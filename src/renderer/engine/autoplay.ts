@@ -8,6 +8,7 @@ import { extractFeatures } from './features';
 import { RULES, newGame, step, type GameState, type Scoreboard } from './game';
 import { SimBody, makeSimPlayer, type Strategy } from './sim';
 import { createRng } from './rng';
+import type { LevelNo } from './levels';
 
 export const PEEK_MS = 8000;
 export const BASELINE_MS = 30000;
@@ -44,13 +45,18 @@ export function wantsToLeave(s: GameState, policy: Policy): boolean {
   return s.heat + RULES.heatPerPeek + 0.4 * RULES.pulseHeatMax >= RULES.bustAt;
 }
 
-export function runSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy } = {}): SimGameResult {
+export function runSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo } = {}): SimGameResult {
+  return playSimGame(strategy, seed, opts).result;
+}
+
+/** Same as runSimGame, but also hands back the final state (for tell sheets in the demo and tests). */
+export function playSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo } = {}): { result: SimGameResult; state: GameState } {
   const policy = opts.policy ?? 'rational';
   const player = makeSimPlayer(strategy, seed);
   const body = new SimBody(player, seed, opts.fps ?? 15);
   const r = createRng(seed * 31 + 7);
 
-  let s = step(newGame(seed), { type: 'begin' });
+  let s = step(newGame(seed, opts.level), { type: 'begin' });
   const baseline = learnBaseline(body.run(BASELINE_MS));
   s = step(s, { type: 'baselineDone', baseline });
 
@@ -83,5 +89,5 @@ export function runSimGame(strategy: Strategy, seed: number, opts: { fps?: numbe
   const trapSaleTotal = s.log.filter((o) => o.kind === 'trap' && o.result === 'sold').reduce((a, o) => a + (o.offer ?? 0), 0);
   const burnedValue = s.log.filter((o) => o.kind !== 'trap' && o.result === 'burned').reduce((a, o) => a + o.value, 0);
   const offersSeen = s.log.filter((o) => o.decision !== 'walk').length;
-  return { ...score, strategy, policy, seed, peeks, trapWalks, trapSaleTotal, burnedValue, offersSeen };
+  return { result: { ...score, strategy, policy, seed, peeks, trapWalks, trapSaleTotal, burnedValue, offersSeen }, state: s };
 }

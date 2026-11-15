@@ -4,6 +4,7 @@ import {
 } from './banker';
 import { MIN_QUALITY } from './features';
 import { createRng } from './rng';
+import { DEFAULT_LEVEL, levelConfig, type LevelNo } from './levels';
 
 /** Fixed value table: 5 small, 2 big, 3 traps. Shown on the board. */
 export const VALUE_TABLE = {
@@ -14,7 +15,7 @@ export const VALUE_TABLE = {
 
 /** Push your luck rules. Every number here is shown on screen and moves an outcome. */
 export const RULES = {
-  heatPerTrapBought: 0.3,  // the banker audits a box it bought and finds a trap
+  heatPerTrapBought: 0.34, // the banker audits a box it bought and finds a trap
   heatPerPeek: 0,          // peeking itself is free: heat comes from what the banker finds
   heatUnread: 0.1,         // "I lost you" makes it suspicious
   pulseHeatMax: 0.15,      // rising pulse (12 s average) adds slow heat
@@ -37,6 +38,8 @@ export interface BoxOutcome {
   heatAdded: number;
   /** Was the banker's call right? walk = trap expected, offer/unread = treasure expected. null until known. */
   correct: boolean | null;
+  /** Summary numbers of the peek, kept for the tell sheet. */
+  features: PeekFeatures;
 }
 
 export interface Scoreboard {
@@ -52,6 +55,15 @@ export interface Scoreboard {
   chanceAccuracy: number;
   busted: boolean;
   left: boolean;
+  level: LevelNo;
+  rank: string;
+  /** Traps the banker walked away from (he read you). */
+  trapsCaught: number;
+  /** Beat this banker: pile >= target and he caught at most maxTrapsCaught of your traps. */
+  won: boolean;
+  target: number;
+  maxTrapsCaught: number;
+  maxBurned: number;
 }
 
 export interface GameState {
@@ -59,6 +71,8 @@ export interface GameState {
   phase: Phase;
   boxes: Box[];
   practice: { kind: BoxKind }[];
+  practiceLog: { kind: BoxKind; features: PeekFeatures }[];
+  level: LevelNo;
   baseline: Baseline | null;
   model: BankerModel;
   activeBoxId: number | null;
@@ -87,7 +101,7 @@ export type GameAction =
   | { type: 'leave' }
   | { type: 'reveal' };
 
-export function newGame(seed: number): GameState {
+export function newGame(seed: number, level: LevelNo = DEFAULT_LEVEL): GameState {
   const r = createRng(seed);
   const items: { kind: BoxKind; value: number }[] = [
     ...VALUE_TABLE.small.map((value) => ({ kind: 'small' as const, value })),
@@ -97,7 +111,7 @@ export function newGame(seed: number): GameState {
   const boxes: Box[] = r.shuffle(items).map((it, id) => ({ id, kind: it.kind, value: it.value, state: 'sealed' }));
   const practice: { kind: BoxKind }[] = r.chance(0.5) ? [{ kind: 'small' }, { kind: 'trap' }] : [{ kind: 'trap' }, { kind: 'small' }];
   return {
-    seed, phase: 'begin', boxes, practice, baseline: null, model: emptyModel(), activeBoxId: null, read: null,
+    seed, phase: 'begin', boxes, practice, practiceLog: [], level, baseline: null, model: emptyModel(level), activeBoxId: null, read: null,
     features: null, pile: 0, heat: 0, heatParts: { traps: 0, peeks: 0, pulse: 0, unread: 0 }, trapsBought: 0,
     log: [], lastOutcome: null, busted: false, left: false, score: null,
   };
@@ -142,6 +156,10 @@ function settle(s: GameState, outcome: BoxOutcome): GameState {
 }
 
 export function computeScore(s: GameState): Scoreboard {
+  const cfg = levelConfig(s.level);
+  // Caught = he walked from the trap, or he lost you at it (hiding is a tell too).
+  const trapsCaught = s.log.filter((o) => o.kind === 'trap' && (o.result === 'burned' || o.decision === 'unread')).length;
+  const treasuresBurned = s.log.filter((o) => o.kind !== 'trap' && o.result === 'burned').length;
   const known = s.log.filter((o) => o.correct !== null);
   const correct = known.filter((o) => o.correct).length;
   const walks = known.filter((o) => o.decision === 'walk').length;
@@ -161,6 +179,13 @@ export function computeScore(s: GameState): Scoreboard {
     chanceAccuracy: pw * pt + (1 - pw) * (1 - pt),
     busted: s.busted,
     left: s.left,
+    level: s.level,
+    rank: cfg.rank,
+    trapsCaught,
+    won: !s.busted && s.pile >= cfg.target && trapsCaught <= cfg.maxTrapsCaught && treasuresBurned <= cfg.maxBurned,
+    target: cfg.target,
+    maxTrapsCaught: cfg.maxTrapsCaught,
+    maxBurned: cfg.maxBurned,
   };
 }
 
@@ -177,7 +202,7 @@ export function step(s: GameState, a: GameAction): GameState {
       if (s.phase !== 'practice') return s;
       let model = s.model;
       for (const p of a.peeks) model = learnExample(model, p.features, p.kind);
-      return { ...s, model, phase: 'board' };
+      return { ...s, model, practiceLog: a.peeks.map((p) => ({ kind: p.kind, features: p.features })), phase: 'board' };
     }
 
     case 'choose': {
@@ -192,7 +217,7 @@ export function step(s: GameState, a: GameAction): GameState {
       const box = s.boxes.find((b) => b.id === s.activeBoxId) as Box;
       const f = a.features;
       const unread = f.quality < MIN_QUALITY;
-      const pulseTarget = Math.min(RULES.pulseHeatMax, Math.max(0, f.pulseDelta) * RULES.pulseHeatPerBpm);
+      const pulseTarget = !levelConfig(s.level).signals.pulseHeat ? 0 : Math.min(RULES.pulseHeatMax, Math.max(0, f.pulseDelta) * RULES.pulseHeatPerBpm);
       const heatParts = {
         ...s.heatParts,
         peeks: s.heatParts.peeks + RULES.heatPerPeek,
@@ -205,7 +230,7 @@ export function step(s: GameState, a: GameAction): GameState {
         const burned: GameState = { ...heated, read, boxes: setBox(heated.boxes, box.id, 'burned') };
         return settle(burned, {
           boxId: box.id, kind: box.kind, value: box.value, decision: 'walk', offer: null, pTrap: read.pTrap,
-          result: 'burned', heatAdded: heated.heat - s.heat, correct: null, // unknown until the reveal
+          result: 'burned', heatAdded: heated.heat - s.heat, correct: null, features: f, // unknown until the reveal
         });
       }
       return { ...heated, read, phase: 'bankerRead' };
@@ -230,7 +255,7 @@ export function step(s: GameState, a: GameAction): GameState {
       };
       return settle(next, {
         boxId: box.id, kind: box.kind, value: box.value, decision: s.read.decision, offer, pTrap: s.read.pTrap,
-        result: sold ? 'sold' : 'opened', heatAdded: heat - s.heat,
+        result: sold ? 'sold' : 'opened', heatAdded: heat - s.heat, features: s.features,
         correct: callCorrect(s.read.decision, box.kind),
       });
     }
@@ -264,8 +289,8 @@ export interface Banker {
   readonly baseline: Baseline;
 }
 
-export function createBanker(baseline: Baseline, _opts?: { seed?: number }): Banker {
-  let model = emptyModel();
+export function createBanker(baseline: Baseline, opts?: { seed?: number; level?: LevelNo }): Banker {
+  let model = emptyModel(opts?.level ?? DEFAULT_LEVEL);
   const b: Banker = {
     heat: 0,
     baseline,

@@ -3,6 +3,7 @@ import { memo, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { ROOM } from './layout';
 import type { VaultMaterials } from './materials';
 import { clockDialTexture } from './textures';
@@ -25,76 +26,65 @@ function BackWall({ mats }: { mats: VaultMaterials }) {
   return <mesh geometry={geo} position={[0, 0, ROOM.back]} material={mats.concrete} receiveShadow />;
 }
 
+function mergedDoorParts(): { steel: THREE.BufferGeometry; bright: THREE.BufferGeometry } {
+  const steel: THREE.BufferGeometry[] = [];
+  const bright: THREE.BufferGeometry[] = [];
+  const P = (g: THREE.BufferGeometry, m: THREE.Matrix4, list = steel) => { const n = g.index ? g.toNonIndexed() : g; n.applyMatrix4(m); for (const k of Object.keys(n.attributes)) if (!['position', 'normal', 'uv'].includes(k)) n.deleteAttribute(k); list.push(n); };
+  const M = (p: [number, number, number], r: [number, number, number] = [0, 0, 0]) => new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)), new THREE.Vector3(1, 1, 1));
+  // stepped, bevelled door plug: lathe profile (radius, depth) turned about the door axis
+  const R = DOOR.r;
+  const prof = [
+    new THREE.Vector2(0.0, 0.2), new THREE.Vector2(0.16, 0.2), new THREE.Vector2(0.17, 0.19), new THREE.Vector2(0.45, 0.19), new THREE.Vector2(0.47, 0.17),
+    new THREE.Vector2(0.74, 0.17), new THREE.Vector2(0.76, 0.15), new THREE.Vector2(R + 0.05, 0.15), new THREE.Vector2(R + 0.08, 0.12),
+    new THREE.Vector2(R + 0.08, 0.03), new THREE.Vector2(R - 0.03, 0.0), new THREE.Vector2(R - 0.03, -0.42), new THREE.Vector2(R - 0.07, -0.45), new THREE.Vector2(0, -0.45),
+  ];
+  P(new THREE.LatheGeometry(prof, 96), M([0, 0, 0], [Math.PI / 2, 0, 0]));
+  // locking bolts: round-nosed steel pins around the plug
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    P(new THREE.CapsuleGeometry(0.038, 0.12, 6, 16), M([Math.cos(a) * (R - 0.0), Math.sin(a) * (R - 0.0), -0.25], [0, 0, a - Math.PI / 2]), bright);
+  }
+  // face bolt heads on the outer ring
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    P(new THREE.SphereGeometry(0.016, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), M([Math.cos(a) * (R - 0.08), Math.sin(a) * (R - 0.08), 0.15], [Math.PI / 2, 0, 0]), bright);
+  }
+  // hub, spoked handwheel
+  P(new THREE.CylinderGeometry(0.12, 0.14, 0.08, 48), M([0, 0, 0.23], [Math.PI / 2, 0, 0]), bright);
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2 + 0.3;
+    P(new THREE.CylinderGeometry(0.02, 0.016, 0.36, 16), M([Math.sin(a) * 0.2, Math.cos(a) * 0.2, 0.3], [0, 0, -a]), bright);
+    P(new THREE.SphereGeometry(0.034, 20, 14), M([Math.sin(a) * 0.4, Math.cos(a) * 0.4, 0.3]), bright);
+  }
+  P(new THREE.TorusGeometry(0.4, 0.016, 10, 72), M([0, 0, 0.3]), bright);
+  return { steel: mergeGeometries(steel)!, bright: mergeGeometries(bright)! };
+}
+
 function VaultDoor({ mats }: { mats: VaultMaterials }) {
-  const bolts = 14;
   const ring = useMemo(() => {
-    const s = new THREE.Shape(); s.absarc(0, 0, DOOR.r + 0.2, 0, Math.PI * 2, false);
+    const s = new THREE.Shape(); s.absarc(0, 0, DOOR.r + 0.22, 0, Math.PI * 2, false);
     const h = new THREE.Path(); h.absarc(0, 0, DOOR.r + 0.01, 0, Math.PI * 2, true); s.holes.push(h);
-    return new THREE.ExtrudeGeometry(s, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.02, bevelSize: 0.02, bevelSegments: 3, curveSegments: 96 });
+    return new THREE.ExtrudeGeometry(s, { depth: 0.12, bevelEnabled: true, bevelThickness: 0.025, bevelSize: 0.025, bevelSegments: 4, curveSegments: 96 });
   }, []);
+  const door = useMemo(() => mergedDoorParts(), []);
   const open = THREE.MathUtils.degToRad(48);
   return (
     <group position={[DOOR.x, DOOR.y, ROOM.back]}>
-      {/* frame ring */}
-      <mesh geometry={ring} material={mats.steelBrushed} castShadow receiveShadow />
-      {/* tunnel into the vault, with a dim warm glow deep inside */}
+      <mesh geometry={ring} material={mats.steel} receiveShadow />
       <mesh position={[0, 0, -0.6]} rotation={[Math.PI / 2, 0, 0]} material={mats.concrete}>
         <cylinderGeometry args={[DOOR.r + 0.01, DOOR.r + 0.01, 1.2, 64, 1, true]} />
       </mesh>
-      <mesh position={[0, 0, -1.2]} material={mats.concrete}>
-        <circleGeometry args={[DOOR.r + 0.02, 48]} />
-      </mesh>
-      <mesh position={[0, 0, -1.19]}><circleGeometry args={[DOOR.r * 0.8, 40]} /><meshBasicMaterial color="#2a1a0e" /></mesh>
-      {/* the door, hinged on the right of the ring, swung toward the room */}
+      <mesh position={[0, 0, -1.19]}><circleGeometry args={[DOOR.r * 0.9, 40]} /><meshBasicMaterial color="#14171b" /></mesh>
       <group position={[DOOR.r + 0.12, 0, 0.12]} rotation={[0, open, 0]}>
-        <group position={[-(DOOR.r + 0.12), 0, 0.18]}>
-          <mesh rotation={[Math.PI / 2, 0, 0]} material={mats.steel} castShadow receiveShadow>
-            <cylinderGeometry args={[DOOR.r + 0.08, DOOR.r + 0.08, 0.16, 96]} />
-          </mesh>
-          <mesh position={[0, 0, -0.28]} rotation={[Math.PI / 2, 0, 0]} material={mats.steelBrushed} castShadow>
-            <cylinderGeometry args={[DOOR.r - 0.04, DOOR.r - 0.02, 0.42, 96]} />
-          </mesh>
-          {Array.from({ length: bolts }, (_, i) => {
-            const a = (i / bolts) * Math.PI * 2;
-            return (
-              <mesh key={i} position={[Math.cos(a) * (DOOR.r + 0.04), Math.sin(a) * (DOOR.r + 0.04), -0.3]} rotation={[0, 0, a + Math.PI / 2]} material={mats.steelBrushed} castShadow>
-                <cylinderGeometry args={[0.045, 0.045, 0.16, 24]} />
-              </mesh>
-            );
-          })}
-          {/* face rings */}
-          {[0.95, 0.72, 0.42].map((r) => (
-            <mesh key={r} position={[0, 0, 0.085]} material={mats.steelBrushed}>
-              <torusGeometry args={[r, 0.012, 12, 96]} />
-            </mesh>
-          ))}
-          {/* hub + three spoke wheel + brass combination dial */}
-          <mesh position={[0, 0, 0.11]} rotation={[Math.PI / 2, 0, 0]} material={mats.steelBrushed} castShadow>
-            <cylinderGeometry args={[0.12, 0.14, 0.06, 48]} />
-          </mesh>
-          {[0, 1, 2].map((i) => (
-            <group key={i} rotation={[0, 0, (i / 3) * Math.PI * 2 + 0.3]}>
-              <mesh position={[0, 0.24, 0.2]} material={mats.steelBrushed} castShadow>
-                <cylinderGeometry args={[0.018, 0.018, 0.36, 16]} />
-              </mesh>
-              <mesh position={[0, 0.43, 0.2]} material={mats.brassPolished} castShadow>
-                <sphereGeometry args={[0.035, 20, 16]} />
-              </mesh>
-            </group>
-          ))}
-          <mesh position={[0, 0, 0.2]} rotation={[Math.PI / 2, 0, 0]} material={mats.steelBrushed}>
-            <cylinderGeometry args={[0.05, 0.05, 0.1, 24]} />
-          </mesh>
-          <mesh position={[0, 0.58, 0.1]} rotation={[Math.PI / 2, 0, 0]} material={mats.brass} castShadow>
+        <group position={[-(DOOR.r + 0.12), 0, 0.05]}>
+          <mesh geometry={door.steel} material={mats.steel} receiveShadow />
+          <mesh geometry={door.bright} material={mats.steelBrushed} />
+          <mesh position={[0, 0.58, 0.21]} rotation={[Math.PI / 2, 0, 0]} material={mats.brassDark}>
             <cylinderGeometry args={[0.1, 0.11, 0.04, 48]} />
-          </mesh>
-          <mesh position={[0, 0.58, 0.125]} rotation={[Math.PI / 2, 0, 0]} material={mats.blackEnamel}>
-            <cylinderGeometry args={[0.07, 0.07, 0.012, 40]} />
           </mesh>
         </group>
       </group>
-      {/* massive hinge */}
-      <mesh position={[DOOR.r + 0.16, 0, 0.16]} material={mats.steel} castShadow>
+      <mesh position={[DOOR.r + 0.16, 0, 0.16]} material={mats.steel}>
         <cylinderGeometry args={[0.07, 0.07, 1.3, 32]} />
       </mesh>
     </group>
@@ -102,8 +92,9 @@ function VaultDoor({ mats }: { mats: VaultMaterials }) {
 }
 
 function DepositWall({ mats }: { mats: VaultMaterials }) {
-  const cols = 15, rows = 10, cw = 0.15, rh = 0.15, gap = 0.008;
-  const x0 = 0.95, y0 = 0.32, z = ROOM.back + 0.02;
+  const cols = 15, rows = 10, cw = 0.15, rh = 0.15;
+  const x0 = 0.95, y0 = 0.32, z = ROOM.back + 0.03;
+  const frames = useRef<THREE.InstancedMesh>(null);
   const doors = useRef<THREE.InstancedMesh>(null);
   const holes = useRef<THREE.InstancedMesh>(null);
   const plates = useRef<THREE.InstancedMesh>(null);
@@ -119,32 +110,41 @@ function DepositWall({ mats }: { mats: VaultMaterials }) {
     }
     return out;
   }, []);
-  const doorGeo = useMemo(() => new RoundedBoxGeometry(cw - gap, 1, 0.014, 2, 0.003), []);
+  // a modelled frame (rectangle with a bevelled opening) per cell, a recessed door inside it
+  const frameGeo = useMemo(() => {
+    const s = new THREE.Shape(); s.moveTo(-cw / 2, -0.5); s.lineTo(cw / 2, -0.5); s.lineTo(cw / 2, 0.5); s.lineTo(-cw / 2, 0.5); s.closePath();
+    const h = new THREE.Path(); const iw = cw / 2 - 0.009; h.moveTo(-iw, -0.5 + 0.009); h.lineTo(-iw, 0.5 - 0.009); h.lineTo(iw, 0.5 - 0.009); h.lineTo(iw, -0.5 + 0.009); h.closePath(); s.holes.push(h);
+    return new THREE.ExtrudeGeometry(s, { depth: 0.012, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 1 });
+  }, []);
+  const doorGeo = useMemo(() => new RoundedBoxGeometry(cw - 0.022, 1, 0.008, 2, 0.002), []);
   useLayoutEffect(() => {
     const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
     const col = new THREE.Color();
+    const qx = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
     cells.forEach((c, i) => {
-      doors.current!.setMatrixAt(i, m.compose(p.set(c.x, c.y, z + 0.012), q, s.set(1, c.h - gap, 1)));
-      col.setHSL(0.11, 0.25, 0.5 + ((i * 37) % 11) / 60);
+      frames.current!.setMatrixAt(i, m.compose(p.set(c.x, c.y, z), q, s.set(1, c.h, 1)));
+      doors.current!.setMatrixAt(i, m.compose(p.set(c.x, c.y, z + 0.004), q, s.set(1, c.h - 0.022, 1)));
+      col.setHSL(0.1, 0.22, 0.42 + ((i * 37) % 11) / 90);
       doors.current!.setColorAt(i, col);
-      holes.current!.setMatrixAt(i, m.compose(p.set(c.x + cw * 0.28, c.y, z + 0.0205), q.setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0)), s.set(1, 1, 1)));
-      plates.current!.setMatrixAt(i, m.compose(p.set(c.x - cw * 0.12, c.y + c.h * 0.22, z + 0.0198), new THREE.Quaternion(), s.set(1, 1, 1)));
+      holes.current!.setMatrixAt(i, m.compose(p.set(c.x + cw * 0.28, c.y, z + 0.0085), qx, s.set(1, 1, 1)));
+      plates.current!.setMatrixAt(i, m.compose(p.set(c.x - cw * 0.14, c.y + c.h * 0.25, z + 0.0085), q, s.set(1, 1, 1)));
     });
-    for (const r of [doors, holes, plates]) { r.current!.instanceMatrix.needsUpdate = true; r.current!.computeBoundingSphere(); }
+    for (const r of [frames, doors, holes, plates]) { r.current!.instanceMatrix.needsUpdate = true; r.current!.computeBoundingSphere(); }
     if (doors.current!.instanceColor) doors.current!.instanceColor.needsUpdate = true;
-  }, [cells]);
-  const plateMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#d9cfb4', roughness: 0.5, metalness: 0.3 }), []);
+  }, [cells, frameGeo, doorGeo]);
+  const plateMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#6f6656', roughness: 0.6, metalness: 0.4 }), []);
   return (
     <group>
-      <mesh position={[x0 + (cols * cw) / 2, y0 + (rows * rh) / 2, z]} material={mats.steel} receiveShadow>
-        <boxGeometry args={[cols * cw + 0.06, rows * rh + 0.06, 0.03]} />
+      <mesh position={[x0 + (cols * cw) / 2, y0 + (rows * rh) / 2, z - 0.01]} material={mats.steel} receiveShadow>
+        <boxGeometry args={[cols * cw + 0.06, rows * rh + 0.06, 0.02]} />
       </mesh>
-      <instancedMesh ref={doors} args={[doorGeo, mats.brass, cells.length]} castShadow receiveShadow />
-      <instancedMesh ref={holes} args={[undefined, mats.blackEnamel, cells.length]}>
-        <cylinderGeometry args={[0.009, 0.009, 0.003, 16]} />
+      <instancedMesh ref={frames} args={[frameGeo, mats.brassDark, cells.length]} receiveShadow />
+      <instancedMesh ref={doors} args={[doorGeo, mats.brass, cells.length]} receiveShadow />
+      <instancedMesh ref={holes} args={[undefined, mats.void, cells.length]}>
+        <cylinderGeometry args={[0.0045, 0.0045, 0.002, 12]} />
       </instancedMesh>
       <instancedMesh ref={plates} args={[undefined, plateMat, cells.length]}>
-        <boxGeometry args={[0.04, 0.016, 0.002]} />
+        <boxGeometry args={[0.032, 0.012, 0.0015]} />
       </instancedMesh>
     </group>
   );
@@ -222,7 +222,6 @@ export const Room = memo(function Room({ mats, heat }: { mats: VaultMaterials; h
       <DepositWall mats={mats} />
       <WallClock mats={mats} heat={heat} />
       {/* grazing ceiling light on the deposit wall */}
-      <AimedSpot position={[2.1, 3.1, ROOM.back + 1.3]} target={[2.1, 1.0, ROOM.back]} angle={0.75} penumbra={0.9} intensity={0.9} distance={6} color="#d8dde6" />
     </group>
   );
 });

@@ -1,6 +1,7 @@
 import type { BankerRead, BankerSignal, Box, BoxKind, PeekFeatures } from './types';
 import { MIN_QUALITY } from './features';
 import { clamp } from './dsp';
+import { DEFAULT_LEVEL, levelConfig, type LevelNo } from './levels';
 
 /**
  * The banker: a per player Gaussian naive Bayes (trap vs treasure) over standardized features,
@@ -29,18 +30,18 @@ export const PRIOR = {
 
 /** Rules for what the banker does with its belief. Heat and its own track record move them. */
 export const BANKER_RULES = {
-  walkAt: 0.6,         // walk when P(trap) reaches this at zero heat
-  walkHeatSlope: 0.2,  // ...and this much lower at full heat
+  // walkAt and marginBase are per banker: see levels.ts
+  walkHeatSlope: 0.2,  // the walk threshold drops this much at full heat
   walkFloor: 0.3,
-  marginBase: 0.2,
   marginHeat: 0.05,    // full heat adds 5 points of margin
   marginDoubt: 0.05,   // a banker that has been wrong widens its margin
   unreadDiscount: 0.5, // unread boxes get a blind, discounted offer
   minOffer: 20,
+  walkOnCatch: true,   // it never buys a box you caught your breath at: a catch faked at treasure just burns it
 } as const;
 
 export interface Example { x: number[]; kind: BoxKind; unread: boolean; joy: number; }
-export interface BankerModel { examples: Example[]; }
+export interface BankerModel { examples: Example[]; level: LevelNo; }
 
 /** What the banker can see of the game: its own heat, track record and the value board. */
 export interface BankerView {
@@ -65,39 +66,52 @@ export function featureVector(f: PeekFeatures): number[] {
   ];
 }
 
-export function emptyModel(): BankerModel { return { examples: [] }; }
+export function emptyModel(level: LevelNo = DEFAULT_LEVEL): BankerModel { return { examples: [], level }; }
 
 export function learnExample(model: BankerModel, f: PeekFeatures, kind: BoxKind): BankerModel {
   const unread = f.quality < MIN_QUALITY;
-  return { examples: [...model.examples, { x: featureVector(f), kind, unread, joy: f.exprDelta.happy ?? 0 }] };
+  return { ...model, examples: [...model.examples, { x: featureVector(f), kind, unread, joy: f.exprDelta.happy ?? 0 }] };
 }
 
 interface Stats { muTrap: number[]; muTreasure: number[]; sd: number[]; }
 
 export function modelStats(model: BankerModel): Stats {
+  // A faster learner counts each labelled box for more against its priors.
+  const w = levelConfig(model.level).learnWeight;
   const kOf = (i: number): number => (i < 3 ? PRIOR.breathPseudo : PRIOR.pseudo);
   const read = model.examples.filter((e) => !e.unread);
   const traps = read.filter((e) => e.kind === 'trap');
   const treas = read.filter((e) => e.kind !== 'trap');
   const mu = (prior: readonly number[], xs: Example[]): number[] =>
-    prior.map((p, i) => (kOf(i) * p + xs.reduce((s, e) => s + (e.x[i] as number), 0)) / (kOf(i) + xs.length));
+    prior.map((p, i) => (kOf(i) * p + w * xs.reduce((s, e) => s + (e.x[i] as number), 0)) / (kOf(i) + w * xs.length));
   const muTrap = mu(PRIOR.trap, traps);
   const muTreasure = mu(PRIOR.treasure, treas);
   const sd = PRIOR.sd.map((s0, i) => {
     const k = kOf(i);
     let ss = 2 * k * s0 * s0;
-    for (const e of traps) ss += ((e.x[i] as number) - (muTrap[i] as number)) ** 2;
-    for (const e of treas) ss += ((e.x[i] as number) - (muTreasure[i] as number)) ** 2;
-    return Math.max(0.35 * s0, Math.sqrt(ss / (2 * k + read.length)));
+    for (const e of traps) ss += w * ((e.x[i] as number) - (muTrap[i] as number)) ** 2;
+    for (const e of treas) ss += w * ((e.x[i] as number) - (muTreasure[i] as number)) ** 2;
+    return Math.max(0.35 * s0, Math.sqrt(ss / (2 * k + w * read.length)));
   });
   return { muTrap, muTreasure, sd };
 }
 
-/** Per feature log likelihood ratio (trap over treasure). Positive = looks like a trap. */
+/** Which features this banker is allowed to read (the ladder). */
+export function featureMask(level: LevelNo): boolean[] {
+  const sig = levelConfig(level).signals;
+  return FEATURE_NAMES.map((n) => {
+    const g = GROUP[n];
+    return g === 'breath' ? sig.breath : g === 'blinks' ? sig.blinks : sig.face;
+  });
+}
+
+/** Per feature log likelihood ratio (trap over treasure). Positive = looks like a trap. 0 for signals this banker can't read. */
 export function evidence(model: BankerModel, f: PeekFeatures): number[] {
   const s = modelStats(model);
   const x = featureVector(f);
+  const mask = featureMask(model.level);
   return x.map((xi, i) => {
+    if (!mask[i]) return 0;
     const sd = s.sd[i] as number;
     const a = (xi - (s.muTrap[i] as number)) / sd;
     const b = (xi - (s.muTreasure[i] as number)) / sd;
@@ -142,12 +156,12 @@ export function bankerConfidence(view: BankerView): number {
   return (view.correct + 1.4) / (view.calls + 2); // starts at 0.7
 }
 
-export function walkThreshold(heat: number): number {
-  return Math.max(BANKER_RULES.walkFloor, BANKER_RULES.walkAt - BANKER_RULES.walkHeatSlope * heat);
+export function walkThreshold(heat: number, level: LevelNo = DEFAULT_LEVEL): number {
+  return Math.max(BANKER_RULES.walkFloor, levelConfig(level).walkAt - BANKER_RULES.walkHeatSlope * heat);
 }
 
-export function margin(view: BankerView): number {
-  return BANKER_RULES.marginBase + BANKER_RULES.marginHeat * view.heat + BANKER_RULES.marginDoubt * (1 - bankerConfidence(view));
+export function margin(view: BankerView, level: LevelNo = DEFAULT_LEVEL): number {
+  return levelConfig(level).marginBase + BANKER_RULES.marginHeat * view.heat + BANKER_RULES.marginDoubt * (1 - bankerConfidence(view));
 }
 
 const round10 = (x: number): number => Math.max(0, Math.round(x / 10) * 10);
@@ -177,8 +191,8 @@ function walkReason(f: PeekFeatures, driver: FeatureName | null, view: BankerVie
   }
 }
 
-function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number, ev: number[], walkAt: number): string {
-  const smiled = (f.exprDelta.happy ?? 0) > 0.06;
+function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number, ev: number[], walkAt: number, face: boolean): string {
+  const smiled = face && (f.exprDelta.happy ?? 0) > 0.06;
   const calmBreath = f.breathCatchMs === 0 && Math.abs(f.rateChange) < 0.3 && f.shallowing < 0.2;
   if (smiled && calmBreath && pBig < 0.5) return `Big one? You smiled, but your breathing didn't change. I'm not sure. I'll pay ${offer}.`;
   if (pBig >= 0.5) return `Big one. ${smiled ? 'That smile was real.' : 'Your breathing picked up.'} I'll pay ${offer}.`;
@@ -195,8 +209,9 @@ function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number
 /** Pure read. Decides walk, offer or unread, prices it, and says why in one plain sentence. */
 export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view: BankerView): BankerRead {
   const pri = boardPriors(view);
-  const m = margin(view);
-  const walkAt = walkThreshold(view.heat);
+  const m = margin(view, model.level);
+  const walkAt = walkThreshold(view.heat, model.level);
+  const face = levelConfig(model.level).signals.face;
 
   if (f.quality < MIN_QUALITY) {
     // Unread: blind offer from what unread boxes have turned out to be for this player.
@@ -227,17 +242,20 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
   let lj = clamp((-((joy - muBig) ** 2) + (joy - muSmall) ** 2) / (2 * sdJ * sdJ), -3, 3);
   // A smile that looks like this player's trap smile is not evidence of a big one.
   if ((ev[4] as number) > 0) lj = Math.min(lj, 0);
+  if (!face) lj = 0; // a banker who can't read faces can't read a big one either
   const pBig = sigmoid(logit(pri.pBigGivenTreasure) + lj);
 
   const evTreasure = pBig * pri.bigMean + (1 - pBig) * pri.smallMean;
   // If it buys at all, it pays what it thinks a treasure is worth, minus its margin.
   const offer = round10(evTreasure * (1 - m));
 
-  if (pTrap >= walkAt || offer < BANKER_RULES.minOffer) {
+  const caught = BANKER_RULES.walkOnCatch && !f.talking && f.breathCatchMs > 0 && featureMask(model.level)[0] === true;
+  if (caught || pTrap >= walkAt || offer < BANKER_RULES.minOffer) {
     let best = -Infinity;
     let driver: FeatureName | null = null;
     ev.forEach((x, i) => { if (x > best) { best = x; driver = FEATURE_NAMES[i] ?? null; } });
     if (best < 0.7) driver = null; // no single signal carried it: heat or the board did
+    if (caught) driver = 'breath';
     const d = driver as FeatureName | null;
     return { pTrap, pBig, decision: 'walk', reason: walkReason(f, d, view), signal: d ? GROUP[d] : 'none' };
   }
@@ -246,5 +264,5 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
   let calmDriver: FeatureName | null = null;
   ev.forEach((x, i) => { if (x < best) { best = x; calmDriver = FEATURE_NAMES[i] ?? null; } });
   const cd = calmDriver as FeatureName | null;
-  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, offer, ev, walkAt), signal: cd && best < -0.5 ? GROUP[cd] : 'none' };
+  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, offer, ev, walkAt, face), signal: cd && best < -0.5 ? GROUP[cd] : 'none' };
 }

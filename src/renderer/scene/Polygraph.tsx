@@ -131,7 +131,7 @@ export const StripRecorder = memo(function StripRecorder({ mats, breath }: { mat
         {/* supply and take-up rolls */}
         {[-1, 1].map((s) => (
           <group key={s} position={[s * (PW / 2 + 0.008), 0.005, 0]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.011, 0.011, PD + 0.004, 32]} /><meshStandardMaterial color="#9c9586" roughness={0.9} /></mesh>
+            <mesh rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.011, 0.011, PD + 0.004, 32]} /><meshStandardMaterial color="#8e887b" roughness={1} /></mesh>
             {[-1, 1].map((e) => (
               <mesh key={e} position={[0, 0, e * (PD / 2 + 0.004)]} rotation={[Math.PI / 2, 0, 0]} material={mats.brassPolished}><cylinderGeometry args={[0.014, 0.014, 0.003, 32]} /></mesh>
             ))}

@@ -7,6 +7,7 @@ import { TABLE_Y, GLASS_Z, GLASS_HALF_W, GLASS_BOTTOM, GLASS_TOP } from './layou
 import type { VaultMaterials } from './materials';
 import { frostTexture } from './textures';
 import { AimedSpot } from './AimedSpot';
+import { useFrostedGlassMaterial } from './FrostedGlass';
 
 export const LAMP = { x: -0.36, z: -1.04, h: 0.36 };
 const LAMP_TARGET: [number, number, number] = [0.0, TABLE_Y, -0.78];
@@ -94,8 +95,8 @@ export const BankerLamp = memo(function BankerLamp({ mats, heat, beat, quality }
   }, [apex, tgt, beamLen, quality]);
   const dustUniforms = useMemo(() => ({ uTime: { value: 0 }, uScale: { value: 5 }, uColor: { value: new THREE.Color('#ffdcb0') }, uIntensity: { value: 0.7 } }), []);
 
-  const warm = useMemo(() => new THREE.Color('#ffb36b'), []);
-  const hot = useMemo(() => new THREE.Color('#ff5a2c'), []);
+  const warm = useMemo(() => new THREE.Color('#ffd9ad'), []);
+  const hot = useMemo(() => new THREE.Color('#ff6a3a'), []);
   const col = useMemo(() => new THREE.Color(), []);
   useFrame((st) => {
     const t = st.clock.elapsedTime;
@@ -103,7 +104,7 @@ export const BankerLamp = memo(function BankerLamp({ mats, heat, beat, quality }
     col.copy(warm).lerp(hot, h * 0.75);
     // incandescent shimmer + a tiny dip on each heartbeat
     const flicker = 1 + 0.012 * Math.sin(t * 47) + 0.01 * Math.sin(t * 23.7) - beat.current * 0.07;
-    if (spot.current) { spot.current.intensity = 0.6 * flicker; spot.current.color.copy(col); }
+    if (spot.current) { spot.current.intensity = 0.85 * flicker; spot.current.color.copy(col); }
     bulbMat.emissive.copy(col); opalMat.emissive.copy(col).multiplyScalar(0.9);
     beamUniforms.uTime.value = t;
     beamUniforms.uColor.value.copy(col);
@@ -113,7 +114,7 @@ export const BankerLamp = memo(function BankerLamp({ mats, heat, beat, quality }
     dustUniforms.uScale.value = st.size.height * 0.006;
   });
 
-  const shadowSize = quality === 'high' ? 2048 : 1024;
+  const shadowSize = quality === 'high' ? 1536 : 1024;
   return (
     <group>
       {/* lamp body */}
@@ -182,11 +183,8 @@ function perforatedAlpha(): THREE.Texture {
   return new THREE.CanvasTexture(c);
 }
 
-export const TellerScreen = memo(function TellerScreen({ mats }: { mats: VaultMaterials }) {
-  const glass = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#eef2ec', transmission: 1, roughness: 0.55, roughnessMap: frostTexture(), thickness: 0.012, ior: 1.52,
-    metalness: 0, clearcoat: 0.3, clearcoatRoughness: 0.2, attenuationColor: new THREE.Color('#d9e6dc'), attenuationDistance: 0.4,
-  }), []);
+export const TellerScreen = memo(function TellerScreen({ mats, quality }: { mats: VaultMaterials; quality: 'high' | 'medium' }) {
+  const glass = useFrostedGlassMaterial(frostTexture(), quality);
   const grille = useMemo(() => new THREE.MeshStandardMaterial({ color: '#6b5228', metalness: 1, roughness: 0.55, alphaMap: perforatedAlpha(), alphaTest: 0.5, side: THREE.DoubleSide }), []);
   const h = GLASS_TOP - GLASS_BOTTOM; const cy = (GLASS_TOP + GLASS_BOTTOM) / 2; const W = GLASS_HALF_W * 2;
   return (

@@ -1,5 +1,5 @@
 // The banker: never a face. A seated silhouette behind frosted glass, backlit by his own lamp.
-import { memo, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox } from '@react-three/drei';
@@ -8,6 +8,8 @@ import type { BankerState } from './types';
 import type { VaultMaterials } from './materials';
 import { sceneFx } from './fx';
 import { AimedSpot } from './AimedSpot';
+import { FIG } from './bankerFigure';
+import { enableBehindGlass } from './FrostedGlass';
 
 const LAMP_LEVEL: Record<BankerState, number> = { idle: 0.55, reading: 1.6, speaking: 1.15, walking: 0.18, offering: 1.0 };
 const LEAN: Record<BankerState, number> = { idle: 0.03, reading: 0.24, speaking: 0.1, walking: -0.16, offering: 0.16 };
@@ -29,9 +31,20 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
   const head = useRef<THREE.Group>(null);
   const armR = useRef<THREE.Group>(null);
   const chit = useRef<THREE.Group>(null);
-  const back = useRef<THREE.SpotLight>(null);
+  const washMat = useMemo(() => {
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const ctx = c.getContext('2d')!;
+    const g = ctx.createRadialGradient(170, 120, 10, 150, 128, 190);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.45, '#6a6a6a'); g.addColorStop(1, '#000000');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
+    const t = new THREE.CanvasTexture(c);
+    const m = mats.walnut.clone(); m.emissiveMap = t; m.emissive = new THREE.Color('#ffd4a3'); m.emissiveIntensity = 0.2;
+    return m;
+  }, [mats.walnut]);
   const shadeMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#3a2a18', emissive: new THREE.Color('#ffc58a'), emissiveIntensity: 2, roughness: 0.9, side: THREE.DoubleSide }), []);
   const chitMat = useMemo(() => new THREE.MeshStandardMaterial({ map: chitTexture(), color: '#e9c77c', metalness: 0.55, roughness: 0.4 }), []);
+  const rootRef = useRef<THREE.Group>(null);
+  useEffect(() => { if (rootRef.current) enableBehindGlass(rootRef.current); }, []);
   const st = useRef({ state, since: 0, lamp: LAMP_LEVEL[state], lean: LEAN[state], chit: 0, reach: 0 });
   const col = useMemo(() => new THREE.Color(), []);
 
@@ -43,9 +56,10 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
     // lamp swells while he reads you; heartbeat-free, slow and deliberate
     const lampT = LAMP_LEVEL[state] * (state === 'reading' ? 0.92 + 0.08 * Math.sin(now * 2.1) : 1);
     a.lamp += (lampT - a.lamp) * (1 - Math.exp(-dt * (state === 'walking' ? 2.2 : 1.6)));
-    col.set('#ffbe7a').lerp(new THREE.Color('#ff6f3d'), heat.current * 0.6);
-    if (back.current) { back.current.intensity = a.lamp * 1.6; back.current.color.copy(col); }
-    shadeMat.emissive.copy(col); shadeMat.emissiveIntensity = 0.4 + a.lamp * 2.2;
+    col.set('#ffd4a3').lerp(new THREE.Color('#ff6f3d'), heat.current * 0.6);
+    // his lamp's wash on the booth panel is emissive (no extra light for every pixel in the room)
+    washMat.emissive.copy(col); washMat.emissiveIntensity = 0.05 + a.lamp * 0.32;
+    shadeMat.emissive.copy(col); shadeMat.emissiveIntensity = 0.25 + a.lamp * 0.9;
 
     // posture
     const breathe = Math.sin(now * 1.3) * 0.006;
@@ -76,10 +90,10 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
 
   const S = mats.silhouette;
   return (
-    <group>
+    <group ref={rootRef}>
       {/* backdrop panel of his booth, washed by his lamp so he reads as a silhouette */}
-      <mesh position={[0, 1.45, BANKER_Z - 0.85]} material={mats.walnut} receiveShadow>
-        <boxGeometry args={[1.3, 1.6, 0.04]} />
+      <mesh position={[0, 1.45, BANKER_Z - 0.85]} material={washMat} receiveShadow>
+        <boxGeometry args={[2.1, 1.7, 0.04]} />
       </mesh>
       {/* credenza and his lamp */}
       <RoundedBox args={[1.1, 0.8, 0.4]} radius={0.01} position={[0, 0.4, BANKER_Z - 0.6]} material={mats.walnut} receiveShadow castShadow />
@@ -88,7 +102,6 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
         <mesh position={[0, 0.2, 0]} material={mats.brass}><cylinderGeometry args={[0.008, 0.008, 0.34, 12]} /></mesh>
         <mesh position={[0, 0.4, 0]} material={shadeMat}><cylinderGeometry args={[0.07, 0.13, 0.17, 40, 1, true]} /></mesh>
       </group>
-      <AimedSpot lightRef={back} position={[0.36, 1.2, BANKER_Z - 0.55]} target={[0, 1.4, BANKER_Z - 0.85]} angle={1.2} penumbra={1} intensity={4} distance={2} color="#ffbe7a" />
 
       {/* high-backed chair */}
       <RoundedBox args={[0.5, 0.62, 0.1]} radius={0.05} smoothness={3} position={[0, 0.86, BANKER_Z - 0.26]} material={S} />
@@ -97,22 +110,25 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
       {/* seated figure, pivoting at the hips */}
       <group position={[0, 0.55, BANKER_Z - 0.06]}>
         <group ref={body}>
-          <mesh position={[0, 0.34, 0]} scale={[1.25, 1, 0.72]} material={S}><capsuleGeometry args={[0.16, 0.3, 8, 20]} /></mesh>
-          <mesh position={[0, 0.58, 0]} rotation={[0, 0, Math.PI / 2]} scale={[1, 1, 0.8]} material={S}><capsuleGeometry args={[0.075, 0.33, 8, 16]} /></mesh>
-          <mesh position={[0, 0.68, 0]} material={S}><cylinderGeometry args={[0.05, 0.058, 0.1, 16]} /></mesh>
-          <group ref={head} position={[0, 0.74, 0.01]}>
-            <mesh position={[0, 0.09, 0]} scale={[0.86, 1.12, 0.98]} material={S}><sphereGeometry args={[0.1, 32, 24]} /></mesh>
-            {[-1, 1].map((s) => <mesh key={s} position={[s * 0.088, 0.085, 0]} scale={[0.4, 1, 0.7]} material={S}><sphereGeometry args={[0.03, 12, 10]} /></mesh>)}
+          <mesh geometry={FIG.torso} material={S} />
+          <group ref={head} position={[0, 0.66, 0.01]}>
+            <mesh geometry={FIG.head} material={S} />
           </group>
-          {/* left arm resting on the desk */}
-          <group position={[-0.24, 0.56, 0]} rotation={[-0.35, 0, 0.12]}>
-            <mesh position={[0, -0.14, 0]} material={S}><capsuleGeometry args={[0.05, 0.24, 6, 12]} /></mesh>
-            <mesh position={[0.05, -0.27, 0.15]} rotation={[1.35, 0, -0.4]} material={S}><capsuleGeometry args={[0.045, 0.26, 6, 12]} /></mesh>
+          {/* left forearm rests on the desk */}
+          <group position={[-0.215, 0.5, 0]} rotation={[-0.3, 0, 0.1]}>
+            <mesh geometry={FIG.upperArm} material={S} />
+            <group position={[0, -0.26, 0]} rotation={[1.45, 0, -0.35]}>
+              <mesh geometry={FIG.foreArm} material={S} />
+              <mesh geometry={FIG.hand} material={S} position={[0, -0.25, 0]} />
+            </group>
           </group>
           {/* right arm reaches */}
-          <group ref={armR} position={[0.24, 0.56, 0]} rotation={[-0.35, 0, -0.12]}>
-            <mesh position={[0, -0.14, 0]} material={S}><capsuleGeometry args={[0.05, 0.24, 6, 12]} /></mesh>
-            <mesh position={[-0.05, -0.27, 0.15]} rotation={[1.35, 0, 0.4]} material={S}><capsuleGeometry args={[0.045, 0.26, 6, 12]} /></mesh>
+          <group ref={armR} position={[0.215, 0.5, 0]} rotation={[-0.3, 0, -0.1]}>
+            <mesh geometry={FIG.upperArm} material={S} />
+            <group position={[0, -0.26, 0]} rotation={[1.45, 0, 0.35]}>
+              <mesh geometry={FIG.foreArm} material={S} />
+              <mesh geometry={FIG.hand} material={S} position={[0, -0.25, 0]} />
+            </group>
           </group>
         </group>
       </group>

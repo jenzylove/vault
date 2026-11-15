@@ -231,3 +231,36 @@ export function softSpriteTexture(): THREE.Texture {
 export function frostTexture(): THREE.Texture {
   return grimeTexture('frost', 0.55, 0.12, 31, 0);
 }
+
+/** Stamped refinery mark on a gold bar's top face (used as bump + slight tone). */
+export function barStampTexture(): THREE.Texture {
+  const k = 'barStamp';
+  const hit = cache.get(k); if (hit) return hit;
+  const [c, ctx] = makeCanvas(512, 224);
+  ctx.fillStyle = '#d8d8d8'; ctx.fillRect(0, 0, 512, 224);
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 6; ctx.strokeRect(14, 14, 484, 196);
+  ctx.fillStyle = '#4a4a4a'; ctx.textAlign = 'center';
+  ctx.font = 'bold 40px "Times New Roman",serif'; ctx.fillText('KELLER & CIE', 256, 66);
+  ctx.font = 'bold 54px "Times New Roman",serif'; ctx.fillText('FINE GOLD', 256, 126);
+  ctx.font = '600 34px "Times New Roman",serif'; ctx.fillText('999.9   1 KILO', 256, 172);
+  ctx.font = '24px "Times New Roman",serif'; ctx.fillText('Nº 104417  ·  ZÜRICH', 256, 202);
+  const t = new THREE.CanvasTexture(c); t.anisotropy = 8;
+  cache.set(k, t);
+  return t;
+}
+
+/** Struck coin face: rim, portrait disc and lettering ring (bump). */
+export function coinFaceTexture(): THREE.Texture {
+  const k = 'coinFace';
+  const hit = cache.get(k); if (hit) return hit;
+  const S = 256;
+  const [c, ctx] = makeCanvas(S, S);
+  ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, S, S);
+  ctx.strokeStyle = '#e0e0e0'; ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2 - 10, 0, Math.PI * 2); ctx.stroke();
+  for (let i = 0; i < 90; i++) { const a = (i / 90) * Math.PI * 2; ctx.fillStyle = '#c8c8c8'; ctx.fillRect(S / 2 + Math.cos(a) * (S / 2 - 30) - 2, S / 2 + Math.sin(a) * (S / 2 - 30) - 2, 4, 4); }
+  ctx.fillStyle = '#d0d0d0'; ctx.beginPath(); ctx.ellipse(S / 2 + 6, S / 2, 48, 62, 0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#b0b0b0'; ctx.beginPath(); ctx.arc(S / 2 - 10, S / 2 - 26, 30, 0, Math.PI * 2); ctx.fill();
+  const t = new THREE.CanvasTexture(c);
+  cache.set(k, t);
+  return t;
+}

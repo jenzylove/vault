@@ -36,6 +36,14 @@ One person at a laptop with a webcam, playing alone, in a minute. First screen: 
 - Holding your breath through every peek: an 8 s peek always contains a breath, so a hold is itself the tell.
 - Feeding a recorded calm video (the SDK has a file mode): live camera only, plus one random cue per game ("blink twice"), checked live.
 
+## 3b. Why you come back (the reward loop)
+
+1. **Tell sheet after every game.** The banker shows you your own tells with numbers: "At traps you held your breath 1.4 s. At the big box you blinked twice as fast." Your tells are tracked across games so you watch them shrink (breath catch 1.4 s → 0.6 s → gone). Mastery of your own body, shown by the camera.
+2. **Career ladder of bankers.** Five banks, each banker reads more and learns faster: Bank 1 reads breath only; Bank 2 adds blinks; Bank 3 adds face; Bank 4 adds pulse heat and learns faster; Bank 5 (the Swiss vault) reads everything with the strongest learning. Beat a banker (finish with a pile above his target and he read you below a set rate) to unlock the next vault room. Ranks: Pickpocket, Cutpurse, Cracksman, Safecracker, Ghost.
+3. **Daily vault.** Same seeded box layout for everyone each day; a share card shows your pile and how often the banker read you ("He read me 2 of 10. Can he read you?").
+
+Loop: play → the banker shows your tell → you train it out → you beat a harder banker → you climb → tomorrow's vault.
+
 ## 4. SmartSpectra signals, each only where it's accurate
 
 | Signal | Timescale | Job |

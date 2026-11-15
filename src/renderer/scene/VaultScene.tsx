@@ -13,6 +13,7 @@ import { Gauge, StripRecorder } from './Polygraph';
 import { Effects } from './Effects';
 import { CAMERA_POS, CAMERA_TARGET } from './layout';
 import { sceneFx } from './fx';
+import { AimedSpot } from './AimedSpot';
 
 export type { VaultSceneProps } from './types';
 
@@ -57,13 +58,13 @@ function SceneContents(props: VaultSceneProps) {
   const fps = useRef({ n: 0, t: 0 });
 
   const { gl } = useThree();
-  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __vaultGL: unknown }).__vaultGL = gl; }, [gl]);
+  useEffect(() => { if (import.meta.env.DEV) Object.assign(window, { __vaultGL: gl, __vaultScene: scene }); }, [gl, scene]);
   useEffect(() => {
     // the frosted screen only needs a blurred copy of the room behind it
     (gl as THREE.WebGLRenderer & { transmissionResolutionScale: number }).transmissionResolutionScale = props.quality === 'high' ? 0.5 : 0.35;
   }, [gl, props.quality]);
   useEffect(() => {
-    scene.fog = new THREE.FogExp2('#0d0a07', 0.07);
+    scene.fog = new THREE.FogExp2('#08090a', 0.07);
     return () => { scene.fog = null; };
   }, [scene]);
 
@@ -74,12 +75,12 @@ function SceneContents(props: VaultSceneProps) {
     if (sceneFx.shadowFrames > 0) { gl.shadowMap.needsUpdate = true; sceneFx.shadowFrames--; }
     const h = heat.current;
     const fog = scene.fog as THREE.FogExp2 | null;
-    if (fog) { fog.density = 0.06 + h * 0.12; fog.color.setRGB(0.05 + h * 0.03, 0.038, 0.027); }
+    if (fog) { fog.density = 0.06 + h * 0.12; fog.color.setRGB(0.032 + h * 0.03, 0.034, 0.038 - h * 0.01); }
     // one shared gold light follows the brightest open casket (constant light count: no shader recompiles)
     let best = 0, bi = -1;
     for (let i = 0; i < sceneFx.boxGlow.length; i++) if (sceneFx.boxGlow[i] > best) { best = sceneFx.boxGlow[i]; bi = i; }
     if (glow.current) {
-      glow.current.intensity = best * 0.22;
+      glow.current.intensity = best * 0.12;
       if (bi >= 0) glow.current.position.copy(sceneFx.boxGlowPos[bi]);
     }
     mats.gold.emissiveIntensity = 0.08 + best * 0.12;
@@ -91,14 +92,16 @@ function SceneContents(props: VaultSceneProps) {
 
   return (
     <>
-      <Environment files="./assets/hdri/lythwood_lounge_1k.hdr" environmentIntensity={0.08} />
-      <hemisphereLight args={['#2c2a28', '#0b0806', 0.12]} />
+      <Environment files="./assets/hdri/bank_vault_1k.hdr" environmentIntensity={0.06} />
+      <hemisphereLight args={['#2a2e33', '#0a0a0a', 0.1]} />
+      {/* cool fill spilling from the open vault, opposite the warm key */}
+      <AimedSpot position={[-2.3, 2.6, -3.4]} target={[0.9, 0.9, -1.9]} angle={0.85} penumbra={1} intensity={5} distance={8} color="#a9bedb" />
       <pointLight ref={glow} intensity={0} distance={0.9} decay={2} color="#ffb347" />
       <CameraRig />
-      <Room mats={mats} heat={heat} />
+      {!devOff('room') && <Room mats={mats} heat={heat} />}
       <Table mats={mats} />
-      {!devOff('glass') && <TellerScreen mats={mats} />}
-      <BankerLamp mats={mats} heat={heat} beat={beat} quality={props.quality} />
+      {!devOff('glass') && <TellerScreen mats={mats} quality={props.quality} />}
+      {!devOff('lamp') && <BankerLamp mats={mats} heat={heat} beat={beat} quality={props.quality} />}
       <Banker state={props.bankerState} mats={mats} heat={heat} />
       <Gauge mats={mats} breath={breath} beat={beat} />
       <StripRecorder mats={mats} breath={breath} />
@@ -125,7 +128,7 @@ export function VaultScene(props: VaultSceneProps): JSX.Element {
       style={{ position: 'absolute', inset: 0, background: '#050403' }}
     >
       <color attach="background" args={['#050403']} />
-      <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(0.55, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />
+      {!devOff('adapt') && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(0.55, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
       <Suspense fallback={null}>
         <SceneContents {...props} />
       </Suspense>
