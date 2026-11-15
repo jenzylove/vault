@@ -11,4 +11,6 @@ export const sceneFx = {
   focus: new THREE.Vector3(0, 0.8, -0.7),
   focusWeight: 0,
   fps: 0,
+  /** frames left during which the key-light shadow map must re-render */
+  shadowFrames: 30,
 };

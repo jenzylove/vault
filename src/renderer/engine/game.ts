@@ -20,7 +20,8 @@ export const RULES = {
   pulseHeatMax: 0.15,      // rising pulse (12 s average) adds slow heat
   pulseHeatPerBpm: 1 / 60,
   bustAt: 1,               // full heat: the banker throws you out...
-  bustKeep: 0.5,           // ...and you leave with half your pile
+  bustKeep: 0,             // ...and you leave with nothing
+  heistBonus: 1,           // a trap you sold pays its price again when the audit finds it: you robbed the banker
 } as const;
 
 export type Phase = 'begin' | 'baseline' | 'practice' | 'board' | 'peek' | 'bankerRead' | 'audit' | 'reveal' | 'over';
@@ -222,7 +223,7 @@ export function step(s: GameState, a: GameAction): GameState {
       const next: GameState = {
         ...s,
         boxes: setBox(s.boxes, box.id, sold ? 'sold' : 'opened'),
-        pile: s.pile + (sold ? offer : box.value),
+        pile: s.pile + (sold ? offer : box.value) + (trapFound ? Math.round(offer * RULES.heistBonus) : 0),
         heatParts, heat,
         trapsBought: s.trapsBought + (trapFound ? 1 : 0),
         model: learnExample(s.model, s.features, box.kind), // the audit: the banker sees what was inside

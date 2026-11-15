@@ -9,7 +9,7 @@ import { frostTexture } from './textures';
 import { AimedSpot } from './AimedSpot';
 
 export const LAMP = { x: -0.36, z: -1.04, h: 0.36 };
-const LAMP_TARGET: [number, number, number] = [-0.02, TABLE_Y, -0.6];
+const LAMP_TARGET: [number, number, number] = [0.0, TABLE_Y, -0.78];
 
 const beamVert = /* glsl */ `
 varying vec3 vN; varying vec3 vV; varying float vH; varying vec3 vLocal;
@@ -92,7 +92,7 @@ export const BankerLamp = memo(function BankerLamp({ mats, heat, beat, quality }
     g.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
     return g;
   }, [apex, tgt, beamLen, quality]);
-  const dustUniforms = useMemo(() => ({ uTime: { value: 0 }, uScale: { value: 5 }, uColor: { value: new THREE.Color('#ffdcb0') }, uIntensity: { value: 0.35 } }), []);
+  const dustUniforms = useMemo(() => ({ uTime: { value: 0 }, uScale: { value: 5 }, uColor: { value: new THREE.Color('#ffdcb0') }, uIntensity: { value: 0.7 } }), []);
 
   const warm = useMemo(() => new THREE.Color('#ffb36b'), []);
   const hot = useMemo(() => new THREE.Color('#ff5a2c'), []);
@@ -107,7 +107,7 @@ export const BankerLamp = memo(function BankerLamp({ mats, heat, beat, quality }
     bulbMat.emissive.copy(col); opalMat.emissive.copy(col).multiplyScalar(0.9);
     beamUniforms.uTime.value = t;
     beamUniforms.uColor.value.copy(col);
-    beamUniforms.uIntensity.value = (0.1 + h * 0.08) * flicker;
+    beamUniforms.uIntensity.value = (0.22 + h * 0.18) * flicker;
     dustUniforms.uTime.value = t;
     dustUniforms.uColor.value.copy(col).lerp(new THREE.Color('#ffffff'), 0.3);
     dustUniforms.uScale.value = st.size.height * 0.006;
@@ -160,8 +160,7 @@ export const BankerLamp = memo(function BankerLamp({ mats, heat, beat, quality }
           ))}
         </group>
       </group>
-      <AimedSpot lightRef={spot} position={[apex.x, apex.y, apex.z]} target={LAMP_TARGET} angle={0.92} penumbra={0.75} intensity={0.6} distance={4} color="#ffb36b" castShadow shadowSize={shadowSize} />
-      <pointLight position={[LAMP.x, TABLE_Y + LAMP.h + 0.08, LAMP.z]} intensity={0.02} distance={3} color="#ff9f55" />
+      <AimedSpot lightRef={spot} position={[apex.x, apex.y, apex.z]} target={LAMP_TARGET} angle={0.92} penumbra={0.75} intensity={0.6} distance={1.9} color="#ffb36b" castShadow shadowSize={shadowSize} />
       {/* haze cone */}
       <mesh position={beamPos} quaternion={q} renderOrder={5}>
         <coneGeometry args={[beamLen * 0.62, beamLen, 64, 1, true]} />
@@ -205,7 +204,7 @@ export const TellerScreen = memo(function TellerScreen({ mats }: { mats: VaultMa
         <RoundedBox key={`f${s}`} args={[0.09, 0.012, 0.12]} radius={0.004} smoothness={2} position={[s * (GLASS_HALF_W + 0.025), TABLE_Y + 0.006, 0]} material={mats.brassDark} castShadow />
       ))}
       {/* speak-through grille */}
-      <group position={[0, 1.2, 0.006]} scale={0.75}>
+      <group position={[0, 1.02, 0.006]} scale={0.75}>
         <mesh material={mats.brassDark}><torusGeometry args={[0.07, 0.008, 12, 64]} /></mesh>
         <mesh material={grille}><circleGeometry args={[0.068, 48]} /></mesh>
       </group>

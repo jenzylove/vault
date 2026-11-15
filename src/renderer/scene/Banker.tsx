@@ -29,7 +29,6 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
   const head = useRef<THREE.Group>(null);
   const armR = useRef<THREE.Group>(null);
   const chit = useRef<THREE.Group>(null);
-  const lamp = useRef<THREE.PointLight>(null);
   const back = useRef<THREE.SpotLight>(null);
   const shadeMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#3a2a18', emissive: new THREE.Color('#ffc58a'), emissiveIntensity: 2, roughness: 0.9, side: THREE.DoubleSide }), []);
   const chitMat = useMemo(() => new THREE.MeshStandardMaterial({ map: chitTexture(), color: '#e9c77c', metalness: 0.55, roughness: 0.4 }), []);
@@ -45,7 +44,6 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
     const lampT = LAMP_LEVEL[state] * (state === 'reading' ? 0.92 + 0.08 * Math.sin(now * 2.1) : 1);
     a.lamp += (lampT - a.lamp) * (1 - Math.exp(-dt * (state === 'walking' ? 2.2 : 1.6)));
     col.set('#ffbe7a').lerp(new THREE.Color('#ff6f3d'), heat.current * 0.6);
-    if (lamp.current) { lamp.current.intensity = a.lamp * 0.3; lamp.current.color.copy(col); }
     if (back.current) { back.current.intensity = a.lamp * 1.6; back.current.color.copy(col); }
     shadeMat.emissive.copy(col); shadeMat.emissiveIntensity = 0.4 + a.lamp * 2.2;
 
@@ -69,6 +67,7 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
     const chitT = state === 'offering' ? Math.min(1, Math.max(0, (t - 0.4) / 1.4)) : 0;
     const e = chitT * chitT * (3 - 2 * chitT);
     a.chit += ((state === 'offering' ? e : 0) - a.chit) * (state === 'offering' ? 1 : 1 - Math.exp(-dt * 2));
+    if (a.chit > 0.001 && a.chit < 0.999) sceneFx.shadowFrames = Math.max(sceneFx.shadowFrames, 2);
     if (chit.current) {
       chit.current.position.z = THREE.MathUtils.lerp(BANKER_Z + 0.35, GLASS_Z + 0.38, a.chit);
       chit.current.visible = a.chit > 0.01;
@@ -88,7 +87,6 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
         <mesh position={[0, 0.02, 0]} material={mats.brass}><cylinderGeometry args={[0.06, 0.07, 0.04, 32]} /></mesh>
         <mesh position={[0, 0.2, 0]} material={mats.brass}><cylinderGeometry args={[0.008, 0.008, 0.34, 12]} /></mesh>
         <mesh position={[0, 0.4, 0]} material={shadeMat}><cylinderGeometry args={[0.07, 0.13, 0.17, 40, 1, true]} /></mesh>
-        <pointLight ref={lamp} position={[0, 0.38, 0]} intensity={0.5} distance={1.6} decay={2} color="#ffbe7a" />
       </group>
       <AimedSpot lightRef={back} position={[0.36, 1.2, BANKER_Z - 0.55]} target={[0, 1.4, BANKER_Z - 0.85]} angle={1.2} penumbra={1} intensity={4} distance={2} color="#ffbe7a" />
 

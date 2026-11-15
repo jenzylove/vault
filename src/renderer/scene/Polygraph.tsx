@@ -19,7 +19,6 @@ export const Gauge = memo(function Gauge({ mats, breath, beat }: { mats: VaultMa
   const pos: [number, number, number] = [0.15, TABLE_Y, -0.5];
   const needle = useRef<THREE.Group>(null);
   const jewel = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#4a0503', emissive: new THREE.Color('#ff2a12'), emissiveIntensity: 0.2, roughness: 0.15, clearcoat: 1, transmission: 0 }), []);
-  const jewelLight = useRef<THREE.PointLight>(null);
   const dial = useMemo(() => gaugeDialTexture(), []);
   const glass = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.04, metalness: 0, transparent: true, opacity: 0.12, clearcoat: 1, envMapIntensity: 1.5, depthWrite: false }), []);
   const spring = useRef({ x: 0, v: 0 });
@@ -33,7 +32,6 @@ export const Gauge = memo(function Gauge({ mats, breath, beat }: { mats: VaultMa
     if (needle.current) needle.current.rotation.z = -sp.x * 2.2;
     const hb = beat.current;
     jewel.emissiveIntensity = 0.25 + hb * 7;
-    if (jewelLight.current) jewelLight.current.intensity = hb * 0.015;
   });
   return (
     <group position={pos} rotation={[0, faceCamera(pos[0], pos[2]), 0]} scale={0.7}>
@@ -50,7 +48,7 @@ export const Gauge = memo(function Gauge({ mats, breath, beat }: { mats: VaultMa
         </mesh>
         <mesh position={[0, 0, 0.0228]}>
           <circleGeometry args={[0.064, 64]} />
-          <meshStandardMaterial map={dial} roughness={0.65} />
+          <meshStandardMaterial map={dial} emissiveMap={dial} emissive="#fff1d6" emissiveIntensity={0.12} roughness={0.65} />
         </mesh>
         <group ref={needle} position={[0, 0, 0.0236]}>
           <mesh geometry={needleGeo} material={mats.blackEnamel} castShadow />
@@ -69,7 +67,6 @@ export const Gauge = memo(function Gauge({ mats, breath, beat }: { mats: VaultMa
       <group position={[0.058, 0.04, 0.045]}>
         <mesh material={mats.brassPolished} rotation={[Math.PI / 2, 0, 0]}><cylinderGeometry args={[0.009, 0.01, 0.008, 20]} /></mesh>
         <mesh position={[0, 0.002, 0.003]} material={jewel}><sphereGeometry args={[0.0065, 20, 14]} /></mesh>
-        <pointLight ref={jewelLight} position={[0, 0.01, 0.02]} intensity={0} distance={0.35} decay={2} color="#ff3a1a" />
       </group>
     </group>
   );
@@ -129,12 +126,12 @@ export const StripRecorder = memo(function StripRecorder({ mats, breath }: { mat
       <group position={[0, 0.056, 0.004]} rotation={[-0.16, 0, 0]}>
         <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
           <planeGeometry args={[PW, PD]} />
-          <meshStandardMaterial map={tex} roughness={0.92} />
+          <meshStandardMaterial map={tex} roughness={0.95} color="#857e71" />
         </mesh>
         {/* supply and take-up rolls */}
         {[-1, 1].map((s) => (
           <group key={s} position={[s * (PW / 2 + 0.008), 0.005, 0]}>
-            <mesh rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.011, 0.011, PD + 0.004, 32]} /><meshStandardMaterial color="#e9e1cc" roughness={0.9} /></mesh>
+            <mesh rotation={[Math.PI / 2, 0, 0]} castShadow><cylinderGeometry args={[0.011, 0.011, PD + 0.004, 32]} /><meshStandardMaterial color="#9c9586" roughness={0.9} /></mesh>
             {[-1, 1].map((e) => (
               <mesh key={e} position={[0, 0, e * (PD / 2 + 0.004)]} rotation={[Math.PI / 2, 0, 0]} material={mats.brassPolished}><cylinderGeometry args={[0.014, 0.014, 0.003, 32]} /></mesh>
             ))}

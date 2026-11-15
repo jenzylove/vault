@@ -63,9 +63,10 @@ beforeAll(() => {
     '## Rules in force',
     '',
     `- Heat: +${RULES.heatPerTrapBought} per trap the banker buys and finds at its audit, +${RULES.heatUnread} per unread peek, up to +${RULES.pulseHeatMax} from a rising pulse. At ${RULES.bustAt} the banker throws you out with ${RULES.bustKeep * 100}% of your pile.`,
-    `- Banker walks when P(trap) ≥ ${BANKER_RULES.walkAt} − ${BANKER_RULES.walkHeatSlope} × heat (floor ${BANKER_RULES.walkFloor}). Offer = belief value × (1 − margin), margin = ${BANKER_RULES.marginBase} + ${BANKER_RULES.marginHeat} × heat + ${BANKER_RULES.marginDoubt} × (1 − banker's own hit rate).`,
+    `- Heist: a trap you sold pays its price again (×${RULES.heistBonus}) when the banker's audit finds it.`,
+    `- Banker walks when P(trap) ≥ ${BANKER_RULES.walkAt} − ${BANKER_RULES.walkHeatSlope} × heat (floor ${BANKER_RULES.walkFloor}). Offer = its estimate of a treasure's value × (1 − margin), margin = ${BANKER_RULES.marginBase} + ${BANKER_RULES.marginHeat} × heat + ${BANKER_RULES.marginDoubt} × (1 − banker's own hit rate).`,
     `- Unread peeks get a blind offer at ${BANKER_RULES.unreadDiscount * 100}%, priced from what this player's unread boxes turned out to be.`,
-    `- Banker model: per player Gaussian naive Bayes on breath catch, shallowing, rate change, blinks, smile, alarm; priors with ${PRIOR.pseudo} pseudo counts per class, updated by 2 labelled practice peeks and every audit.`,
+    `- Banker model: per player Gaussian naive Bayes on breath catch, shallowing, rate change, blinks, smile, alarm; priors with ${PRIOR.breathPseudo} pseudo counts per class for breath and ${PRIOR.pseudo} for the rest, updated by 2 labelled practice peeks and every audit.`,
     '',
     '## Simulated player policy',
     '',
@@ -79,6 +80,8 @@ describe('incentive probe (simulated players)', () => {
   test('skilled breath control wins on average', () => {
     const d = paired('steady');
     expect(d.mean).toBeGreaterThan(3 * d.se);
+    // and clearly: robbing the banker should feel like it pays (15 to 25% over honest)
+    expect(col('steady', (r) => r.pile)).toBeGreaterThan(1.15 * col('honest', (r) => r.pile));
     expect(col('steady', (r) => r.trapsSold)).toBeGreaterThan(col('honest', (r) => r.trapsSold) + 0.5);
   });
 
@@ -122,6 +125,8 @@ describe('incentive probe (simulated players)', () => {
 
   test('ducking out of camera does not pay', () => {
     expect(paired('hide').mean).toBeLessThan(0);
+    const g = paired('steadyGreedy');
+    expect(g.mean).toBeLessThan(-3 * g.se); // greedy ignoring heat loses to honest too
   });
 
   test('the banker reads honest players better than chance', () => {
@@ -178,7 +183,7 @@ describe('every number on screen changes an outcome', () => {
     expect(opened).toBeGreaterThan(1);
   });
 
-  test('pile and heat: ignoring heat busts you and halves your pile', () => {
+  test('pile and heat: ignoring heat busts you and costs your pile', () => {
     const busts = col('steadyGreedy', (r) => (r.busted ? 1 : 0));
     expect(busts).toBeGreaterThan(0.1);
     const d = paired('steadyGreedy', 'steady');

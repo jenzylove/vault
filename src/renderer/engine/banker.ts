@@ -20,7 +20,8 @@ export const PRIOR = {
   trap: [1.2, 0.18, 0.3, 0.6, 0.0, 0.05],
   treasure: [0.05, 0.02, 0.12, 0.3, 0.03, 0.0],
   sd: [0.55, 0.2, 0.25, 0.5, 0.1, 0.1],
-  pseudo: 2,           // prior counts per class
+  pseudo: 2,           // prior counts per class (blinks, face, unread)
+  breathPseudo: 6,     // breath priors are held harder: a catch stays suspicious even if you catch everywhere
   shrink: 0.75,        // correlated features (breath trio) are not independent: damp the sum
   capPerFeature: 4,    // no single feature can swing the log odds by more than this
   talkingLogOdds: 0.6, // talking in a peek is itself a leak
@@ -32,8 +33,8 @@ export const BANKER_RULES = {
   walkHeatSlope: 0.2,  // ...and this much lower at full heat
   walkFloor: 0.3,
   marginBase: 0.2,
-  marginHeat: 0.2,     // full heat adds 20 points of margin
-  marginDoubt: 0.15,    // a banker that has been wrong widens its margin
+  marginHeat: 0.05,    // full heat adds 5 points of margin
+  marginDoubt: 0.05,   // a banker that has been wrong widens its margin
   unreadDiscount: 0.5, // unread boxes get a blind, discounted offer
   minOffer: 20,
 } as const;
@@ -74,15 +75,16 @@ export function learnExample(model: BankerModel, f: PeekFeatures, kind: BoxKind)
 interface Stats { muTrap: number[]; muTreasure: number[]; sd: number[]; }
 
 export function modelStats(model: BankerModel): Stats {
-  const k = PRIOR.pseudo;
+  const kOf = (i: number): number => (i < 3 ? PRIOR.breathPseudo : PRIOR.pseudo);
   const read = model.examples.filter((e) => !e.unread);
   const traps = read.filter((e) => e.kind === 'trap');
   const treas = read.filter((e) => e.kind !== 'trap');
   const mu = (prior: readonly number[], xs: Example[]): number[] =>
-    prior.map((p, i) => (k * p + xs.reduce((s, e) => s + (e.x[i] as number), 0)) / (k + xs.length));
+    prior.map((p, i) => (kOf(i) * p + xs.reduce((s, e) => s + (e.x[i] as number), 0)) / (kOf(i) + xs.length));
   const muTrap = mu(PRIOR.trap, traps);
   const muTreasure = mu(PRIOR.treasure, treas);
   const sd = PRIOR.sd.map((s0, i) => {
+    const k = kOf(i);
     let ss = 2 * k * s0 * s0;
     for (const e of traps) ss += ((e.x[i] as number) - (muTrap[i] as number)) ** 2;
     for (const e of treas) ss += ((e.x[i] as number) - (muTreasure[i] as number)) ** 2;
@@ -216,17 +218,20 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
   const k = PRIOR.pseudo;
   const bigs = treas.filter((e) => e.kind === 'big');
   const smalls = treas.filter((e) => e.kind === 'small');
-  const muBig = (k * 0.1 + bigs.reduce((s, e) => s + e.joy, 0)) / (k + bigs.length);
-  const muSmall = (k * 0.02 + smalls.reduce((s, e) => s + e.joy, 0)) / (k + smalls.length);
+  // Uninformative prior: the face says nothing about big vs small until this player's own
+  // revealed treasures show a difference.
+  const muBig = (k * 0.03 + bigs.reduce((s, e) => s + e.joy, 0)) / (k + bigs.length);
+  const muSmall = (k * 0.03 + smalls.reduce((s, e) => s + e.joy, 0)) / (k + smalls.length);
   const joy = f.exprDelta.happy ?? 0;
-  const sdJ = 0.1;
-  let lj = clamp((-((joy - muBig) ** 2) + (joy - muSmall) ** 2) / (2 * sdJ * sdJ), -2, 2);
+  const sdJ = 0.05;
+  let lj = clamp((-((joy - muBig) ** 2) + (joy - muSmall) ** 2) / (2 * sdJ * sdJ), -3, 3);
   // A smile that looks like this player's trap smile is not evidence of a big one.
   if ((ev[4] as number) > 0) lj = Math.min(lj, 0);
-  const pBig = sigmoid(logit(pri.pBigGivenTreasure) + 0.7 * lj);
+  const pBig = sigmoid(logit(pri.pBigGivenTreasure) + lj);
 
   const evTreasure = pBig * pri.bigMean + (1 - pBig) * pri.smallMean;
-  const offer = round10((1 - pTrap) * evTreasure * (1 - m));
+  // If it buys at all, it pays what it thinks a treasure is worth, minus its margin.
+  const offer = round10(evTreasure * (1 - m));
 
   if (pTrap >= walkAt || offer < BANKER_RULES.minOffer) {
     let best = -Infinity;

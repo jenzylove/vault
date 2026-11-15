@@ -113,7 +113,7 @@ export const Box = memo(function Box({ index, box, isActive, peekContents, mats,
   const spring = useRef<THREE.Group>(null);
   const [hover, setHover] = useState(false);
   const plate = useMemo(() => plateTexture(box.id), [box.id]);
-  const plateMat = useMemo(() => new THREE.MeshStandardMaterial({ map: plate, bumpMap: plate, bumpScale: -1.2, color: '#d6b46c', metalness: 0.75, roughness: 0.34 }), [plate]);
+  const plateMat = useMemo(() => new THREE.MeshStandardMaterial({ map: plate, bumpMap: plate, bumpScale: -1.2, color: '#e2c27a', metalness: 0.25, roughness: 0.45 }), [plate]);
   const glowMat = useMemo(() => new THREE.SpriteMaterial({ map: softSpriteTexture(), color: '#ffb84a', blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0 }), []);
 
   // transition bookkeeping (elapsed-clock based)
@@ -219,6 +219,7 @@ export const Box = memo(function Box({ index, box, isActive, peekContents, mats,
     }
     sceneFx.boxGlow[index] = gl;
     g.localToWorld(sceneFx.boxGlowPos[index].set(0, H + 0.03, 0.01));
+    if (t < 4.5 || hover) sceneFx.shadowFrames = Math.max(sceneFx.shadowFrames, 2);
     if (isActive) { sceneFx.focus.copy(g.position); sceneFx.focusWeight = 1; }
   });
 

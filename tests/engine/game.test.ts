@@ -84,13 +84,13 @@ describe('step', () => {
     expect(s.read?.decision).toBe('offer');
     const offer = s.read!.offer!;
     s = step(s, { type: 'sell' });
-    expect(s.pile).toBe(offer);
+    expect(s.pile).toBe(offer * (1 + RULES.heistBonus)); // the heist: paid again at the audit
     expect(s.heat).toBeCloseTo(RULES.heatPerTrapBought, 5);
     expect(s.trapsBought).toBe(1);
     expect(s.lastOutcome?.correct).toBe(false);
   });
 
-  test('full heat busts you: the banker throws you out with half your pile', () => {
+  test('full heat busts you: the banker throws you out with nothing', () => {
     let s = toBoard();
     s = { ...s, pile: 1000, heatParts: { ...s.heatParts, traps: 0.9 }, heat: 0.9, trapsBought: 3 };
     const trap = s.boxes.find((b) => b.kind === 'trap')!;
@@ -99,8 +99,7 @@ describe('step', () => {
     if (s.phase === 'bankerRead') s = step(s, { type: 'sell' });
     expect(s.busted).toBe(true);
     expect(s.phase).toBe('reveal');
-    expect(s.pile).toBeLessThan(1000);
-    expect(s.pile).toBeGreaterThanOrEqual(500 * 0.99);
+    expect(s.pile).toBe(0);
   });
 
   test('leaving keeps the pile and ends the game', () => {

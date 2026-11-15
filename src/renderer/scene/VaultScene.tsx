@@ -1,10 +1,10 @@
 // The Vault: a 1950s Swiss bank vault after hours, rendered from the seated player's eyes.
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment } from '@react-three/drei';
+import { Environment, PerformanceMonitor } from '@react-three/drei';
 import type { VaultSceneProps } from './types';
-import { useVaultMaterials } from './materials';
+import { useVaultMaterials, applyEnvStrength } from './materials';
 import { Room } from './Room';
 import { Table, TellerScreen, BankerLamp } from './Table';
 import { Box } from './Box';
@@ -43,6 +43,10 @@ function CameraRig() {
   return null;
 }
 
+// dev-only profiling switches, e.g. ?fx=0&shadows=0
+const DEV_FLAGS = import.meta.env.DEV ? new URLSearchParams(location.search) : new URLSearchParams();
+const devOff = (k: string) => DEV_FLAGS.get(k) === '0';
+
 function SceneContents(props: VaultSceneProps) {
   const mats = useVaultMaterials();
   const breath = useRef(props.breath); breath.current = props.breath;
@@ -52,12 +56,22 @@ function SceneContents(props: VaultSceneProps) {
   const glow = useRef<THREE.PointLight>(null);
   const fps = useRef({ n: 0, t: 0 });
 
+  const { gl } = useThree();
+  useEffect(() => { if (import.meta.env.DEV) (window as unknown as { __vaultGL: unknown }).__vaultGL = gl; }, [gl]);
+  useEffect(() => {
+    // the frosted screen only needs a blurred copy of the room behind it
+    (gl as THREE.WebGLRenderer & { transmissionResolutionScale: number }).transmissionResolutionScale = props.quality === 'high' ? 0.5 : 0.35;
+  }, [gl, props.quality]);
   useEffect(() => {
     scene.fog = new THREE.FogExp2('#0d0a07', 0.07);
     return () => { scene.fog = null; };
   }, [scene]);
 
-  useFrame((st, dt) => {
+  useFrame((_, dt) => {
+    applyEnvStrength(mats, scene.environment);
+    // shadows re-render only while something on the player's side moves
+    gl.shadowMap.autoUpdate = false;
+    if (sceneFx.shadowFrames > 0) { gl.shadowMap.needsUpdate = true; sceneFx.shadowFrames--; }
     const h = heat.current;
     const fog = scene.fog as THREE.FogExp2 | null;
     if (fog) { fog.density = 0.06 + h * 0.12; fog.color.setRGB(0.05 + h * 0.03, 0.038, 0.027); }
@@ -73,7 +87,6 @@ function SceneContents(props: VaultSceneProps) {
     if (props.activeBoxId == null) sceneFx.focusWeight = Math.max(0, sceneFx.focusWeight - dt * 1.5);
     fps.current.n++; fps.current.t += dt;
     if (fps.current.t >= 0.5) { sceneFx.fps = fps.current.n / fps.current.t; fps.current.n = 0; fps.current.t = 0; }
-    void st;
   });
 
   return (
@@ -84,7 +97,7 @@ function SceneContents(props: VaultSceneProps) {
       <CameraRig />
       <Room mats={mats} heat={heat} />
       <Table mats={mats} />
-      <TellerScreen mats={mats} />
+      {!devOff('glass') && <TellerScreen mats={mats} />}
       <BankerLamp mats={mats} heat={heat} beat={beat} quality={props.quality} />
       <Banker state={props.bankerState} mats={mats} heat={heat} />
       <Gauge mats={mats} breath={breath} beat={beat} />
@@ -92,22 +105,27 @@ function SceneContents(props: VaultSceneProps) {
       {props.boxes.slice(0, 10).map((b, i) => (
         <Box key={b.id} index={i} box={b} isActive={props.activeBoxId === b.id} peekContents={props.activeBoxId === b.id ? props.peekContents : null} mats={mats} onClick={props.onBoxClick} />
       ))}
-      <Effects quality={props.quality} />
+      {!devOff('fx') && <Effects quality={props.quality} />}
     </>
   );
 }
 
 export function VaultScene(props: VaultSceneProps): JSX.Element {
   const high = props.quality === 'high';
+  // adaptive resolution: drop render scale when the GPU is busy (the SDK shares it), recover when it frees up
+  const base = high ? 1 : 0.75;
+  const [dpr, setDpr] = useState(base);
+  useEffect(() => setDpr(base), [base]);
   return (
     <Canvas
-      shadows={{ type: THREE.PCFShadowMap }}
-      dpr={high ? [1, 1.25] : [1, 1]}
+      shadows={devOff('shadows') ? false : { type: THREE.PCFShadowMap }}
+      dpr={dpr}
       gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.NoToneMapping, stencil: false }}
       camera={{ fov: 52, near: 0.03, far: 40, position: CAMERA_POS.toArray() }}
       style={{ position: 'absolute', inset: 0, background: '#050403' }}
     >
       <color attach="background" args={['#050403']} />
+      <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(0.55, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />
       <Suspense fallback={null}>
         <SceneContents {...props} />
       </Suspense>

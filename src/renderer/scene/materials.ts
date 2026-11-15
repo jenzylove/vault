@@ -19,13 +19,13 @@ export const TEX_URLS = {
 };
 
 export interface VaultMaterials {
-  brass: THREE.MeshPhysicalMaterial;
-  brassDark: THREE.MeshPhysicalMaterial;
-  brassPolished: THREE.MeshPhysicalMaterial;
-  gold: THREE.MeshPhysicalMaterial;
+  brass: THREE.MeshStandardMaterial;
+  brassDark: THREE.MeshStandardMaterial;
+  brassPolished: THREE.MeshStandardMaterial;
+  gold: THREE.MeshStandardMaterial;
   steel: THREE.MeshStandardMaterial;
   steelBrushed: THREE.MeshStandardMaterial;
-  walnut: THREE.MeshPhysicalMaterial;
+  walnut: THREE.MeshStandardMaterial;
   concrete: THREE.MeshStandardMaterial;
   terrazzo: THREE.MeshStandardMaterial;
   velvet: THREE.MeshPhysicalMaterial;
@@ -46,6 +46,19 @@ function prep(t: THREE.Texture, rx: number, ry: number, srgb: boolean): THREE.Te
   return c;
 }
 
+/** Reflection strength per material (scene.environmentIntensity only covers materials without their own envMap). */
+export const ENV_STRENGTH: Partial<Record<keyof VaultMaterials, number>> = {
+  brass: 0.55, brassDark: 0.35, brassPolished: 0.8, gold: 1.4, steel: 0.18, steelBrushed: 0.22, greenGlass: 0.7, walnut: 0.22, blackEnamel: 0.3,
+};
+
+export function applyEnvStrength(mats: VaultMaterials, env: THREE.Texture | null): void {
+  if (!env) return;
+  for (const [k, v] of Object.entries(ENV_STRENGTH)) {
+    const m = mats[k as keyof VaultMaterials] as THREE.MeshStandardMaterial;
+    if (m.envMap !== env) { m.envMap = env; m.envMapIntensity = v as number; m.needsUpdate = true; }
+  }
+}
+
 export function useVaultMaterials(): VaultMaterials {
   const tx = useTexture(TEX_URLS) as Record<keyof typeof TEX_URLS, THREE.Texture>;
   return useMemo(() => {
@@ -54,18 +67,17 @@ export function useVaultMaterials(): VaultMaterials {
     const brassColor = grimeTexture('brassCol', 0.9, 0.12, 13, 0);
     brassColor.colorSpace = THREE.SRGBColorSpace;
 
-    const brass = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#c9a35a'), metalness: 1, roughness: 1,
-      roughnessMap: brassRough, map: brassColor, clearcoat: 0.25, clearcoatRoughness: 0.35,
+    const brass = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#c9a35a'), metalness: 1, roughness: 1, roughnessMap: brassRough, map: brassColor,
     });
-    const brassDark = new THREE.MeshPhysicalMaterial({
+    const brassDark = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#8a6a34'), metalness: 1, roughness: 1, roughnessMap: brassRoughDark, map: brassColor,
     });
-    const brassPolished = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#e0bf74'), metalness: 1, roughness: 0.16, clearcoat: 0.6, clearcoatRoughness: 0.1,
+    const brassPolished = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#e0bf74'), metalness: 1, roughness: 0.18,
     });
-    const gold = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#ffc65a'), metalness: 1, roughness: 0.2, emissive: new THREE.Color('#ff9a2a'), emissiveIntensity: 0,
+    const gold = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#ffc65a'), metalness: 1, roughness: 0.16, roughnessMap: grimeTexture('gold', 0.5, 0.25, 41, 40), emissive: new THREE.Color('#ff9a2a'), emissiveIntensity: 0,
     });
     const steel = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#6c7074'), metalness: 0.85, roughness: 1, roughnessMap: grimeTexture('steel', 0.5, 0.18, 21, 120),
@@ -75,10 +87,11 @@ export function useVaultMaterials(): VaultMaterials {
     const steelBrushed = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#8d9195'), metalness: 1, roughness: 1, roughnessMap: brushed, bumpMap: brushed, bumpScale: 0.3,
     });
-    const walnut = new THREE.MeshPhysicalMaterial({
+    // lacquered walnut: the scan's roughness, pulled glossier to read as a polished banker's table
+    const walnut = new THREE.MeshStandardMaterial({
       map: prep(tx.walnutD, 1.2, 1.2, true), normalMap: prep(tx.walnutN, 1.2, 1.2, false),
-      roughnessMap: prep(tx.walnutR, 1.2, 1.2, false), roughness: 0.85, color: new THREE.Color('#8a6a55'),
-      clearcoat: 0.55, clearcoatRoughness: 0.22, normalScale: new THREE.Vector2(0.5, 0.5),
+      roughnessMap: prep(tx.walnutR, 1.2, 1.2, false), roughness: 0.55, color: new THREE.Color('#8a6a55'),
+      normalScale: new THREE.Vector2(0.4, 0.4),
     });
     const concrete = new THREE.MeshStandardMaterial({
       map: prep(tx.concD, 3, 1.5, true), normalMap: prep(tx.concN, 3, 1.5, false), roughnessMap: prep(tx.concR, 3, 1.5, false),

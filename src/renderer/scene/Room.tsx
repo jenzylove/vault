@@ -44,7 +44,7 @@ function VaultDoor({ mats }: { mats: VaultMaterials }) {
       <mesh position={[0, 0, -1.2]} material={mats.concrete}>
         <circleGeometry args={[DOOR.r + 0.02, 48]} />
       </mesh>
-      <pointLight position={[0.2, 0.3, -0.9]} intensity={0.25} distance={2.5} color="#ffb46e" />
+      <mesh position={[0, 0, -1.19]}><circleGeometry args={[DOOR.r * 0.8, 40]} /><meshBasicMaterial color="#2a1a0e" /></mesh>
       {/* the door, hinged on the right of the ring, swung toward the room */}
       <group position={[DOOR.r + 0.12, 0, 0.12]} rotation={[0, open, 0]}>
         <group position={[-(DOOR.r + 0.12), 0, 0.18]}>
