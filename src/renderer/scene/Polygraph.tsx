@@ -18,9 +18,9 @@ const needleGeo = (() => {
 export const Gauge = memo(function Gauge({ mats, breath, beat }: { mats: VaultMaterials; breath: React.MutableRefObject<number[]>; beat: React.MutableRefObject<number> }) {
   const pos: [number, number, number] = [0.15, TABLE_Y, -0.5];
   const needle = useRef<THREE.Group>(null);
-  const jewel = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#4a0503', emissive: new THREE.Color('#ff2a12'), emissiveIntensity: 0.2, roughness: 0.15, clearcoat: 1, transmission: 0 }), []);
+  const jewel = useMemo(() => new THREE.MeshStandardMaterial({ color: '#4a0503', emissive: new THREE.Color('#ff2a12'), emissiveIntensity: 0.2, roughness: 0.15 }), []);
   const dial = useMemo(() => gaugeDialTexture(), []);
-  const glass = useMemo(() => new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.04, metalness: 0, transparent: true, opacity: 0.12, clearcoat: 1, envMapIntensity: 1.5, depthWrite: false }), []);
+  const glass = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.04, metalness: 0.2, transparent: true, opacity: 0.1, depthWrite: false }), []);
   const spring = useRef({ x: 0, v: 0 });
   useFrame((_, dt) => {
     const b = breath.current;

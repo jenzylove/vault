@@ -32,11 +32,11 @@ export interface VaultMaterials {
   walnut: THREE.MeshStandardMaterial;
   concrete: THREE.MeshStandardMaterial;
   terrazzo: THREE.MeshStandardMaterial;
-  velvet: THREE.MeshPhysicalMaterial;
+  velvet: THREE.MeshStandardMaterial;
   blackEnamel: THREE.MeshStandardMaterial;
   void: THREE.MeshBasicMaterial;
   silhouette: THREE.MeshStandardMaterial;
-  greenGlass: THREE.MeshPhysicalMaterial;
+  greenGlass: THREE.MeshStandardMaterial;
   paintedWall: THREE.MeshStandardMaterial;
 }
 
@@ -85,7 +85,6 @@ export function useVaultMaterials(): VaultMaterials {
     brassColor.colorSpace = THREE.SRGBColorSpace;
     const brass = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#a8844c'), metalness: 1, roughness: 1, roughnessMap: prints, map: brassColor,
-      bumpMap: grimeTexture('brassScratch', 0.5, 0.05, 14, 260), bumpScale: 0.25,
     });
     const brassDark = new THREE.MeshStandardMaterial({
       color: new THREE.Color('#6a5130'), metalness: 1, roughness: 1.3, roughnessMap: prints, map: brassColor,
@@ -125,14 +124,12 @@ export function useVaultMaterials(): VaultMaterials {
       color: new THREE.Color('#7d7c78'),
     });
     // dark bottle-green banker's felt
-    const velvet = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#0d1410'), roughness: 1, sheen: 1, sheenRoughness: 0.6, sheenColor: new THREE.Color('#2f4a3a'),
-    });
+    const velvet = new THREE.MeshStandardMaterial({ color: new THREE.Color('#121a15'), roughness: 1, metalness: 0 });
     const blackEnamel = new THREE.MeshStandardMaterial({ color: '#070605', roughness: 0.6, metalness: 0.2 });
     const voidMat = new THREE.MeshBasicMaterial({ color: '#000000' });
     const silhouette = new THREE.MeshStandardMaterial({ color: '#0b0a09', roughness: 1, metalness: 0 });
-    const greenGlass = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color('#06351a'), roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04,
+    const greenGlass = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#06351a'), roughness: 0.12, metalness: 0.1,
       emissive: new THREE.Color('#0b4a20'), emissiveIntensity: 0.04, side: THREE.DoubleSide,
     });
     return { brass, brassDark, brassPolished, gold, steel, steelBrushed, walnut, concrete, terrazzo, velvet, blackEnamel, void: voidMat, silhouette, greenGlass, paintedWall };

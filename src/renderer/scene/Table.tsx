@@ -35,7 +35,7 @@ void main(){
   float facing = abs(dot(normalize(vN), normalize(vV)));
   float core = pow(facing, 2.2);
   float along = smoothstep(0.0, 0.35, vH) * smoothstep(1.0, 0.82, vH);
-  float n = noise(vLocal * 18.0 + vec3(0.0, uTime * 0.12, uTime * 0.05)) * 0.6 + noise(vLocal * 5.0 - uTime * 0.04) * 0.6;
+  float n = noise(vLocal * 9.0 + vec3(0.0, uTime * 0.1, uTime * 0.04)) * 1.1;
   float a = core * along * (0.45 + n * 0.75) * uIntensity;
   gl_FragColor = vec4(uColor * a, a);
 }`;

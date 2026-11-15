@@ -116,7 +116,7 @@ function SceneContents(props: VaultSceneProps) {
 export function VaultScene(props: VaultSceneProps): JSX.Element {
   const high = props.quality === 'high';
   // adaptive resolution: drop render scale when the GPU is busy (the SDK shares it), recover when it frees up
-  const base = high ? 1 : 0.75;
+  const base = high ? 0.9 : 0.7;
   const [dpr, setDpr] = useState(base);
   useEffect(() => setDpr(base), [base]);
   return (
@@ -128,7 +128,7 @@ export function VaultScene(props: VaultSceneProps): JSX.Element {
       style={{ position: 'absolute', inset: 0, background: '#050403' }}
     >
       <color attach="background" args={['#050403']} />
-      {!devOff('adapt') && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(0.55, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
+      {!devOff('adapt') && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(high ? 0.65 : 0.5, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
       <Suspense fallback={null}>
         <SceneContents {...props} />
       </Suspense>
