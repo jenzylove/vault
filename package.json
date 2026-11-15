@@ -1,0 +1,41 @@
+{
+  "name": "the-vault",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A banker reads your breath while you peek inside the box. Built on the Presage SmartSpectra SDK.",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "overrides": {
+    "@smartspectra/node-sdk-linux-x64": "file:./stubs/linux-x64",
+    "@smartspectra/node-sdk-linux-arm64": "file:./stubs/linux-arm64",
+    "@smartspectra/node-sdk-darwin-arm64": "file:./stubs/darwin-arm64"
+  },
+  "dependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "@react-three/postprocessing": "^2.19.1",
+    "@smartspectra/node-sdk": "^3.5.0",
+    "postprocessing": "^6.39.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.187.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@types/three": "^0.187.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.3.2",
+    "electron-vite": "^6.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}
