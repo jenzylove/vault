@@ -2,8 +2,9 @@
 import * as THREE from 'three';
 
 export const sceneFx = {
-  boxGlow: new Array<number>(10).fill(0),
-  boxGlowPos: Array.from({ length: 10 }, () => new THREE.Vector3()),
+  /** ten board boxes plus up to four practice boxes (indices 10 and up) */
+  boxGlow: new Array<number>(14).fill(0),
+  boxGlowPos: Array.from({ length: 14 }, () => new THREE.Vector3()),
   /** elapsed-time when the banker last pulled a box toward him (burn) */
   pullTime: -1e9,
   pullX: 0,

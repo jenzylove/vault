@@ -36,27 +36,79 @@ export interface TellSheet {
   headline: string;
 }
 
-interface Spec { label: string; unit: string; floor: number; get: (f: PeekFeatures) => number; fmt: (x: number) => string; line: (t: string, r: string) => string; }
+interface Spec {
+  label: string;
+  /** plain word unit for the trend line, never a symbol */
+  unit: string;
+  floor: number;
+  get: (f: PeekFeatures) => number;
+  /** one value in plain words, no signs: "1.4 seconds", "10 percent shallower", "6 points more" */
+  say: (x: number) => string;
+  line: (trap: number, treasure: number) => string;
+}
 
-const signed = (x: number): string => `${x >= 0 ? '+' : ''}${Math.round(x)}`;
+// Player facing copy rule: no minus or plus signs, no percent symbol, no hyphens or dashes.
+const whole = (x: number): number => Math.round(Math.abs(x));
+const one = (x: number): string => Math.abs(x).toFixed(1);
+/** "10 percent shallower" / "4 percent deeper" / "as deep as your calm" */
+const unitFor = (k: number, n: string): string => (k === 1 ? n.replace(/^points/, 'point').replace(/^beats/, 'beat') : n);
+const towards = (x: number, n: string, up: string, down: string, level: string): string =>
+  whole(x) === 0 ? level : `${whole(x)} ${unitFor(whole(x), n)} ${x > 0 ? up : down}`;
+
+function face(label: string, get: (f: PeekFeatures) => number, verb: string, what: string): Spec {
+  const amt = (x: number): string => (whole(x) === 0 ? `no more${what}` : `${towards(x, 'points', 'more', 'less', '')}${what}`);
+  return {
+    label, unit: 'points', floor: 3, get: (f) => 100 * get(f),
+    say: (x) => towards(x, 'points', 'more', 'less', 'no change'),
+    line: (t, r) => `At traps ${verb} ${amt(t)} than at your calm. At treasure, ${amt(r)}.`,
+  };
+}
+
 const SPECS: Record<TellKey, Spec> = {
-  breath: { label: 'Breath catch', unit: 's', floor: 0.25, get: (f) => f.breathCatchMs / 1000, fmt: (x) => x.toFixed(1),
-    line: (t, r) => `At traps your breath stopped for ${t} s on average; at treasure ${r} s.` },
-  shallow: { label: 'Shallow breathing', unit: '%', floor: 8, get: (f) => 100 * f.shallowing, fmt: (x) => String(Math.round(x)),
-    line: (t, r) => `At traps your breathing was ${t}% shallower than your calm; at treasure ${r}%.` },
-  rate: { label: 'Breathing rate', unit: '%', floor: 10, get: (f) => 100 * Math.abs(f.rateChange), fmt: (x) => String(Math.round(x)),
-    line: (t, r) => `At traps your breathing rate moved ${t}% from your calm; at treasure ${r}%.` },
-  blinks: { label: 'Blinks', unit: 'per peek', floor: 0.8, get: (f) => f.blinkCount ?? 0, fmt: (x) => x.toFixed(1),
-    line: (t, r) => `At traps you blinked ${t} times per peek; at treasure ${r}.` },
-  smile: { label: 'Smile', unit: 'points', floor: 3, get: (f) => 100 * (f.exprDelta.happy ?? 0), fmt: signed,
-    line: (t, r) => `At traps your smile moved ${t} points from your calm; at treasure ${r}.` },
-  surprise: { label: 'Surprise', unit: 'points', floor: 3, get: (f) => 100 * (f.exprDelta.surprise ?? 0), fmt: signed,
-    line: (t, r) => `At traps surprise moved ${t} points on your face; at treasure ${r}.` },
-  fear: { label: 'Fear', unit: 'points', floor: 3, get: (f) => 100 * (f.exprDelta.fear ?? 0), fmt: signed,
-    line: (t, r) => `At traps fear moved ${t} points on your face; at treasure ${r}.` },
-  pulse: { label: 'Pulse', unit: 'bpm', floor: 2, get: (f) => f.pulseDelta, fmt: signed,
-    line: (t, r) => `At traps your pulse ran ${t} bpm from your calm; at treasure ${r}.` },
+  breath: {
+    label: 'Breath catch', unit: 'seconds', floor: 0.25, get: (f) => f.breathCatchMs / 1000,
+    say: (x) => `${one(x)} seconds`,
+    line: (t, r) => `At traps your breath stopped for ${one(t)} seconds on average. At treasure, ${one(r)} seconds.`,
+  },
+  shallow: {
+    label: 'Shallow breathing', unit: 'percent', floor: 8, get: (f) => 100 * f.shallowing,
+    say: (x) => towards(x, 'percent', 'shallower', 'deeper', 'as deep as your calm'),
+    line: (t, r) => `At traps your breath ${whole(t) === 0 ? 'stayed as deep as your calm' : `went ${towards(t, 'percent', 'shallower', 'deeper', '')} than your calm`}. `
+      + `At treasure it ${whole(r) === 0 ? 'stayed as deep as your calm' : `went ${towards(r, 'percent', 'shallower', 'deeper', '')}`}.`,
+  },
+  rate: {
+    label: 'Breathing rate', unit: 'percent', floor: 10, get: (f) => 100 * Math.abs(f.rateChange),
+    say: (x) => `${whole(x)} percent`,
+    line: (t, r) => `At traps your breathing rate moved ${whole(t)} percent away from your calm. At treasure it moved ${whole(r)} percent.`,
+  },
+  blinks: {
+    label: 'Blinks', unit: 'blinks', floor: 0.8, get: (f) => f.blinkCount ?? 0,
+    say: (x) => `${one(x)} blinks`,
+    line: (t, r) => `At traps you blinked ${one(t)} times a peek. At treasure, ${one(r)} times.`,
+  },
+  smile: face('Smile', (f) => f.exprDelta.happy ?? 0, 'you smiled', ''),
+  surprise: face('Surprise', (f) => f.exprDelta.surprise ?? 0, 'your face showed', ' surprise'),
+  fear: face('Fear', (f) => f.exprDelta.fear ?? 0, 'your face showed', ' fear'),
+  pulse: {
+    label: 'Pulse', unit: 'beats a minute', floor: 2, get: (f) => f.pulseDelta,
+    say: (x) => towards(x, 'beats a minute', 'faster', 'slower', 'level with your calm'),
+    line: (t, r) => `At traps your pulse ran ${whole(t) === 0 ? 'level with your calm' : `${towards(t, 'beats a minute', 'faster', 'slower', '')} than your calm`}. `
+      + `At treasure it ran ${whole(r) === 0 ? 'level with your calm' : towards(r, 'beats a minute', 'faster', 'slower', '')}.`,
+  },
 };
+
+/** One tell value in plain words, for any line outside the sheet (practice notes, trend lines). */
+export function sayTell(key: TellKey, value: number): string { return SPECS[key].say(value); }
+
+/** "Breath catch at traps, your last 3 games: 1.4, 0.9 and 0.6 seconds." No signs, no symbols. */
+export function trendSentence(key: TellKey, values: number[]): string {
+  const spec = SPECS[key];
+  if (values.length < 2) return 'Play again to watch this tell shrink.';
+  const plain = key === 'breath' || key === 'blinks' ? values.map(one) : key === 'rate' ? values.map((v) => String(whole(v))) : values.map((v) => spec.say(v));
+  const list = `${plain.slice(0, -1).join(', ')} and ${plain[plain.length - 1]}`;
+  const tail = key === 'breath' ? ' seconds' : key === 'blinks' ? ' blinks a peek' : key === 'rate' ? ' percent away from your calm' : key === 'smile' || key === 'surprise' || key === 'fear' ? ', against your calm' : '';
+  return `${spec.label} at traps, your last ${values.length} games: ${list}${tail}.`;
+}
 
 /** A tell counts as giving you away from this effect size on. */
 export const TELL_THRESHOLD = 0.8;
@@ -92,7 +144,7 @@ export function tellSheet(s: GameState): TellSheet {
     const effect = a.length && b.length ? (mt - mr) / Math.max(pooled, spec.floor) : 0;
     return {
       key, label: spec.label, trap: mt, treasure: mr, unit: spec.unit, effect, strength: Math.abs(effect),
-      sentence: spec.line(spec.fmt(mt), spec.fmt(mr)), nTrap: a.length, nTreasure: b.length,
+      sentence: spec.line(mt, mr), nTrap: a.length, nTreasure: b.length,
     };
   }).sort((x, y) => y.strength - x.strength);
 

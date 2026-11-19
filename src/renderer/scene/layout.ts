@@ -3,7 +3,8 @@ import * as THREE from 'three';
 
 export const TABLE_Y = 0.76;
 export const CAMERA_POS = new THREE.Vector3(0, 1.17, 0.12);
-export const CAMERA_TARGET = new THREE.Vector3(0, 0.9, -1.4);
+// aimed a little low so the box arc sits in the middle band of a 16:9 frame, clear of the prompts below it
+export const CAMERA_TARGET = new THREE.Vector3(0, 0.8, -1.4);
 
 export const BOX = { w: 0.078, h: 0.052, d: 0.104, lid: 0.011, wall: 0.0035 };
 export const ARC_R = 0.98;
@@ -24,4 +25,14 @@ export function boxSlot(i: number, count = 10): { pos: THREE.Vector3; rotY: numb
     pos: new THREE.Vector3(CAMERA_POS.x + Math.sin(a) * ARC_R, TABLE_Y, CAMERA_POS.z - Math.cos(a) * ARC_R),
     rotY: -a,
   };
+}
+
+/** Practice tray: centred behind the arc, in front of the lamp and the deal tray. */
+export const PRACTICE_TRAY = { x: 0.0, z: -1.17, gap: 0.12 };
+
+export function practiceSlot(i: number, count: number): { pos: THREE.Vector3; rotY: number } {
+  const x = PRACTICE_TRAY.x + (i - (count - 1) / 2) * PRACTICE_TRAY.gap;
+  const pos = new THREE.Vector3(x, TABLE_Y + 0.012, PRACTICE_TRAY.z);
+  // face the player's eye, like the arc boxes do
+  return { pos, rotY: Math.atan2(CAMERA_POS.x - x, CAMERA_POS.z - PRACTICE_TRAY.z) };
 }

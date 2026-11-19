@@ -127,3 +127,53 @@ export function ValuesBoard({ game }: { game: GameState }): JSX.Element {
     </div>
   );
 }
+
+/**
+ * Live check: one random cue per game ("blink twice"), so a recorded video cannot stand in for the player.
+ * Pure display; the flow counts blinks from the signal bus and decides pass or fail.
+ */
+export interface BlinkCueProps {
+  /** blinks counted since the cue appeared */
+  blinks: number;
+  /** blinks wanted, default 2 */
+  needed?: number;
+  status: 'waiting' | 'passed' | 'failed';
+  /** whole seconds left while waiting; hidden when undefined */
+  secondsLeft?: number;
+  /** shown as a Try again button when the check failed */
+  onRetry?: () => void;
+}
+
+function Eye({ shut, idx }: { shut: boolean; idx: number }): JSX.Element {
+  return (
+    <svg className={`eye${shut ? ' shut' : ''}`} viewBox="0 0 64 36" aria-hidden="true" style={{ animationDelay: `${idx * 90}ms` }}>
+      <path className="lid" d="M4 18 C 18 2, 46 2, 60 18 C 46 34, 18 34, 4 18 Z" />
+      <circle className="iris" cx="32" cy="18" r="8" />
+      <path className="closed" d="M4 18 C 18 30, 46 30, 60 18" />
+    </svg>
+  );
+}
+
+export function BlinkCue({ blinks, needed = 2, status, secondsLeft, onRetry }: BlinkCueProps): JSX.Element {
+  const got = Math.min(needed, Math.max(0, Math.floor(blinks)));
+  const prompt = status === 'passed' ? 'Thank you.' : status === 'failed' ? 'He missed that.' : 'Blink twice.';
+  const line = status === 'passed'
+    ? 'That was you, live. On with the game.'
+    : status === 'failed'
+      ? 'Face the camera in good light and blink twice, slowly.'
+      : 'One quick check that he is watching you live, not a recording.';
+  return (
+    <div className={`blinkcue ${status}`} role="status" aria-live="polite">
+      <div className="eyebrow">Live check</div>
+      <div className="prompt shadowed">{prompt}</div>
+      <div className="eyes" aria-label={`${got} of ${needed} blinks seen`}>
+        {Array.from({ length: needed }, (_, i) => <Eye key={i} idx={i} shut={i < got || status === 'passed'} />)}
+      </div>
+      <div className="rulebar shadowed">
+        {line}
+        {status === 'waiting' && secondsLeft !== undefined && <span className="left"> {Math.max(0, Math.ceil(secondsLeft))} seconds left.</span>}
+      </div>
+      {status === 'failed' && onRetry && <div className="actions"><Btn primary k="Enter" onClick={onRetry}>Try again</Btn></div>}
+    </div>
+  );
+}

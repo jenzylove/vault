@@ -99,7 +99,7 @@ export function brushedTexture(seed: number): THREE.Texture {
 }
 
 /** Engraved number plate: white plate with black-enamel engraved numeral (map + bump). */
-export function plateTexture(n: number): THREE.Texture {
+export function plateTexture(n: number | string): THREE.Texture {
   const k = `plate:${n}`;
   const hit = cache.get(k); if (hit) return hit;
   const [c, ctx] = makeCanvas(256, 160);
@@ -109,9 +109,10 @@ export function plateTexture(n: number): THREE.Texture {
   // engraved border line
   ctx.strokeStyle = '#3a3226'; ctx.lineWidth = 4; ctx.strokeRect(12, 12, 232, 136);
   ctx.fillStyle = '#16120c';
-  ctx.font = 'bold 104px "Didot","Bodoni MT","Times New Roman",serif';
+  const label = String(n);
+  ctx.font = `bold ${label.length > 2 ? 64 : 104}px "Didot","Bodoni MT","Times New Roman",serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(n), 128, 86);
+  ctx.fillText(label, 128, 86);
   // two screw heads
   for (const x of [28, 228]) {
     ctx.fillStyle = '#5c5040'; ctx.beginPath(); ctx.arc(x, 80, 7, 0, Math.PI * 2); ctx.fill();
@@ -260,7 +261,59 @@ export function coinFaceTexture(): THREE.Texture {
   for (let i = 0; i < 90; i++) { const a = (i / 90) * Math.PI * 2; ctx.fillStyle = '#c8c8c8'; ctx.fillRect(S / 2 + Math.cos(a) * (S / 2 - 30) - 2, S / 2 + Math.sin(a) * (S / 2 - 30) - 2, 4, 4); }
   ctx.fillStyle = '#d0d0d0'; ctx.beginPath(); ctx.ellipse(S / 2 + 6, S / 2, 48, 62, 0.2, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#b0b0b0'; ctx.beginPath(); ctx.arc(S / 2 - 10, S / 2 - 26, 30, 0, Math.PI * 2); ctx.fill();
+  // struck legend around the portrait, and a date under it
+  ctx.fillStyle = '#dadada'; ctx.font = 'bold 19px "Times New Roman",serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const legend = 'HELVETIA  •  20 FR  •  ';
+  for (let i = 0; i < legend.length; i++) {
+    const a = -Math.PI / 2 + (i / legend.length) * Math.PI * 2;
+    ctx.save(); ctx.translate(S / 2 + Math.cos(a) * (S / 2 - 46), S / 2 + Math.sin(a) * (S / 2 - 46)); ctx.rotate(a + Math.PI / 2); ctx.fillText(legend[i], 0, 0); ctx.restore();
+  }
+  ctx.font = 'bold 16px "Times New Roman",serif'; ctx.fillText('1947', S / 2, S / 2 + 74);
   const t = new THREE.CanvasTexture(c);
+  cache.set(k, t);
+  return t;
+}
+
+/** Ember glow through char: mostly black, with bright cracks where the brass still burns. */
+export function emberTexture(): THREE.Texture {
+  const k = 'ember';
+  const hit = cache.get(k); if (hit) return hit;
+  const S = 256;
+  const [c, ctx] = makeCanvas(S, S);
+  const n = fbm(S, 77, 5, 4);
+  const img = ctx.createImageData(S, S);
+  for (let i = 0; i < S * S; i++) {
+    // ridged noise: thin hot veins along the noise midline
+    const ridge = 1 - Math.min(1, Math.abs(n[i] - 0.5) * 9);
+    const v = Math.pow(Math.max(0, ridge), 2.2);
+    img.data[i * 4] = 255 * v; img.data[i * 4 + 1] = 150 * v; img.data[i * 4 + 2] = 60 * v; img.data[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  cache.set(k, t);
+  return t;
+}
+
+/** A small cream card with an inked word, for the practice tray (folded tent card) and its brass placard. */
+export function cardTexture(text: string, sub: string, ink = '#2a2017', paper = '#efe6cf'): THREE.Texture {
+  const k = `card:${text}:${sub}:${ink}:${paper}`;
+  const hit = cache.get(k); if (hit) return hit;
+  const [c, ctx] = makeCanvas(512, 256);
+  const g = ctx.createLinearGradient(0, 0, 512, 256);
+  g.addColorStop(0, paper); g.addColorStop(1, '#d8ccb0');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 512, 256);
+  // paper tooth
+  const r = rng(text.length * 131 + 7);
+  for (let i = 0; i < 2600; i++) { ctx.fillStyle = `rgba(80,60,30,${r() * 0.06})`; ctx.fillRect(r() * 512, r() * 256, 1.5, 1.5); }
+  ctx.strokeStyle = ink; ctx.globalAlpha = 0.55; ctx.lineWidth = 3; ctx.strokeRect(16, 16, 480, 224); ctx.globalAlpha = 1;
+  ctx.fillStyle = ink; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'italic 600 92px "Cormorant Garamond","Didot","Times New Roman",serif';
+  ctx.fillText(text, 256, sub ? 112 : 130);
+  if (sub) { ctx.font = '600 30px "Times New Roman",serif'; ctx.globalAlpha = 0.75; ctx.fillText(sub.toUpperCase().split('').join(' '), 256, 196); ctx.globalAlpha = 1; }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   cache.set(k, t);
   return t;
 }

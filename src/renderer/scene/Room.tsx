@@ -98,6 +98,8 @@ function DepositWall({ mats }: { mats: VaultMaterials }) {
   const doors = useRef<THREE.InstancedMesh>(null);
   const holes = useRef<THREE.InstancedMesh>(null);
   const plates = useRef<THREE.InstancedMesh>(null);
+  const holes2 = useRef<THREE.InstancedMesh>(null);
+  const pulls = useRef<THREE.InstancedMesh>(null);
   const cells = useMemo(() => {
     const out: { x: number; y: number; h: number }[] = [];
     for (let c = 0; c < cols; c++) {
@@ -121,15 +123,20 @@ function DepositWall({ mats }: { mats: VaultMaterials }) {
     const m = new THREE.Matrix4(); const q = new THREE.Quaternion(); const s = new THREE.Vector3(); const p = new THREE.Vector3();
     const col = new THREE.Color();
     const qx = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0));
+    const qz = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, Math.PI / 2));
     cells.forEach((c, i) => {
       frames.current!.setMatrixAt(i, m.compose(p.set(c.x, c.y, z), q, s.set(1, c.h, 1)));
       doors.current!.setMatrixAt(i, m.compose(p.set(c.x, c.y, z + 0.004), q, s.set(1, c.h - 0.022, 1)));
-      col.setHSL(0.1, 0.22, 0.42 + ((i * 37) % 11) / 90);
+      // light grazes down from the ceiling: brighter near the top, falling off toward the floor and the far end
+      const up = (c.y - y0) / (rows * rh), along = (c.x - x0) / (cols * cw);
+      col.setHSL(0.095 + ((i * 13) % 5) / 400, 0.2 + ((i * 7) % 3) / 60, 0.2 + up * up * 0.26 + (1 - along) * 0.05 + ((i * 37) % 11) / 140);
+      holes2.current!.setMatrixAt(i, m.compose(p.set(c.x + cw * 0.36, c.y, z + 0.0085), qx, s.set(1, 1, 1)));
+      pulls.current!.setMatrixAt(i, m.compose(p.set(c.x, c.y - c.h / 2 + 0.024, z + 0.0115), qz, s.set(1, 1, 1)));
       doors.current!.setColorAt(i, col);
       holes.current!.setMatrixAt(i, m.compose(p.set(c.x + cw * 0.28, c.y, z + 0.0085), qx, s.set(1, 1, 1)));
       plates.current!.setMatrixAt(i, m.compose(p.set(c.x - cw * 0.14, c.y + c.h * 0.25, z + 0.0085), q, s.set(1, 1, 1)));
     });
-    for (const r of [frames, doors, holes, plates]) { r.current!.instanceMatrix.needsUpdate = true; r.current!.computeBoundingSphere(); }
+    for (const r of [frames, doors, holes, plates, holes2, pulls]) { r.current!.instanceMatrix.needsUpdate = true; r.current!.computeBoundingSphere(); }
     if (doors.current!.instanceColor) doors.current!.instanceColor.needsUpdate = true;
   }, [cells, frameGeo, doorGeo]);
   const plateMat = useMemo(() => new THREE.MeshStandardMaterial({ color: '#6f6656', roughness: 0.6, metalness: 0.4 }), []);
@@ -142,6 +149,12 @@ function DepositWall({ mats }: { mats: VaultMaterials }) {
       <instancedMesh ref={doors} args={[doorGeo, mats.brass, cells.length]} receiveShadow />
       <instancedMesh ref={holes} args={[undefined, mats.void, cells.length]}>
         <cylinderGeometry args={[0.0045, 0.0045, 0.002, 12]} />
+      </instancedMesh>
+      <instancedMesh ref={holes2} args={[undefined, mats.void, cells.length]}>
+        <cylinderGeometry args={[0.0038, 0.0038, 0.002, 10]} />
+      </instancedMesh>
+      <instancedMesh ref={pulls} args={[undefined, mats.brassPolished, cells.length]}>
+        <capsuleGeometry args={[0.0028, 0.03, 3, 8]} />
       </instancedMesh>
       <instancedMesh ref={plates} args={[undefined, plateMat, cells.length]}>
         <boxGeometry args={[0.032, 0.012, 0.0015]} />

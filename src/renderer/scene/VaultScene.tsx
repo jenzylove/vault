@@ -8,6 +8,7 @@ import { useVaultMaterials, applyEnvStrength } from './materials';
 import { Room } from './Room';
 import { Table, TellerScreen, BankerLamp } from './Table';
 import { Box } from './Box';
+import { PracticeTray } from './Practice';
 import { Banker } from './Banker';
 import { Gauge, StripRecorder } from './Polygraph';
 import { Effects } from './Effects';
@@ -15,7 +16,7 @@ import { CAMERA_POS, CAMERA_TARGET } from './layout';
 import { sceneFx } from './fx';
 import { AimedSpot } from './AimedSpot';
 
-export type { VaultSceneProps } from './types';
+export type { VaultSceneProps, SceneBox, SceneBoxState, ScenePracticeBox } from './types';
 
 function CameraRig() {
   const { camera, size } = useThree();
@@ -85,7 +86,8 @@ function SceneContents(props: VaultSceneProps) {
     }
     mats.gold.emissiveIntensity = 0.08 + best * 0.12;
     // active box focus decays when nothing is active
-    if (props.activeBoxId == null) sceneFx.focusWeight = Math.max(0, sceneFx.focusWeight - dt * 1.5);
+    const practicePeek = props.practice?.some((p) => p.state === 'peeking') ?? false;
+    if (props.activeBoxId == null && !practicePeek) sceneFx.focusWeight = Math.max(0, sceneFx.focusWeight - dt * 1.5);
     fps.current.n++; fps.current.t += dt;
     if (fps.current.t >= 0.5) { sceneFx.fps = fps.current.n / fps.current.t; fps.current.n = 0; fps.current.t = 0; }
   });
@@ -108,6 +110,7 @@ function SceneContents(props: VaultSceneProps) {
       {props.boxes.slice(0, 10).map((b, i) => (
         <Box key={b.id} index={i} box={b} isActive={props.activeBoxId === b.id} peekContents={props.activeBoxId === b.id ? props.peekContents : null} mats={mats} onClick={props.onBoxClick} />
       ))}
+      {props.practice && props.practice.length > 0 && <PracticeTray practice={props.practice} mats={mats} />}
       {!devOff('fx') && <Effects quality={props.quality} />}
     </>
   );

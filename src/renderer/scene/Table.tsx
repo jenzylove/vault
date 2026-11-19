@@ -3,9 +3,10 @@ import { memo, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame } from '@react-three/fiber';
 import { RoundedBox, useGLTF } from '@react-three/drei';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { TABLE_Y, GLASS_Z, GLASS_HALF_W, GLASS_BOTTOM, GLASS_TOP } from './layout';
 import type { VaultMaterials } from './materials';
-import { frostTexture } from './textures';
+import { frostTexture, grimeTexture, coinFaceTexture } from './textures';
 import { AimedSpot } from './AimedSpot';
 import { useFrostedGlassMaterial } from './FrostedGlass';
 
@@ -214,6 +215,78 @@ export const TellerScreen = memo(function TellerScreen({ mats, quality }: { mats
   );
 });
 
+// Green baize writing pad set into the walnut under the ten boxes, edged with a thin brass inlay.
+function Baize({ mats }: { mats: VaultMaterials }) {
+  const felt = useMemo(() => {
+    const nap = grimeTexture('baize', 0.5, 0.5, 91, 0);
+    const m = new THREE.MeshStandardMaterial({ color: '#1f3d2c', roughness: 1, metalness: 0, map: nap, bumpMap: nap, bumpScale: 0.6, polygonOffset: true, polygonOffsetFactor: -1 });
+    m.map = nap.clone(); m.map.repeat.set(6, 3); m.map.colorSpace = THREE.NoColorSpace; m.map.needsUpdate = true;
+    return m;
+  }, []);
+  const W = 1.24, D = 0.44, cz = -0.83;
+  const shape = useMemo(() => {
+    const s = new THREE.Shape(); const r = 0.03, w = W / 2, d = D / 2;
+    s.moveTo(-w + r, -d); s.lineTo(w - r, -d); s.quadraticCurveTo(w, -d, w, -d + r); s.lineTo(w, d - r); s.quadraticCurveTo(w, d, w - r, d);
+    s.lineTo(-w + r, d); s.quadraticCurveTo(-w, d, -w, d - r); s.lineTo(-w, -d + r); s.quadraticCurveTo(-w, -d, -w + r, -d);
+    return s;
+  }, []);
+  const inlay = useMemo(() => {
+    const s = shape.clone(); const h = new THREE.Path(shape.getPoints(24).map((p) => p.clone().multiplyScalar(0.985)));
+    s.holes.push(h);
+    return new THREE.ShapeGeometry(s, 24);
+  }, [shape]);
+  return (
+    <group position={[0, TABLE_Y + 0.0003, cz]} rotation={[-Math.PI / 2, 0, 0]}>
+      <mesh material={felt} receiveShadow><shapeGeometry args={[shape, 24]} /></mesh>
+      <mesh geometry={inlay} material={mats.brassPolished} position={[0, 0, 0.0002]} receiveShadow />
+    </group>
+  );
+}
+
+// The banker's gold scale on the player's right: two pans on chains, a few coins weighed on one side.
+// Merged into three meshes (brass, walnut, coins) so it costs three draw calls.
+function buildScale(): { brass: THREE.BufferGeometry; wood: THREE.BufferGeometry; coins: THREE.BufferGeometry } {
+  const brass: THREE.BufferGeometry[] = [];
+  const coins: THREE.BufferGeometry[] = [];
+  const add = (list: THREE.BufferGeometry[], g: THREE.BufferGeometry, p: [number, number, number], r: [number, number, number] = [0, 0, 0]) => {
+    const n = g.index ? g.toNonIndexed() : g;
+    n.applyMatrix4(new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)), new THREE.Vector3(1, 1, 1)));
+    list.push(n);
+  };
+  const H = 0.2, arm = 0.085, tilt = 0.06; // the loaded pan sits low
+  add(brass, new THREE.CylinderGeometry(0.03, 0.04, 0.004, 32), [0, 0.0135, 0]);
+  add(brass, new THREE.CylinderGeometry(0.0035, 0.0045, H, 12), [0, H / 2 + 0.012, 0]);
+  add(brass, new THREE.ConeGeometry(0.006, 0.018, 12), [0, H + 0.02, 0]);
+  add(brass, new THREE.CylinderGeometry(0.0022, 0.0022, arm * 2, 10), [0, H + 0.012, 0], [0, 0, Math.PI / 2 + tilt]);
+  add(brass, new THREE.BoxGeometry(0.0015, 0.024, 0.0015), [0, H + 0.024, 0], [0, 0, tilt]);
+  for (const side of [-1, 1]) {
+    const x = side * arm * Math.cos(tilt), y = H + 0.012 - side * arm * Math.sin(tilt);
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      add(brass, new THREE.CylinderGeometry(0.0006, 0.0006, 0.1, 4), [x + Math.cos(a) * 0.017, y - 0.05, Math.sin(a) * 0.017], [Math.sin(a) * 0.32, 0, -Math.cos(a) * 0.32]);
+    }
+    add(brass, new THREE.CylinderGeometry(0.036, 0.03, 0.006, 32, 1, true), [x, y - 0.1, 0]);
+    add(brass, new THREE.CircleGeometry(0.03, 32), [x, y - 0.1025, 0], [-Math.PI / 2, 0, 0]);
+    if (side < 0) for (let i = 0; i < 5; i++) add(coins, new THREE.CylinderGeometry(0.0082, 0.0082, 0.0019, 28), [x + (i % 2) * 0.004 - 0.002, y - 0.1015 + i * 0.0019, (i % 3) * 0.002], [0, i, 0]);
+  }
+  const strip = (gs: THREE.BufferGeometry[]) => gs.map((g) => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return g; });
+  const wood = new THREE.CylinderGeometry(0.05, 0.056, 0.012, 32).translate(0, 0.006, 0);
+  return { brass: mergeGeometries(strip(brass))!, wood, coins: mergeGeometries(strip(coins))! };
+}
+
+function GoldScale({ mats }: { mats: VaultMaterials }) {
+  const geo = useMemo(buildScale, []);
+  const coinMat = useMemo(() => { const m = mats.gold.clone(); m.bumpMap = coinFaceTexture(); m.bumpScale = 1.2; return m; }, [mats.gold]);
+  useFrame(() => { if (mats.gold.envMap && coinMat.envMap !== mats.gold.envMap) { coinMat.envMap = mats.gold.envMap; coinMat.envMapIntensity = mats.gold.envMapIntensity; coinMat.needsUpdate = true; } });
+  return (
+    <group position={[0.6, TABLE_Y, -1.02]} rotation={[0, -0.6, 0]}>
+      <mesh geometry={geo.wood} material={mats.walnut} castShadow receiveShadow />
+      <mesh geometry={geo.brass} material={mats.brassPolished} castShadow receiveShadow />
+      <mesh geometry={geo.coins} material={coinMat} castShadow />
+    </group>
+  );
+}
+
 export const Table = memo(function Table({ mats }: { mats: VaultMaterials }) {
   const { scene } = useGLTF('./assets/models/magnifying_glass_01/magnifying_glass_01_1k.gltf', false, false);
   const magnifier = useMemo(() => { const s = scene.clone(); s.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; } }); return s; }, [scene]);
@@ -232,6 +305,8 @@ export const Table = memo(function Table({ mats }: { mats: VaultMaterials }) {
         </mesh>
       ))}
       <primitive object={magnifier} position={[-0.66, TABLE_Y + 0.013, -1.2]} rotation={[-Math.PI / 2, 0, -2.2]} />
+      <Baize mats={mats} />
+      <GoldScale mats={mats} />
     </group>
   );
 });

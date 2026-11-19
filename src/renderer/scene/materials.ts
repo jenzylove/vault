@@ -129,7 +129,8 @@ export function useVaultMaterials(): VaultMaterials {
     const voidMat = new THREE.MeshBasicMaterial({ color: '#000000' });
     const silhouette = new THREE.MeshStandardMaterial({ color: '#0b0a09', roughness: 1, metalness: 0 });
     const greenGlass = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#06351a'), roughness: 0.12, metalness: 0.1,
+      // cased glass with a soft sheen, not a hard mirror stripe along the shade
+      color: new THREE.Color('#06351a'), roughness: 0.3, metalness: 0.05,
       emissive: new THREE.Color('#0b4a20'), emissiveIntensity: 0.04, side: THREE.DoubleSide,
     });
     return { brass, brassDark, brassPolished, gold, steel, steelBrushed, walnut, concrete, terrazzo, velvet, blackEnamel, void: voidMat, silhouette, greenGlass, paintedWall };

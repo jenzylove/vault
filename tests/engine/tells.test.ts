@@ -5,6 +5,7 @@ import {
   type PeekFeatures, type GameState,
 } from '../../src/renderer/engine';
 import { emptyModel, learnExample } from '../../src/renderer/engine/banker';
+import { sayTell, trendSentence } from '../../src/renderer/engine/tells';
 
 const banned = /\b(lie|lies|lying|liar|stress|stressed|anxiety|anxious|poker|straight face)\b/i;
 
@@ -17,7 +18,7 @@ describe('tell sheet', () => {
       expect(sheet.tells).toHaveLength(TELL_KEYS.length);
       expect(sheet.readLine).toMatch(/^The banker read \d+ of \d+ boxes right\.$/);
       const breath = sheet.tells.find((t) => t.key === 'breath')!;
-      expect(breath.sentence).toMatch(/^At traps your breath stopped for \d+\.\d s on average; at treasure \d+\.\d s\.$/);
+      expect(breath.sentence).toMatch(/^At traps your breath stopped for \d+\.\d seconds on average\. At treasure, \d+\.\d seconds\.$/);
       expect(breath.trap).toBeGreaterThan(breath.treasure);
       if (sheet.biggest && ['breath', 'shallow', 'rate'].includes(sheet.biggest.key)) breathTop++;
       for (const t of sheet.tells) expect(t.sentence).not.toMatch(banned);
@@ -39,7 +40,29 @@ describe('tell sheet', () => {
     const sheet = tellSheet(playSimGame('fakeSmile', 7).state);
     const smile = sheet.tells.find((t) => t.key === 'smile')!;
     expect(smile.trap).toBeGreaterThan(smile.treasure);
-    expect(smile.sentence).toMatch(/^At traps your smile moved \+\d+ points/);
+    expect(smile.sentence).toMatch(/^At traps you smiled \d+ points more than at your calm\./);
+  });
+
+  test('every line is plain words: no signs, symbols, hyphens or dashes', () => {
+    const symbols = /[-+%‐-―−;]/;
+    for (const strategy of ['honest', 'steady', 'fakeSmile', 'freeze'] as const) {
+      for (let seed = 1; seed <= 8; seed++) {
+        const sheet = tellSheet(playSimGame(strategy, seed, { level: 5 }).state);
+        expect(sheet.headline).not.toMatch(symbols);
+        for (const t of sheet.tells) {
+          expect(t.sentence).not.toMatch(symbols);
+          expect(t.sentence).not.toMatch(banned);
+          expect(t.label).not.toMatch(symbols);
+          expect(trendSentence(t.key, [t.trap, -t.trap, 0])).not.toMatch(symbols);
+        }
+      }
+    }
+    expect(sayTell('shallow', -10.2)).toBe('10 percent deeper');
+    expect(sayTell('shallow', 10)).toBe('10 percent shallower');
+    expect(sayTell('pulse', -3)).toBe('3 beats a minute slower');
+    expect(sayTell('smile', 1.2)).toBe('1 point more');
+    expect(trendSentence('breath', [1.4, 0.92, 0.6])).toBe('Breath catch at traps, your last 3 games: 1.4, 0.9 and 0.6 seconds.');
+    expect(trendSentence('breath', [1.4])).toBe('Play again to watch this tell shrink.');
   });
 
   test('works before the reveal and with nothing played', () => {

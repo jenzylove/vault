@@ -1,17 +1,21 @@
 // DEV ONLY: scene preview with mock props cycling through every state. Not the game.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { VaultScene } from './VaultScene';
-import type { BankerState, SceneBox, SceneBoxKind, VaultSceneProps } from './types';
+import type { BankerState, SceneBox, SceneBoxKind, ScenePracticeBox, VaultSceneProps } from './types';
 import { sceneFx } from './fx';
 
 const KINDS: SceneBoxKind[] = ['small', 'big', 'small', 'trap', 'small', 'big', 'trap', 'small', 'trap', 'small'];
 const fresh = (): SceneBox[] => KINDS.map((k, i) => ({ id: i + 1, state: 'sealed', kind: k }));
 
-type Step = { label: string; banker: BankerState; active: number | null; heat: number; boxes: (b: SceneBox[]) => SceneBox[] };
+type Step = { label: string; banker: BankerState; active: number | null; heat: number; boxes: (b: SceneBox[]) => SceneBox[]; practice?: ScenePracticeBox[] };
+const PR = (a: ScenePracticeBox['state'], b: ScenePracticeBox['state']): ScenePracticeBox[] => [{ kind: 'trap', state: a }, { kind: 'small', state: b }];
 const set = (b: SceneBox[], id: number, state: SceneBox['state']) => b.map((x) => (x.id === id ? { ...x, state } : x));
 
 const SCRIPT: Step[] = [
-  { label: 'idle, all sealed', banker: 'idle', active: null, heat: 0, boxes: () => fresh() },
+  { label: 'practice tray, both sealed', banker: 'idle', active: null, heat: 0, boxes: () => fresh(), practice: PR('sealed', 'sealed') },
+  { label: 'practice I peek (trap)', banker: 'reading', active: null, heat: 0, boxes: (b) => b, practice: PR('peeking', 'sealed') },
+  { label: 'practice II peek (treasure)', banker: 'reading', active: null, heat: 0, boxes: (b) => b, practice: PR('sealed', 'peeking') },
+  { label: 'idle, all sealed', banker: 'idle', active: null, heat: 0, boxes: (b) => b },
   { label: 'peek box 2 (big), banker reading', banker: 'reading', active: 2, heat: 0.05, boxes: (b) => set(b, 2, 'peeking') },
   { label: 'banker speaking', banker: 'speaking', active: 2, heat: 0.05, boxes: (b) => b },
   { label: 'banker offering a chit', banker: 'offering', active: 2, heat: 0.05, boxes: (b) => b },
@@ -23,6 +27,7 @@ const SCRIPT: Step[] = [
   { label: 'peek box 7 (trap)', banker: 'reading', active: 7, heat: 0.6, boxes: (b) => set(b, 7, 'peeking') },
   { label: 'box 7 opened: trap snaps shut', banker: 'idle', active: 7, heat: 0.8, boxes: (b) => set(b, 7, 'opened-trap') },
   { label: 'box 1 opened: small treasure', banker: 'idle', active: 1, heat: 1, boxes: (b) => set(b, 1, 'opened-treasure') },
+  { label: 'reveal: burned box 6 opened (big)', banker: 'idle', active: null, heat: 1, boxes: (b) => set(b, 6, 'burned-revealed') },
 ];
 
 export default function ScenePreview() {
@@ -32,6 +37,7 @@ export default function ScenePreview() {
   const [banker, setBanker] = useState<BankerState>('idle');
   const [active, setActive] = useState<number | null>(null);
   const [heat, setHeat] = useState(0);
+  const [practice, setPractice] = useState<ScenePracticeBox[] | undefined>(SCRIPT[0].practice);
   const [quality, setQuality] = useState<VaultSceneProps['quality']>('high');
   const [breath, setBreath] = useState<number[]>([]);
   const [beatEnv, setBeatEnv] = useState(0);
@@ -44,7 +50,7 @@ export default function ScenePreview() {
     const s = SCRIPT[i % SCRIPT.length];
     setStepIdx(i % SCRIPT.length);
     setBoxes((b) => s.boxes(i % SCRIPT.length === 0 ? fresh() : b));
-    setBanker(s.banker); setActive(s.active); setHeat(s.heat);
+    setBanker(s.banker); setActive(s.active); setHeat(s.heat); setPractice(s.practice);
   }, []);
 
   // auto cycle
@@ -113,12 +119,12 @@ export default function ScenePreview() {
 
   // expose a hook for the screenshot script
   useEffect(() => {
-    (window as unknown as { __vaultPreview: unknown }).__vaultPreview = { applyStep, steps: SCRIPT.length, setAuto, setQuality };
+    (window as unknown as { __vaultPreview: unknown }).__vaultPreview = { applyStep, steps: SCRIPT.length, labels: SCRIPT.map((x) => x.label), setAuto, setQuality };
   }, [applyStep]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#050403' }}>
-      <VaultScene boxes={boxes} activeBoxId={active} peekContents={peek} bankerState={banker} breath={breath} heartbeat={beatEnv} heat={heat} onBoxClick={onBoxClick} quality={quality} />
+      <VaultScene boxes={boxes} activeBoxId={active} peekContents={peek} bankerState={banker} breath={breath} heartbeat={beatEnv} heat={heat} onBoxClick={onBoxClick} quality={quality} practice={practice} />
       <div style={{ position: 'absolute', left: 12, top: 10, font: '12px/1.45 ui-monospace, Consolas, monospace', color: '#d8cdb4', background: 'rgba(0,0,0,0.55)', padding: '8px 10px', borderRadius: 4, pointerEvents: 'none', maxWidth: 360 }}>
         <div style={{ color: '#ffb36b', fontWeight: 700, letterSpacing: 1 }}>SCENE PREVIEW (mock props, dev only)</div>
         <div>{fps.toFixed(0)} fps · {quality} · heat {heat.toFixed(1)} · banker {banker} · active {active ?? '-'}</div>
