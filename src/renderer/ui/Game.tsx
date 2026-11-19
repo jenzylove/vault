@@ -10,7 +10,7 @@ import {
   type Baseline, type BoxKind, type GameAction, type GameState, type LevelNo, type PeekFeatures, type TellHistory, type TellSheet,
 } from '../engine';
 import type { SignalSource, SourceStatus } from '../signals/types';
-import { FaceWatch, type FaceProblem } from '../signals/lineup';
+import { FaceWatch, STALE_MS, type FaceProblem } from '../signals/lineup';
 import { V_MANY_FACES, V_NO_FACE, V_OK, validationWords } from '../signals/status';
 import { Lineup } from './Lineup';
 import type { BankerState, SceneBox, SceneBoxKind } from '../scene/types';
@@ -1025,8 +1025,8 @@ function SignalWarn({ bus, live, status }: { bus: SignalBus | null; live: boolea
   const s = usePoll(() => {
     if (!bus) return null;
     const v = live ? status?.validation : null;
-    // face codes have their own pause overlay; any other SDK hint shows here after a second
-    if (v && v.code !== V_OK && v.code !== V_NO_FACE && v.code !== V_MANY_FACES && performance.now() - v.at > 1000) return validationWords(v.code, v.hint).big;
+    // face codes have their own pause overlay; any other SDK hint shows while the SDK keeps repeating it
+    if (v && v.code !== V_OK && v.code !== V_NO_FACE && v.code !== V_MANY_FACES && performance.now() - v.at < STALE_MS) return validationWords(v.code, v.hint).big;
     const stale = performance.now() - bus.lastFrameAt > 3000;
     if (stale) return live ? 'Waiting for the camera.' : null;
     const q = bus.quality();

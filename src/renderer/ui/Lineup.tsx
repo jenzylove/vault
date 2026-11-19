@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { SignalSource, SourceStatus } from '../signals/types';
-import { LineupGate, wireGate, type GateRead } from '../signals/lineup';
+import { LineupGate, STALE_MS, wireGate, type GateRead } from '../signals/lineup';
 import { V_OK, validationWords } from '../signals/status';
 import { Btn } from './parts';
 
@@ -102,7 +102,7 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
   let small: string | undefined;
   if (!stream || processing === 'starting') { big = 'Turning the camera on.'; small = 'This takes a few seconds.'; }
   else if (read.ready) { big = 'You are lined up.'; small = 'He can see your breathing. Stay like this.'; }
-  else if (v && v.code !== V_OK) { ({ big, small } = validationWords(v.code, v.hint)); }
+  else if (v && v.code !== V_OK && performance.now() - v.at < STALE_MS) { ({ big, small } = validationWords(v.code, v.hint)); }
   else if (read.waiting === 'validation') { big = 'Hold still.'; small = 'Checking the picture.'; }
   else { big = 'Hold still. Finding your breathing.'; small = 'Breathe as you normally do.'; }
 

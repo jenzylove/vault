@@ -17,11 +17,12 @@ async function rig() {
   wireGate(src, gate, () => clock.t);
   let us = 1_000_000;
   /** Advance the clock, delivering one metrics batch of chest samples every `every` ms. */
-  const run = (ms: number, every = 500, chest = true) => {
+  const run = (ms: number, every = 500, chest = true, repeat?: number) => {
     const end = clock.t + ms;
     while (clock.t + every <= end) {
       clock.t += every;
       us += every * 1000;
+      if (repeat !== undefined) sdk.emit('validationStatus', repeat, us, '');
       if (chest) sdk.emit('metrics', chestMetrics([us - 30_000, us]), us);
     }
     clock.t = end;
@@ -34,7 +35,7 @@ describe('lineup gate on a mocked SDK', () => {
   it('holds while the SDK reports a problem, even with chest samples flowing', async () => {
     const { gate, run, say, clock } = await rig();
     say(7, 'Chest not visible');
-    run(5000);
+    run(5000, 250, true, 7);   // the SDK repeats a problem code while it lasts
     const r = gate.check(clock.t);
     expect(r.ready).toBe(false);
     expect(r.waiting).toBe('validation');
@@ -94,6 +95,16 @@ describe('lineup gate on a mocked SDK', () => {
     expect(gate.check(clock.t).ready).toBe(true);
   });
 
+  it('opens once a problem code stops repeating, even if the SDK never sends an OK packet', async () => {
+    const { gate, run, clock } = await rig();
+    run(2000, 250, true, 7);
+    expect(gate.check(clock.t).ready).toBe(false);
+    run(1000);
+    expect(gate.check(clock.t).ready).toBe(false);   // under 2 s since the last problem packet
+    run(1200);
+    expect(gate.check(clock.t).ready).toBe(true);
+  });
+
   it('closes when the session stops', async () => {
     const { gate, run, say, clock, src } = await rig();
     say(0);
@@ -124,6 +135,15 @@ describe('face pause from SDK validation codes', () => {
     at(3000, 0);
     expect(w.check(3500)).toBe('none');   // still paused
     expect(w.check(4000)).toBeNull();
+  });
+
+  it('resumes when the no face code stops repeating, with no OK packet ever sent', async () => {
+    const { w, at } = await faceRig();
+    for (let t = 0; t <= 2000; t += 100) at(t, 1);
+    expect(w.check(2000)).toBe('none');
+    expect(w.check(2900)).toBe('none');   // code only 0.9 s quiet
+    expect(w.check(3100)).toBe('none');   // cleared at 3000, needs a second of calm
+    expect(w.check(4100)).toBeNull();
   });
 
   it('pauses on multiple faces, and switches the reason while paused', async () => {

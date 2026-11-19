@@ -6,6 +6,7 @@ import type { SignalSource } from './types';
 export const LINEUP_CLEAR_MS = 2000;   // no validation problem for this long
 export const LINEUP_STEADY_MS = 2000;  // chest samples arriving without a break for this long
 export const CHEST_GAP_MS = 2500;      // a longer silence than this breaks the run (metrics arrive in batches)
+export const STALE_MS = 1000;          // a problem code not repeated for this long has cleared
 
 export interface GateRead {
   ready: boolean;
@@ -36,7 +37,9 @@ export class LineupGate {
   }
 
   check(now: number): GateRead {
-    const bad = this.code !== null && this.code !== V_OK;
+    // The SDK repeats a problem code many times a second while it lasts and may never send an
+    // explicit OK, so a problem that has not been repeated for STALE_MS counts as cleared.
+    const bad = this.code !== null && this.code !== V_OK && this.lastBadAt !== null && now - this.lastBadAt < STALE_MS;
     const clearFor = bad ? 0 : this.lastBadAt === null ? Infinity : now - this.lastBadAt;
     const flowing = this.lastChestAt !== null && this.runStart !== null && now - this.lastChestAt <= CHEST_GAP_MS;
     const flowFor = flowing ? now - (this.runStart as number) : 0;
@@ -64,16 +67,20 @@ export class FaceWatch {
   private raw: FaceProblem = null;
   private since = 0;
   private paused: FaceProblem = null;
+  private lastFaceCodeAt = 0;
 
-  reset(): void { this.raw = null; this.since = 0; this.paused = null; }
+  reset(): void { this.raw = null; this.since = 0; this.paused = null; this.lastFaceCodeAt = 0; }
 
   validation(code: number, now: number): void {
     const p: FaceProblem = code === V_NO_FACE ? 'none' : code === V_MANY_FACES ? 'many' : null;
+    if (p !== null) this.lastFaceCodeAt = now;
     if (p !== this.raw) { this.raw = p; this.since = now; }
   }
 
   /** The problem the game should pause for right now, or null to play on. */
   check(now: number): FaceProblem {
+    // The SDK may never send an OK packet: a face code that stopped repeating has cleared.
+    if (this.raw !== null && now - this.lastFaceCodeAt >= STALE_MS) { this.raw = null; this.since = this.lastFaceCodeAt + STALE_MS; }
     const held = now - this.since;
     if (this.paused === null) {
       if (this.raw !== null && held >= FACE_PAUSE_ENTER_MS) this.paused = this.raw;
