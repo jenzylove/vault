@@ -4,7 +4,8 @@
  */
 import { SimBody, makeSimPlayer, type Strategy } from '../engine';
 import type { BoxKind } from '../engine';
-import type { SignalFrame, SignalSource } from '../signals/types';
+import type { SignalFrame, SignalSource, SourceStatus } from '../signals/types';
+import { StatusHub } from '../signals/status';
 
 /** A source that can be told what the player just saw (only a simulated body needs this). */
 export interface PeekAware { onPeek(kind: BoxKind): void }
@@ -22,6 +23,7 @@ export class SimulatedSource implements SignalSource, PeekAware {
   private carry = 0;
   private beatPhase = 0;
   private readonly fps = 30;
+  private hub = new StatusHub(); // no camera: no stream, no validation packets, never an SDK error
 
   /** speed > 1 runs simulated time faster than the wall clock (screenshots and tests only). */
   constructor(seed = Date.now() % 100000, strategy: Strategy = 'honest', private speed = 1) {
@@ -35,16 +37,21 @@ export class SimulatedSource implements SignalSource, PeekAware {
 
   onPeek(kind: BoxKind): void { this.body.react(kind); }
 
+  status(): SourceStatus { return this.hub.get(); }
+  onStatus(cb: (s: SourceStatus) => void): () => void { return this.hub.on(cb); }
+
   async start(): Promise<void> {
     if (this.timer) return;
     this.last = performance.now();
     this.carry = 0;
     this.timer = setInterval(() => this.tick(), 1000 / this.fps);
+    this.hub.set({ processing: 'running' });
   }
 
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    this.hub.set({ processing: 'idle' });
   }
 
   private tick(): void {

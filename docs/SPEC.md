@@ -6,7 +6,7 @@ Read docs/PRD.md first. This file fixes the interfaces so the engine, the 3D sce
 - Electron + Vite (electron-vite) + React 18 + TypeScript (strict).
 - 3D: three, @react-three/fiber, @react-three/drei, @react-three/postprocessing.
 - Tests: vitest. Lint: tsc --noEmit.
-- Presage: @smartspectra/node-sdk (renderer entry `@smartspectra/node-sdk/renderer`, main `bindSmartSpectraIpc`, preload `@smartspectra/node-sdk/preload`). Owned by the chief, not by agents.
+- Presage: @smartspectra/node-sdk (renderer entry `@smartspectra/node-sdk/renderer`, main `bindSmartSpectraIpc`, preload `@smartspectra/node-sdk/preload`, plus `window.vault.presage()` from our preload for the key). Owned by the chief, not by agents.
 
 ## Folders (each agent owns only its folder)
 - `src/main/`, `src/preload/` : Electron shell (chief)
@@ -30,13 +30,36 @@ export interface SignalFrame {
   conf: number;         // 0..1 confidence of the sample
   stable: boolean;
 }
+export type ProcessingState = 'idle' | 'starting' | 'running' | 'stopping' | 'error';
+export interface ValidationInfo { code: number; hint: string; at: number }  // SDK ValidationCode (0 ok), the SDK's hint as given, performance.now()
+export interface SourceError { code: number | string; message: string; say: string; retryable: boolean } // `say` is the player facing text
+export interface SourceStatus {
+  processing: ProcessingState;
+  validation: ValidationInfo | null;   // latest validationStatus packet
+  error: SourceError | null;           // a session ending error (the source has already stopped itself)
+  stream: MediaStream | null;          // camera stream for the mirrored preview (live only)
+}
 export interface SignalSource {
   start(): Promise<void>;
   stop(): Promise<void>;
   subscribe(cb: (f: SignalFrame) => void): () => void;
   kind: 'live' | 'replay' | 'simulated';
+  status(): SourceStatus;
+  onStatus(cb: (s: SourceStatus) => void): () => void;
 }
 ```
+
+### Live source and credits (`src/renderer/signals/live.ts`)
+- Presage bills by session wall time. A session exists only between `start()` and `stop()`; `stop()` waits for a pending `start()` so it can never orphan one, then calls the SDK's `stop()` and `destroy()`.
+- Metrics: breathing (0, 1, 2), cardio (15, 16, 17) and face 12, 13, 14 (blinking, talking, expressions). Face landmarks (11) are never requested.
+- The key comes from `PRESAGE_API_KEY` (environment or `.env`, read by the main process, never logged) or a key the player pastes.
+- Errors: network (5) restarts the session once; metric not authorized (13) steps down to breathing + cardio, then breathing only; everything else (including 14, frame rate too low) stops the session and reports `status().error.say`.
+- The Game starts the session at the lineup and stops it on results (reveal), leaving, Esc, window close or hide, a face pause longer than 45 s, a lineup longer than 45 s, a minute with no input outside a read, and any error.
+
+### Lineup and face pause (`src/renderer/signals/lineup.ts`, `src/renderer/ui/Lineup.tsx`)
+- Before the calm step (live only) the player lines up in a mirrored preview with a gold face oval and shoulder curve. The SDK's validation hint is shown big in plain words (1 no face found, 5 more light, 7 show more chest, 16 move up or tilt the camera down; any other hint as given, without dashes).
+- Continue opens when no validation problem has been reported for 2 s and chest samples have arrived without a gap over 2.5 s for 2 s (`LineupGate`).
+- Mid game, a read (calm, practice peek, peek) pauses while the SDK reports validation code 1 (no face) or 2 (multiple faces) for 0.8 s, and resumes 1 s after it clears (`FaceWatch`). The SDK's metrics carry no face count, so these codes are the only face signal used. The paused read starts over.
 
 ## Engine contract (`src/renderer/engine/index.ts`)
 ```ts

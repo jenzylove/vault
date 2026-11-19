@@ -1,0 +1,100 @@
+// Pure timing logic for the lineup gate and the mid game face pause. Times are wall clock ms
+// (performance.now()) passed in, so tests drive them without a camera or the SDK.
+import { V_MANY_FACES, V_NO_FACE, V_OK } from './status';
+import type { SignalSource } from './types';
+
+export const LINEUP_CLEAR_MS = 2000;   // no validation problem for this long
+export const LINEUP_STEADY_MS = 2000;  // chest samples arriving without a break for this long
+export const CHEST_GAP_MS = 2500;      // a longer silence than this breaks the run (metrics arrive in batches)
+
+export interface GateRead {
+  ready: boolean;
+  progress: number;          // 0..1 toward ready
+  code: number | null;       // latest validation code, null before any packet
+  waiting: 'validation' | 'chest' | null; // what still holds the player back
+}
+
+/** Lets the player past the lineup once the SDK is happy and chest samples flow steadily. */
+export class LineupGate {
+  private code: number | null = null;
+  private lastBadAt: number | null = null;
+  private lastChestAt: number | null = null;
+  private runStart: number | null = null;
+
+  reset(): void { this.code = null; this.lastBadAt = null; this.lastChestAt = null; this.runStart = null; }
+
+  validation(code: number, now: number): void {
+    // a problem lasts until the packet that clears it, so the clear clock starts at that packet
+    const wasBad = this.code !== null && this.code !== V_OK;
+    if (code !== V_OK || wasBad) this.lastBadAt = now;
+    this.code = code;
+  }
+
+  chest(now: number): void {
+    if (this.lastChestAt === null || now - this.lastChestAt > CHEST_GAP_MS) this.runStart = now;
+    this.lastChestAt = now;
+  }
+
+  check(now: number): GateRead {
+    const bad = this.code !== null && this.code !== V_OK;
+    const clearFor = bad ? 0 : this.lastBadAt === null ? Infinity : now - this.lastBadAt;
+    const flowing = this.lastChestAt !== null && this.runStart !== null && now - this.lastChestAt <= CHEST_GAP_MS;
+    const flowFor = flowing ? now - (this.runStart as number) : 0;
+    const p = Math.min(clearFor / LINEUP_CLEAR_MS, flowFor / LINEUP_STEADY_MS, 1);
+    const ready = clearFor >= LINEUP_CLEAR_MS && flowFor >= LINEUP_STEADY_MS;
+    return {
+      ready,
+      progress: Math.max(0, p),
+      code: this.code,
+      waiting: ready ? null : clearFor < LINEUP_CLEAR_MS ? 'validation' : 'chest',
+    };
+  }
+}
+
+export const FACE_PAUSE_ENTER_MS = 800;   // a face problem must hold this long to pause
+export const FACE_PAUSE_EXIT_MS = 1000;   // and be gone this long to resume
+
+export type FaceProblem = 'none' | 'many' | null;
+
+/**
+ * Watches the SDK's validation codes for "no face found" (1) and "multiple faces found" (2).
+ * Nothing else is used: the SDK reports no face count in its metrics, only these codes.
+ */
+export class FaceWatch {
+  private raw: FaceProblem = null;
+  private since = 0;
+  private paused: FaceProblem = null;
+
+  reset(): void { this.raw = null; this.since = 0; this.paused = null; }
+
+  validation(code: number, now: number): void {
+    const p: FaceProblem = code === V_NO_FACE ? 'none' : code === V_MANY_FACES ? 'many' : null;
+    if (p !== this.raw) { this.raw = p; this.since = now; }
+  }
+
+  /** The problem the game should pause for right now, or null to play on. */
+  check(now: number): FaceProblem {
+    const held = now - this.since;
+    if (this.paused === null) {
+      if (this.raw !== null && held >= FACE_PAUSE_ENTER_MS) this.paused = this.raw;
+    } else if (this.raw === null) {
+      if (held >= FACE_PAUSE_EXIT_MS) this.paused = null;
+    } else {
+      this.paused = this.raw; // none <-> many while paused: show the current one
+    }
+    return this.paused;
+  }
+}
+
+/** Feed a gate from a source: wall clock chest arrivals and every new validation packet. Returns an unsubscribe. */
+export function wireGate(source: SignalSource, gate: LineupGate, now: () => number): () => void {
+  gate.reset();
+  let lastV = source.status().validation;
+  if (lastV) gate.validation(lastV.code, lastV.at);
+  const offS = source.onStatus((s) => {
+    if (s.validation && s.validation !== lastV) { lastV = s.validation; gate.validation(s.validation.code, s.validation.at); }
+    if (s.processing !== 'running' && s.processing !== 'starting') gate.reset();
+  });
+  const offF = source.subscribe((f) => { if (typeof f.chest === 'number') gate.chest(now()); });
+  return () => { offS(); offF(); };
+}

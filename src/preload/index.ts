@@ -1,2 +1,9 @@
-// Presage renderer bridge is exposed here by the chief once the SDK is wired.
-try { require('@smartspectra/node-sdk/preload'); } catch { /* SDK bridge not available yet */ }
+import { contextBridge, ipcRenderer } from 'electron';
+
+// Presage renderer bridge (exposes window.__smartspectraBridge for @smartspectra/node-sdk/renderer).
+try { require('@smartspectra/node-sdk/preload'); } catch (e) { console.error('[vault] SmartSpectra preload bridge failed', e); }
+
+// The game's own bridge: whether live mode can run, and the Presage key from the main process (.env).
+contextBridge.exposeInMainWorld('vault', {
+  presage: (): Promise<{ key: string | null; sdk: boolean }> => ipcRenderer.invoke('vault:presage'),
+});

@@ -9,7 +9,10 @@ import {
   dailySeed, extractFeatures, learnBaseline, levelConfig, newGame, step, tellSheet, tellTrend, unlockedLevel, updateHistory,
   type Baseline, type BoxKind, type GameAction, type GameState, type LevelNo, type PeekFeatures, type TellHistory, type TellSheet,
 } from '../engine';
-import type { SignalSource } from '../signals/types';
+import type { SignalSource, SourceStatus } from '../signals/types';
+import { FaceWatch, type FaceProblem } from '../signals/lineup';
+import { V_MANY_FACES, V_NO_FACE, V_OK, validationWords } from '../signals/status';
+import { Lineup } from './Lineup';
 import type { BankerState, SceneBox, SceneBoxKind } from '../scene/types';
 import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
@@ -21,9 +24,13 @@ import { BreathLine, Btn, Hud, LiveScene, ROMAN, Ring, Subtitle, ValuesBoard, mo
 import './styles.css';
 
 export type SourceChoice = { mode: 'live'; key: string } | { mode: 'simulated' };
-export interface GameProps { createSource: (c: SourceChoice) => Promise<SignalSource>; }
+export interface GameProps {
+  createSource: (c: SourceChoice) => Promise<SignalSource>;
+  /** A Presage key is already set on this computer (.env), so the key screen need not ask for one. */
+  keyOnFile?: boolean;
+}
 
-type Screen = 'title' | 'ladder' | 'consent' | 'key' | 'play';
+type Screen = 'title' | 'ladder' | 'consent' | 'key' | 'lineup' | 'play';
 type ReadStage = 'none' | 'speak' | 'after';
 interface PracticeState { idx: number; stage: 'intro' | 'peek' | 'noted'; peeks: { kind: BoxKind; features: PeekFeatures }[] }
 interface EndInfo { sheet: TellSheet; prev: TellHistory; next: TellHistory; unlockedBefore: LevelNo; unlockedNow: LevelNo; }
@@ -34,7 +41,12 @@ const today = (): string => new Date().toLocaleDateString('en-CA');
 const kindName = (k: BoxKind, v?: number): string => (k === 'trap' ? 'Trap' : k === 'big' ? `Big treasure${v ? `, ${money(v)}` : ''}` : `Treasure${v ? `, ${money(v)}` : ''}`);
 const secs = (ms: number): string => (ms / 1000).toFixed(1);
 
-export function Game({ createSource }: GameProps): JSX.Element {
+/** Credits: with the camera on and no input for this long outside a read, the camera turns off. */
+const IDLE_MS = 60_000;
+/** Credits: a face pause that lasts this long turns the camera off. */
+const FACE_PAUSE_CAP_MS = 45_000;
+
+export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Element {
   const P = useMemo(pace, []);
   const [screen, setScreen] = useState<Screen>('title');
   const [history, setHistory] = useState<TellHistory>(loadHistory);
@@ -58,6 +70,13 @@ export function Game({ createSource }: GameProps): JSX.Element {
   const [cardUrl, setCardUrl] = useState<string | null>(null);
   const [muted, setMutedState] = useState(isMuted());
   const [boardSeen, setBoardSeen] = useState(0);
+  const [lineupOff, setLineupOff] = useState<string | null>(null);
+  const [pauseWhy, setPauseWhy] = useState<string | null>(null);
+  const [srcStatus, setSrcStatus] = useState<SourceStatus | null>(null);
+  const [facePause, setFacePause] = useState<FaceProblem>(null);
+  const lineupFor = useRef<'new' | 'resume'>('new');
+  const faceWatch = useRef(new FaceWatch());
+  const lastInput = useRef(performance.now());
   const lastBaseline = useRef<Baseline | null>(null);
   const recRef = useRef<{ progress: () => number } | null>(null);
   const speechRef = useRef<{ cancel: () => void } | null>(null);
@@ -70,16 +89,9 @@ export function Game({ createSource }: GameProps): JSX.Element {
   const cfg = levelConfig(game.level);
 
   // ---------- starting and stopping ----------
-  const beginPlay = useCallback(async (src: SignalSource, b: SignalBus) => {
-    try {
-      b.attach();
-      await src.start();
-    } catch (e) {
-      setErr(`The camera did not start: ${(e as Error)?.message ?? 'unknown error'}. Check the key, or play with a simulated body.`);
-      setScreen('key');
-      return;
-    }
+  const enterPlay = useCallback(() => {
     setPaused(false);
+    setPauseWhy(null);
     setScreen('play');
     setGame((s) => {
       let g = step(s, { type: 'begin' });
@@ -88,6 +100,26 @@ export function Game({ createSource }: GameProps): JSX.Element {
     });
     setReusedCalm(!!lastBaseline.current);
   }, []);
+
+  // The SDK session starts here, right before the lineup, and nowhere else.
+  const beginPlay = useCallback(async (src: SignalSource, b: SignalBus) => {
+    lastInput.current = performance.now();
+    faceWatch.current.reset();
+    setFacePause(null);
+    if (src.kind === 'live') { lineupFor.current = 'new'; setLineupOff(null); setScreen('lineup'); }
+    try {
+      b.attach();
+      await src.start();
+    } catch (e) {
+      void src.stop();
+      const msg = (e as Error)?.message ?? 'unknown error';
+      if (src.kind === 'live') { setLineupOff(msg); return; }
+      setErr(`The camera did not start: ${msg}. Check the key, or play with a simulated body.`);
+      setScreen('key');
+      return;
+    }
+    if (src.kind !== 'live') enterPlay();
+  }, [enterPlay]);
 
   const startGame = useCallback((level: LevelNo, isDaily: boolean) => {
     const seed = isDaily ? dailySeed(today()) : (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
@@ -110,10 +142,11 @@ export function Game({ createSource }: GameProps): JSX.Element {
   const choose = useCallback(async (c: SourceChoice) => {
     setErr(null);
     if (c.mode === 'live') {
-      if (!c.key.trim()) { setErr('Paste your Presage key first.'); return; }
-      saveKey(c.key);
+      if (!c.key.trim() && !keyOnFile) { setErr('Paste your Presage key first.'); return; }
+      if (c.key.trim()) saveKey(c.key);
     }
     let src: SignalSource;
+    void source?.stop(); // never two sessions
     try { src = await createSource(c); } catch (e) {
       setErr(`That source is not available: ${(e as Error)?.message ?? 'unknown error'}.`);
       return;
@@ -123,7 +156,7 @@ export function Game({ createSource }: GameProps): JSX.Element {
     setBus(b);
     lastBaseline.current = null; // a new body needs a new calm
     await beginPlay(src, b);
-  }, [createSource, beginPlay]);
+  }, [createSource, beginPlay, keyOnFile, source]);
 
   const stopCamera = useCallback(() => {
     stopSpeaking();
@@ -137,21 +170,139 @@ export function Game({ createSource }: GameProps): JSX.Element {
     setScreen('ladder');
   }, [stopCamera, bus]);
 
-  const pause = useCallback(() => {
+  const pause = useCallback((why: string | null = null) => {
     if (screen !== 'play' || paused) return;
     stopCamera();
+    setPauseWhy(why);
+    setFacePause(null);
     setPaused(true);
   }, [screen, paused, stopCamera]);
 
   const resume = useCallback(async () => {
-    if (!source) return;
-    try { await source.start(); setPaused(false); } catch (e) { setErr(`The camera did not start: ${(e as Error)?.message ?? ''}`); }
+    if (!source || !bus) return;
+    setErr(null);
+    lastInput.current = performance.now();
+    faceWatch.current.reset();
+    setFacePause(null);
+    if (source.kind === 'live') {
+      // back through the lineup: the camera restarts and the read must be clear before play goes on
+      lineupFor.current = 'resume';
+      setLineupOff(null);
+      setScreen('lineup');
+      try { await source.start(); } catch (e) { void source.stop(); setLineupOff((e as Error)?.message ?? 'The camera did not start.'); }
+      return;
+    }
+    try { await source.start(); setPaused(false); setPauseWhy(null); } catch (e) { setErr(`The camera did not start: ${(e as Error)?.message ?? ''}`); }
+  }, [source, bus]);
+
+  // ---------- lineup ----------
+  const lineupReady = useCallback(() => {
+    if (lineupFor.current === 'resume') { setPaused(false); setPauseWhy(null); setScreen('play'); return; }
+    enterPlay();
+  }, [enterPlay]);
+  const lineupBack = useCallback(() => {
+    stopCamera();
+    bus?.clear();
+    setPaused(false);
+    setPauseWhy(null);
+    setLineupOff(null);
+    setScreen('ladder');
+  }, [stopCamera, bus]);
+  const lineupTimeout = useCallback(() => {
+    stopCamera();
+    setLineupOff('He turned the camera off to save time.');
+  }, [stopCamera]);
+  const lineupRetry = useCallback(() => {
+    if (!source || !bus) return;
+    if (lineupFor.current === 'resume') { void resume(); return; }
+    void beginPlay(source, bus);
+  }, [source, bus, resume, beginPlay]);
+  const lineupSim = useCallback(() => {
+    stopCamera();
+    setLineupOff(null);
+    void choose({ mode: 'simulated' });
+  }, [stopCamera, choose]);
+
+  // ---------- source status: errors, face pause, credits ----------
+  useEffect(() => {
+    if (!source) { setSrcStatus(null); return; }
+    setSrcStatus(source.status());
+    let lastV = source.status().validation;
+    return source.onStatus((st) => {
+      setSrcStatus(st);
+      if (st.validation && st.validation !== lastV) { lastV = st.validation; faceWatch.current.validation(st.validation.code, st.validation.at); }
+    });
   }, [source]);
+
+  // an SDK error has already ended the session (the source stops itself); tell the player
+  const errSeen = useRef<unknown>(null);
+  useEffect(() => {
+    const e = srcStatus?.error ?? null;
+    if (!e || e === errSeen.current) return;
+    errSeen.current = e;
+    stopSpeaking();
+    if (screen === 'lineup') setLineupOff(e.say);
+    else if (screen === 'play' && game.phase !== 'over') { setErr(e.say); setPauseWhy(null); setFacePause(null); setPaused(true); }
+  }, [srcStatus, screen, game.phase]);
+
+  // stop the session the moment the read is over: results, leaving, closing the window
+  useEffect(() => {
+    if (screen === 'play' && (game.phase === 'reveal' || game.phase === 'over')) source?.stop().catch(() => {});
+  }, [screen, game.phase, source]);
+  const srcRef = useRef<SignalSource | null>(null);
+  srcRef.current = source;
+  useEffect(() => {
+    const off = () => { void srcRef.current?.stop(); };
+    window.addEventListener('pagehide', off);
+    window.addEventListener('beforeunload', off);
+    return () => { window.removeEventListener('pagehide', off); window.removeEventListener('beforeunload', off); off(); };
+  }, []);
+
+  // ---------- face pause and idle guard (live only) ----------
+  const live = source?.kind === 'live';
+  const reading = screen === 'play' && !paused && (
+    (game.phase === 'baseline' && !calmFailed)
+    || (game.phase === 'practice' && practice.stage === 'peek')
+    || game.phase === 'peek');
+  // A read pauses while the SDK reports no face (1) or more than one face (2), and goes on when it clears.
+  useEffect(() => {
+    if (!live || !reading) { setFacePause(null); return; }
+    let since: number | null = null;
+    const id = setInterval(() => {
+      const now = performance.now();
+      const p = faceWatch.current.check(now);
+      setFacePause(p);
+      if (p === null) { since = null; return; }
+      since ??= now;
+      if (now - since > FACE_PAUSE_CAP_MS) pause('Nobody was in view, so he turned the camera off.');
+    }, 200);
+    return () => clearInterval(id);
+  }, [live, reading, pause]);
+  const halted = paused || facePause !== null;
+
+  // Credits: the camera turns off when nobody touches anything for a minute outside a read.
+  useEffect(() => {
+    const touch = () => { lastInput.current = performance.now(); };
+    window.addEventListener('keydown', touch);
+    window.addEventListener('pointerdown', touch);
+    window.addEventListener('pointermove', touch);
+    return () => { window.removeEventListener('keydown', touch); window.removeEventListener('pointerdown', touch); window.removeEventListener('pointermove', touch); };
+  }, []);
+  useEffect(() => {
+    if (!live || screen !== 'play' || paused || game.phase === 'reveal' || game.phase === 'over') return;
+    const id = setInterval(() => {
+      if (reading || readStage === 'speak') { lastInput.current = performance.now(); return; }
+      if (performance.now() - lastInput.current > IDLE_MS) pause('You were away, so he turned the camera off.');
+    }, 2000);
+    const hide = () => { if (document.hidden) pause('The window was hidden, so he turned the camera off.'); };
+    document.addEventListener('visibilitychange', hide);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', hide); };
+  }, [live, screen, paused, game.phase, reading, readStage, pause]);
 
   // ---------- timed windows (signal time) ----------
   // learn your calm
   useEffect(() => {
-    if (screen !== 'play' || paused || !bus || game.phase !== 'baseline' || calmFailed) return;
+    if (screen !== 'play' || halted || !bus || game.phase !== 'baseline' || calmFailed) return;
     const rec = bus.record(BASELINE_MS);
     recRef.current = rec;
     let live = true;
@@ -163,12 +314,12 @@ export function Game({ createSource }: GameProps): JSX.Element {
       dispatch({ type: 'baselineDone', baseline: b });
     });
     return () => { live = false; rec.cancel(); recRef.current = null; };
-  }, [screen, paused, bus, game.phase, calmFailed, calmTry, dispatch]);
+  }, [screen, halted, bus, game.phase, calmFailed, calmTry, dispatch]);
 
   // practice peeks
   const practiceKind: BoxKind | null = game.practice[practice.idx]?.kind ?? null;
   useEffect(() => {
-    if (screen !== 'play' || paused || !bus || !source || game.phase !== 'practice' || practice.stage !== 'peek' || !practiceKind || !game.baseline) return;
+    if (screen !== 'play' || halted || !bus || !source || game.phase !== 'practice' || practice.stage !== 'peek' || !practiceKind || !game.baseline) return;
     if (isPeekAware(source)) source.onPeek(practiceKind);
     const rec = bus.record(PEEK_MS);
     recRef.current = rec;
@@ -180,12 +331,12 @@ export function Game({ createSource }: GameProps): JSX.Element {
       setPractice((p) => ({ ...p, stage: 'noted', peeks: [...p.peeks, { kind: practiceKind, features }] }));
     });
     return () => { live = false; rec.cancel(); recRef.current = null; };
-  }, [screen, paused, bus, source, game.phase, game.baseline, practice.stage, practice.idx, practiceKind]);
+  }, [screen, halted, bus, source, game.phase, game.baseline, practice.stage, practice.idx, practiceKind]);
 
   // board peeks
   const activeBox = game.activeBoxId === null ? null : game.boxes.find((b) => b.id === game.activeBoxId) ?? null;
   useEffect(() => {
-    if (screen !== 'play' || paused || !bus || !source || game.phase !== 'peek' || !activeBox || !game.baseline) return;
+    if (screen !== 'play' || halted || !bus || !source || game.phase !== 'peek' || !activeBox || !game.baseline) return;
     if (isPeekAware(source)) source.onPeek(activeBox.kind);
     const rec = bus.record(PEEK_MS);
     recRef.current = rec;
@@ -198,7 +349,7 @@ export function Game({ createSource }: GameProps): JSX.Element {
     });
     return () => { live = false; rec.cancel(); recRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, paused, bus, source, game.phase, activeBox?.id, game.baseline, dispatch]);
+  }, [screen, halted, bus, source, game.phase, activeBox?.id, game.baseline, dispatch]);
 
   // the banker speaks his read
   useEffect(() => {
@@ -287,6 +438,7 @@ export function Game({ createSource }: GameProps): JSX.Element {
     if (tag === 'INPUT') return;
     const k = e.key.toLowerCase();
     if (k === 'm') { toggleMute(); return; }
+    if (screen === 'lineup') return; // the lineup screen owns its keys
     if (screen === 'play' && paused) {
       if (k === 'enter' || k === ' ') void resume();
       if (k === 'q') toLadder();
@@ -311,13 +463,14 @@ export function Game({ createSource }: GameProps): JSX.Element {
         return;
       case 'key':
         if (k === 's') void choose({ mode: 'simulated' });
-        else if (k === 'enter' && keyDraft.trim()) void choose({ mode: 'live', key: keyDraft });
+        else if (k === 'enter' && (keyDraft.trim() || keyOnFile)) void choose({ mode: 'live', key: keyDraft });
         else if (k === 'escape') setScreen('ladder');
         return;
       case 'play':
         break;
     }
     if (k === 'escape') { e.preventDefault(); if (game.phase !== 'over') pause(); return; }
+    if (facePause) return;
     if (calmFailed && game.phase === 'baseline' && k === 'enter') { setCalmFailed(false); setCalmTry((n) => n + 1); return; }
     if (game.phase === 'practice' && (k === 'enter' || k === ' ')) { e.preventDefault(); practiceNext(); return; }
     if (readStage === 'speak' && (k === ' ' || k === 'enter')) { e.preventDefault(); speechRef.current?.cancel(); return; }
@@ -402,9 +555,14 @@ export function Game({ createSource }: GameProps): JSX.Element {
           <ConsentScreen onAgree={() => { setConsented(true); if (source && bus) void beginPlay(source, bus); else setScreen('key'); }} onBack={() => setScreen('ladder')} />
         )}
         {screen === 'key' && (
-          <KeyScreen draft={keyDraft} setDraft={setKeyDraft} err={err}
+          <KeyScreen draft={keyDraft} setDraft={setKeyDraft} err={err} keyOnFile={keyOnFile}
             onLive={() => void choose({ mode: 'live', key: keyDraft })} onSim={() => void choose({ mode: 'simulated' })}
             onForget={() => { forgetKey(); setKeyDraft(''); }} />
+        )}
+
+        {screen === 'lineup' && source && (
+          <Lineup source={source} off={lineupOff} onReady={lineupReady} onBack={lineupBack}
+            onTimeout={lineupTimeout} onRetry={lineupRetry} onSim={lineupSim} />
         )}
 
         {screen === 'play' && game.phase !== 'over' && (
@@ -456,7 +614,7 @@ export function Game({ createSource }: GameProps): JSX.Element {
               )}
             </div>
             <Badge bus={paused ? null : bus} kind={source?.kind ?? null} muted={muted} />
-            {!paused && (game.phase === 'baseline' || game.phase === 'practice' || game.phase === 'peek') && <SignalWarn bus={bus} live={source?.kind === 'live'} />}
+            {!halted && (game.phase === 'baseline' || game.phase === 'practice' || game.phase === 'peek') && <SignalWarn bus={bus} live={source?.kind === 'live'} status={srcStatus} />}
           </>
         )}
 
@@ -470,13 +628,28 @@ export function Game({ createSource }: GameProps): JSX.Element {
         {screen === 'play' && paused && (
           <div className="pause">
             <div className="eyebrow">Camera off</div>
-            <div className="display" style={{ fontSize: 'var(--fs-xl)', marginTop: 14 }}>Nothing is being read.</div>
+            <div className="display" style={{ fontSize: 'var(--fs-xl)', marginTop: 14 }}>{pauseWhy ?? 'Nothing is being read.'}</div>
             <div className="body measure" style={{ marginTop: 14 }}>The camera is off and the game is paused. Any peek in progress starts over when you come back.</div>
             {err && <div className="err">{err}</div>}
             <div className="actions">
               <Btn primary k="Enter" onClick={() => void resume()}>Turn the camera back on</Btn>
               <Btn k="Q" onClick={toLadder}>Back to the banks</Btn>
             </div>
+          </div>
+        )}
+
+        {screen === 'play' && !paused && facePause && (
+          <div className="pause" role="alertdialog" aria-live="assertive" style={{ background: 'rgba(4,3,2,0.72)' }}>
+            <div className="eyebrow">Paused</div>
+            <div className="display" style={{ fontSize: 'var(--fs-xl)', marginTop: 14 }}>
+              {facePause === 'many' ? 'More than one face in view.' : 'He cannot see your face.'}
+            </div>
+            <div className="body measure" style={{ marginTop: 14 }}>
+              {facePause === 'many'
+                ? 'He reads one player at a time. When only you are in view, the round goes on by itself.'
+                : 'Come back in front of the camera. The round goes on by itself when he sees you.'}
+            </div>
+            <div className="small" style={{ marginTop: 14 }}>This read starts over when it resumes. Esc turns the camera off.</div>
           </div>
         )}
       </div>
@@ -578,16 +751,18 @@ function ConsentScreen({ onAgree, onBack }: { onAgree: () => void; onBack: () =>
   );
 }
 
-function KeyScreen({ draft, setDraft, err, onLive, onSim, onForget }: {
-  draft: string; setDraft: (s: string) => void; err: string | null; onLive: () => void; onSim: () => void; onForget: () => void;
+function KeyScreen({ draft, setDraft, err, keyOnFile, onLive, onSim, onForget }: {
+  draft: string; setDraft: (s: string) => void; err: string | null; keyOnFile: boolean; onLive: () => void; onSim: () => void; onForget: () => void;
 }): JSX.Element {
   return (
     <div className="center">
       <div className="eyebrow enter">Presage key</div>
-      <div className="display enter" style={{ fontSize: 'var(--fs-xl)', margin: '12px 0 8px', ['--d' as string]: 1 }}>Paste your Presage key.</div>
-      <div className="body measure enter" style={{ ['--d' as string]: 2 }}>It lets SmartSpectra read your breathing from the webcam. It stays on this computer.</div>
+      <div className="display enter" style={{ fontSize: 'var(--fs-xl)', margin: '12px 0 8px', ['--d' as string]: 1 }}>{keyOnFile ? 'Your Presage key is ready.' : 'Paste your Presage key.'}</div>
+      <div className="body measure enter" style={{ ['--d' as string]: 2 }}>{keyOnFile
+        ? 'A key is set up on this computer. Press Enter to use your camera, or paste a different key.'
+        : 'It lets SmartSpectra read your breathing from the webcam. It stays on this computer.'}</div>
       <form className="enter" style={{ marginTop: 30, ['--d' as string]: 3 }} onSubmit={(e) => { e.preventDefault(); onLive(); }}>
-        <input className="field" type="password" spellCheck={false} autoComplete="off" placeholder="your key"
+        <input className="field" type="password" spellCheck={false} autoComplete="off" placeholder={keyOnFile ? 'key on this computer' : 'your key'}
           value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Presage API key" />
       </form>
       {err && <div className="err">{err}</div>}
@@ -846,15 +1021,18 @@ function Badge({ bus, kind, muted }: { bus: SignalBus | null; kind: SignalSource
   );
 }
 
-function SignalWarn({ bus, live }: { bus: SignalBus | null; live: boolean }): JSX.Element | null {
+function SignalWarn({ bus, live, status }: { bus: SignalBus | null; live: boolean; status: SourceStatus | null }): JSX.Element | null {
   const s = usePoll(() => {
     if (!bus) return null;
+    const v = live ? status?.validation : null;
+    // face codes have their own pause overlay; any other SDK hint shows here after a second
+    if (v && v.code !== V_OK && v.code !== V_NO_FACE && v.code !== V_MANY_FACES && performance.now() - v.at > 1000) return validationWords(v.code, v.hint).big;
     const stale = performance.now() - bus.lastFrameAt > 3000;
     if (stale) return live ? 'Waiting for the camera.' : null;
     const q = bus.quality();
     if (q !== null && q < 0.5) return 'I lost you. Sit back in the light and face me.';
     if (bus.talking()) return 'Quiet while you peek. Talking hides your breath.';
     return null;
-  }, [bus, live], 300);
+  }, [bus, live, status], 300);
   return s ? <div className="warn shadowed">{s}</div> : null;
 }
