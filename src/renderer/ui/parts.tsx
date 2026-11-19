@@ -96,9 +96,9 @@ export function Hud({ game, daily }: { game: GameState; daily: boolean }): JSX.E
       <div className="purse">
         <div className="pile num" aria-label="Your pile">{money(game.pile)}</div>
         <div className="heat">
-          <div className="row"><span>Heat</span><span className="num">{heatPct}%</span></div>
+          <div className="row"><span>Heat</span><span className="num">{heatPct}</span></div>
           <div className="bar"><div className="fill" style={{ width: `${heatPct}%` }} /></div>
-          <div className="small" style={{ marginTop: 6, fontSize: 'var(--fs-xs)' }}>At {Math.round(RULES.bustAt * 100)}% he throws you out</div>
+          <div className="small" style={{ marginTop: 6, fontSize: 'var(--fs-xs)' }}>At {Math.round(RULES.bustAt * 100)} he throws you out</div>
         </div>
       </div>
     </div>

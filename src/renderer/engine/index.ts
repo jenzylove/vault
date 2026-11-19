@@ -14,7 +14,7 @@ export { runSimGame, playSimGame, PEEK_MS, BASELINE_MS, type Policy, type SimGam
 export { createRng, type Rng } from './rng';
 export { LEVELS, DEFAULT_LEVEL, levelConfig, type BankerLevel, type LevelNo } from './levels';
 export {
-  tellSheet, updateHistory, emptyHistory, tellTrend, unlockedLevel, labelledPeeks, TELL_KEYS, TELL_THRESHOLD,
+  tellSheet, sayTell, trendSentence, updateHistory, emptyHistory, tellTrend, unlockedLevel, labelledPeeks, TELL_KEYS, TELL_THRESHOLD,
   type Tell, type TellKey, type TellSheet, type TellHistory, type TellHistoryEntry,
 } from './tells';
 export { dailySeed, shareLine } from './daily';

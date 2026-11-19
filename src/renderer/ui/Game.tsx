@@ -6,14 +6,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LEVELS, MIN_QUALITY, BASELINE_MS, PEEK_MS, RULES,
-  dailySeed, extractFeatures, learnBaseline, levelConfig, newGame, step, tellSheet, tellTrend, unlockedLevel, updateHistory,
+  dailySeed, extractFeatures, learnBaseline, levelConfig, newGame, sayTell, step, tellSheet, tellTrend, trendSentence, unlockedLevel, updateHistory,
   type Baseline, type BoxKind, type GameAction, type GameState, type LevelNo, type PeekFeatures, type TellHistory, type TellSheet,
 } from '../engine';
 import type { SignalSource, SourceStatus } from '../signals/types';
 import { FaceWatch, STALE_MS, type FaceProblem } from '../signals/lineup';
 import { V_MANY_FACES, V_NO_FACE, V_OK, validationWords } from '../signals/status';
 import { Lineup } from './Lineup';
-import type { BankerState, SceneBox, SceneBoxKind } from '../scene/types';
+import type { BankerState, SceneBox, SceneBoxKind, ScenePracticeBox } from '../scene/types';
 import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
 import { speak, stopSpeaking, setMuted, isMuted } from './speech';
@@ -35,8 +35,6 @@ type ReadStage = 'none' | 'speak' | 'after';
 interface PracticeState { idx: number; stage: 'intro' | 'peek' | 'noted'; peeks: { kind: BoxKind; features: PeekFeatures }[] }
 interface EndInfo { sheet: TellSheet; prev: TellHistory; next: TellHistory; unlockedBefore: LevelNo; unlockedNow: LevelNo; }
 
-const PRACTICE_SLOT = 4;
-const DECOYS: SceneBox[] = Array.from({ length: 10 }, (_, i) => ({ id: 100 + i, state: 'sealed' }));
 const today = (): string => new Date().toLocaleDateString('en-CA');
 const kindName = (k: BoxKind, v?: number): string => (k === 'trap' ? 'Trap' : k === 'big' ? `Big treasure${v ? `, ${money(v)}` : ''}` : `Treasure${v ? `, ${money(v)}` : ''}`);
 const secs = (ms: number): string => (ms / 1000).toFixed(1);
@@ -500,11 +498,11 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const holdId = readStage === 'speak' && game.lastOutcome?.decision === 'walk' ? game.lastOutcome.boxId : null;
   const revealed = new Set(game.phase === 'over' ? hidden : hidden.slice(0, game.phase === 'reveal' ? revealN : 0));
   const sceneBoxes: SceneBox[] = inPractice
-    ? DECOYS.map((d, i) => (i === PRACTICE_SLOT && game.phase === 'practice' && practice.stage === 'peek' ? { ...d, state: 'peeking' } : d))
+    ? game.boxes.map((b): SceneBox => ({ id: b.id, state: 'sealed' }))
     : game.boxes.map((b): SceneBox => {
       const open = (k: BoxKind): SceneBox => ({ id: b.id, kind: k, state: k === 'trap' ? 'opened-trap' : 'opened-treasure' });
       if (b.id === holdId) return { id: b.id, state: 'sealed' };
-      if (revealed.has(b.id)) return open(b.kind);
+      if (revealed.has(b.id)) return b.state === 'burned' ? { id: b.id, kind: b.kind, state: 'burned-revealed' } : open(b.kind);
       switch (b.state) {
         case 'sealed': return { id: b.id, state: 'sealed' };
         case 'peeked': return game.phase === 'peek' && b.id === game.activeBoxId ? { id: b.id, state: 'peeking' } : { id: b.id, state: 'sealed' };
@@ -513,11 +511,15 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         case 'burned': return { id: b.id, state: 'burned' };
       }
     });
+  const scenePractice: ScenePracticeBox[] = game.practice.map((p, i) => ({
+    kind: p.kind,
+    state: game.phase === 'practice' && i === practice.idx && practice.stage === 'peek' ? 'peeking' : 'sealed',
+  }));
   const peekContents: SceneBoxKind | null = inPractice
-    ? (game.phase === 'practice' && practice.stage === 'peek' ? practiceKind : null)
+    ? null
     : game.phase === 'peek' && activeBox ? activeBox.kind : null;
   const sceneActive: number | null = inPractice
-    ? (game.phase === 'practice' && practice.stage !== 'intro' ? 100 + PRACTICE_SLOT : null)
+    ? null
     : game.phase === 'peek' || game.phase === 'bankerRead' ? game.activeBoxId
       : readStage !== 'none' && game.lastOutcome ? game.lastOutcome.boxId : null;
   const bankerState: BankerState = screen !== 'play' ? 'idle'
@@ -537,6 +539,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         boxes={sceneBoxes}
         activeBoxId={sceneActive}
         peekContents={peekContents}
+        practice={inPractice ? scenePractice : undefined}
         bankerState={bankerState}
         heat={screen === 'play' ? game.heat : 0}
         onBoxClick={screen === 'play' && game.phase === 'board' && !paused ? onBoxClick : undefined}
@@ -831,7 +834,7 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   if (last) {
     if (last.quality < MIN_QUALITY) note = 'He lost you on that one. Sit back in the light.';
     else if (last.breathCatchMs > 0) note = `Your breath stopped for ${secs(last.breathCatchMs)} seconds.`;
-    else if (last.shallowing > 0.2) note = `Your breathing went ${Math.round(last.shallowing * 100)}% shallower.`;
+    else if (last.shallowing > 0.2) note = `Your breathing went ${sayTell('shallow', last.shallowing * 100)}.`;
     else if (Math.abs(last.rateChange) > 0.2) note = `Your breathing ${last.rateChange > 0 ? 'sped up' : 'slowed'}.`;
   }
   return (
@@ -950,9 +953,6 @@ function EndScreen({ game, end, cardUrl, daily, onAgain, onNextBank, onLadder, o
   const { sheet } = end;
   const key = sheet.biggest?.key ?? sheet.tells[0]?.key ?? 'breath';
   const trend = tellTrend(end.next, key).slice(-6);
-  const topTell = sheet.tells.find((t) => t.key === key);
-  const unit = topTell?.unit ?? '';
-  const fmt = (x: number) => (unit === 's' ? x.toFixed(1) : String(Math.round(x)));
   const tvals = trend.map((t) => t.trap);
   const maxV = Math.max(1e-6, ...tvals.map((v) => Math.abs(v)));
   const pts = tvals.map((v, i) => `${(tvals.length === 1 ? 65 : 6 + (i / (tvals.length - 1)) * 118).toFixed(1)},${(30 - (Math.abs(v) / maxV) * 24).toFixed(1)}`);
@@ -985,7 +985,7 @@ function EndScreen({ game, end, cardUrl, daily, onAgain, onNextBank, onLadder, o
           <svg viewBox="0 0 130 36">{pts.length > 1 && <polyline points={pts.join(' ')} />}{pts.map((p, i) => { const [x, y] = p.split(','); return <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 3 : 2} />; })}</svg>
           <span>
             {tvals.length > 1
-              ? `${topTell?.label ?? 'This tell'} at traps, your last ${tvals.length} games: ${tvals.map(fmt).join(', ')} ${unit}.`
+              ? trendSentence(key, tvals)
               : 'Play again to watch this tell shrink.'}
           </span>
         </div>
