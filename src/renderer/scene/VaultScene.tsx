@@ -55,8 +55,8 @@ function CameraRig() {
     );
     const want = w > 0 ? tmp.current.copy(CAMERA_TARGET).lerp(sceneFx.focus, 0.3) : CAMERA_TARGET;
     look.current.lerp(want, 1 - Math.exp(-dt * 2));
-    // breath catch: a small involuntary push toward the glass (a few cm, eased both ways), plus a hair closer as he grows suspicious
-    const push = sceneFx.push * 0.035 + sceneFx.alert * 0.012;
+    // breath catch: a small involuntary push toward the glass (about 7 cm, eased both ways), plus a hair closer as he grows suspicious
+    const push = sceneFx.push * 0.07 + sceneFx.alert * 0.012;
     if (push > 0.0001) cam.position.addScaledVector(tmp.current.copy(look.current).sub(cam.position).normalize(), push);
     cam.lookAt(look.current.x + Math.sin(t * 0.29) * 0.004, look.current.y + Math.sin(t * 0.43) * 0.003, look.current.z);
   });

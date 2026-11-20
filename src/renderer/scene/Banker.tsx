@@ -59,7 +59,7 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
     // lamp swells while he reads you; heartbeat-free, slow and deliberate
     const lampT = LAMP_LEVEL[state] * (state === 'reading' ? 0.92 + 0.08 * Math.sin(now * 2.1) : 1);
     a.lamp += (lampT - a.lamp) * (1 - Math.exp(-dt * (state === 'walking' ? 2.2 : 1.6)));
-    const al = sceneFx.alert; const fl = sceneFx.flare;
+    const al = sceneFx.alert; const fl = sceneFx.flare; const snap = sceneFx.push;
     col.set('#ffd4a3').lerp(HOT, heat.current * 0.6).lerp(FLARE, fl * 0.5);
     // his lamp's wash on the booth panel is emissive (no extra light for every pixel in the room)
     // it brightens as he grows suspicious and flares on a breath catch, so the silhouette sharpens against it
@@ -75,10 +75,11 @@ export const Banker = memo(function Banker({ state, mats, heat }: { state: Banke
     const leanIn = state === 'walking' ? al * 0.25 : al;
     const ease = leanIn * leanIn * (3 - 2 * leanIn);
     if (figure.current) {
-      figure.current.position.z = BANKER_Z - 0.06 + ease * 0.12 + fl * 0.01;
-      figure.current.scale.setScalar(1 + ease * 0.07);
+      // a catch snaps him up to the pane (bigger, closer), then he eases back; capped so his hat never crosses the glass
+      figure.current.position.z = Math.min(BANKER_Z + 0.12, BANKER_Z - 0.06 + ease * 0.15 + snap * 0.07);
+      figure.current.scale.setScalar(1 + ease * 0.12 + snap * 0.07);
     }
-    if (body.current) { body.current.rotation.x = a.lean + ease * 0.17 + fl * 0.03 + breathe * (1 - ease * 0.6); body.current.position.y = breathe * 0.5; }
+    if (body.current) { body.current.rotation.x = a.lean + ease * 0.12 + snap * 0.06 + breathe * (1 - ease * 0.6); body.current.position.y = breathe * 0.5; }
     if (head.current) {
       const talk = state === 'speaking' ? Math.sin(now * 5.3) * 0.045 + Math.sin(now * 3.1) * 0.03 : 0;
       const tilt = state === 'reading' ? Math.sin(now * 0.6) * 0.06 : state === 'speaking' ? Math.sin(now * 1.7) * 0.05 : 0;
