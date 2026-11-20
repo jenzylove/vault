@@ -6,6 +6,7 @@ import { RoundedBox } from '@react-three/drei';
 import { TABLE_Y, CAMERA_POS } from './layout';
 import type { VaultMaterials } from './materials';
 import { gaugeDialTexture } from './textures';
+import { sceneFx } from './fx';
 
 const faceCamera = (x: number, z: number) => Math.atan2(CAMERA_POS.x - x, CAMERA_POS.z - z);
 
@@ -21,17 +22,25 @@ export const Gauge = memo(function Gauge({ mats, breath, beat }: { mats: VaultMa
   const jewel = useMemo(() => new THREE.MeshStandardMaterial({ color: '#4a0503', emissive: new THREE.Color('#ff2a12'), emissiveIntensity: 0.2, roughness: 0.15 }), []);
   const dial = useMemo(() => gaugeDialTexture(), []);
   const glass = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.04, metalness: 0.2, transparent: true, opacity: 0.1, depthWrite: false }), []);
-  const spring = useRef({ x: 0, v: 0 });
+  const spring = useRef({ x: 0, v: 0, seen: -1e9 });
   useFrame((_, dt) => {
     const b = breath.current;
     const target = b.length ? Math.max(-1.1, Math.min(1.1, b[b.length - 1])) : 0;
     // under-damped needle: a real meter movement overshoots a hair
     const sp = spring.current; const k = 140, c = 14;
-    const step = Math.min(dt, 1 / 30);
-    sp.v += (k * (target - sp.x) - c * sp.v) * step; sp.x += sp.v * step;
+    // a breath catch kicks the movement: the needle jumps hard right, rings, and settles back onto the trace
+    if (sceneFx.catchAt !== sp.seen) {
+      const fresh = performance.now() - sceneFx.catchAt < 300;
+      sp.seen = sceneFx.catchAt;
+      if (fresh) sp.v += 14;
+    }
+    // substeps keep the kick stable at the 20 fps live rate
+    const n = dt > 1 / 45 ? 3 : 1; const step = Math.min(dt, 1 / 15) / n;
+    for (let i = 0; i < n; i++) { sp.v += (k * (target - sp.x) - c * sp.v) * step; sp.x += sp.v * step; }
+    if (Math.abs(sp.x) > 1.1) { sp.x = Math.sign(sp.x) * 1.1; sp.v *= -0.3; } // pegs on the stop pin
     if (needle.current) needle.current.rotation.z = -sp.x * 2.2;
     const hb = beat.current;
-    jewel.emissiveIntensity = 0.25 + hb * 7;
+    jewel.emissiveIntensity = 0.25 + hb * 7 + sceneFx.flare * 9;
   });
   return (
     <group position={pos} rotation={[0, faceCamera(pos[0], pos[2]), 0]} scale={0.7}>

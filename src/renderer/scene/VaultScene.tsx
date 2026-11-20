@@ -13,10 +13,25 @@ import { Banker } from './Banker';
 import { Gauge, StripRecorder } from './Polygraph';
 import { Effects } from './Effects';
 import { CAMERA_POS, CAMERA_TARGET } from './layout';
-import { sceneFx } from './fx';
+import { sceneFx, flareEnvelope, pushEnvelope } from './fx';
 import { AimedSpot } from './AimedSpot';
 
 export type { VaultSceneProps, SceneBox, SceneBoxState, ScenePracticeBox } from './types';
+
+/** Eases the banker's alert and turns the latest breath catch into the shared flare and push envelopes. Runs first each frame. */
+function ReactionDriver({ alert, catchPulse }: { alert: React.MutableRefObject<number>; catchPulse: React.MutableRefObject<number | undefined> }) {
+  useFrame((_, dt) => {
+    const want = Math.max(0, Math.min(1, alert.current || 0));
+    // rises a little faster than it settles: he notices quickly, forgives slowly
+    const rate = want > sceneFx.alert ? 2.4 : 1.1;
+    sceneFx.alert += (want - sceneFx.alert) * (1 - Math.exp(-Math.min(dt, 0.1) * rate));
+    if (typeof catchPulse.current === 'number' && catchPulse.current > sceneFx.catchAt) sceneFx.catchAt = catchPulse.current;
+    const ms = performance.now() - sceneFx.catchAt;
+    sceneFx.flare = flareEnvelope(ms);
+    sceneFx.push = pushEnvelope(ms);
+  }, -1);
+  return null;
+}
 
 function CameraRig() {
   const { camera, size } = useThree();
@@ -40,6 +55,9 @@ function CameraRig() {
     );
     const want = w > 0 ? tmp.current.copy(CAMERA_TARGET).lerp(sceneFx.focus, 0.3) : CAMERA_TARGET;
     look.current.lerp(want, 1 - Math.exp(-dt * 2));
+    // breath catch: a small involuntary push toward the glass (a few cm, eased both ways), plus a hair closer as he grows suspicious
+    const push = sceneFx.push * 0.035 + sceneFx.alert * 0.012;
+    if (push > 0.0001) cam.position.addScaledVector(tmp.current.copy(look.current).sub(cam.position).normalize(), push);
     cam.lookAt(look.current.x + Math.sin(t * 0.29) * 0.004, look.current.y + Math.sin(t * 0.43) * 0.003, look.current.z);
   });
   return null;
@@ -54,6 +72,8 @@ function SceneContents(props: VaultSceneProps) {
   const breath = useRef(props.breath); breath.current = props.breath;
   const beat = useRef(props.heartbeat); beat.current = props.heartbeat;
   const heat = useRef(props.heat); heat.current = props.heat;
+  const alert = useRef(props.alert ?? 0); alert.current = props.alert ?? 0;
+  const catchPulse = useRef(props.catchPulse); catchPulse.current = props.catchPulse;
   const { scene } = useThree();
   const glow = useRef<THREE.PointLight>(null);
   const fps = useRef({ n: 0, t: 0 });
@@ -99,6 +119,7 @@ function SceneContents(props: VaultSceneProps) {
       {/* cool fill spilling from the open vault, opposite the warm key */}
       <AimedSpot position={[-2.3, 2.6, -3.4]} target={[0.9, 0.9, -1.9]} angle={0.85} penumbra={1} intensity={5} distance={8} color="#a9bedb" />
       <pointLight ref={glow} intensity={0} distance={0.9} decay={2} color="#ffb347" />
+      <ReactionDriver alert={alert} catchPulse={catchPulse} />
       <CameraRig />
       {!devOff('room') && <Room mats={mats} heat={heat} />}
       <Table mats={mats} />

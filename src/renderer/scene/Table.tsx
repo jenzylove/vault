@@ -8,6 +8,7 @@ import { TABLE_Y, GLASS_Z, GLASS_HALF_W, GLASS_BOTTOM, GLASS_TOP } from './layou
 import type { VaultMaterials } from './materials';
 import { frostTexture, grimeTexture, coinFaceTexture } from './textures';
 import { AimedSpot } from './AimedSpot';
+import { sceneFx } from './fx';
 import { useFrostedGlassMaterial } from './FrostedGlass';
 
 export const LAMP = { x: -0.36, z: -1.04, h: 0.36 };
@@ -98,18 +99,22 @@ export const BankerLamp = memo(function BankerLamp({ mats, heat, beat, quality }
 
   const warm = useMemo(() => new THREE.Color('#ffd9ad'), []);
   const hot = useMemo(() => new THREE.Color('#ff6a3a'), []);
+  const flareCol = useMemo(() => new THREE.Color('#ffa94d'), []);
   const col = useMemo(() => new THREE.Color(), []);
   useFrame((st) => {
     const t = st.clock.elapsedTime;
     const h = heat.current;
-    col.copy(warm).lerp(hot, h * 0.75);
-    // incandescent shimmer + a tiny dip on each heartbeat
+    const fl = sceneFx.flare;
+    col.copy(warm).lerp(hot, h * 0.75).lerp(flareCol, fl * 0.55);
+    // incandescent shimmer + a tiny dip on each heartbeat; a breath catch surges the filament brighter and warmer
     const flicker = 1 + 0.012 * Math.sin(t * 47) + 0.01 * Math.sin(t * 23.7) - beat.current * 0.07;
-    if (spot.current) { spot.current.intensity = 0.85 * flicker; spot.current.color.copy(col); }
-    bulbMat.emissive.copy(col); opalMat.emissive.copy(col).multiplyScalar(0.9);
+    const surge = 1 + fl * 1.1;
+    if (spot.current) { spot.current.intensity = 0.85 * flicker * surge; spot.current.color.copy(col); }
+    bulbMat.emissive.copy(col); bulbMat.emissiveIntensity = 12 * surge;
+    opalMat.emissive.copy(col).multiplyScalar(0.9); opalMat.emissiveIntensity = 0.9 * (1 + fl * 0.8);
     beamUniforms.uTime.value = t;
     beamUniforms.uColor.value.copy(col);
-    beamUniforms.uIntensity.value = (0.22 + h * 0.18) * flicker;
+    beamUniforms.uIntensity.value = (0.22 + h * 0.18) * flicker * (1 + fl * 1.4);
     dustUniforms.uTime.value = t;
     dustUniforms.uColor.value.copy(col).lerp(new THREE.Color('#ffffff'), 0.3);
     dustUniforms.uScale.value = st.size.height * 0.006;

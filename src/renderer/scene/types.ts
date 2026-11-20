@@ -37,4 +37,8 @@ export interface VaultSceneProps {
    * (usually two). Omit it (or pass []) once practice is over and the tray is cleared away.
    */
   practice?: ScenePracticeBox[];
+  /** 0..1, how suspicious the banker is right now: he leans toward the glass as it rises. */
+  alert?: number;
+  /** performance.now() timestamp of the latest detected breath catch: lamp flare, needle jump, camera push. */
+  catchPulse?: number;
 }
