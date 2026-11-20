@@ -50,6 +50,23 @@ type NativeSdk = {
   destroy(): unknown;
 };
 const natives = new Map<number, NativeSdk>();
+
+/** Nearest neighbour downscale of an SDK frame (RGB, BGR, RGBA, BGRA) to RGBA at `outW` wide. Other formats: null. */
+function smallRgba(buf: Buffer, w: number, h: number, stride: number, fmt: number, outW: number): { data: Uint8ClampedArray; w: number; h: number } | null {
+  const bpp = fmt === 0 || fmt === 1 ? 3 : fmt === 2 || fmt === 3 ? 4 : 0;
+  if (!bpp || w <= 0 || h <= 0) return null;
+  const bgr = fmt === 1 || fmt === 3;
+  const ow = Math.min(outW, w), oh = Math.max(1, Math.round((h * ow) / w));
+  const out = new Uint8ClampedArray(ow * oh * 4);
+  for (let y = 0; y < oh; y++) {
+    const row = Math.floor((y * h) / oh) * stride;
+    for (let x = 0; x < ow; x++) {
+      const i = row + Math.floor((x * w) / ow) * bpp, o = (y * ow + x) * 4;
+      out[o] = buf[bgr ? i + 2 : i]!; out[o + 1] = buf[i + 1]!; out[o + 2] = buf[bgr ? i : i + 2]!; out[o + 3] = 255;
+    }
+  }
+  return { data: out, w: ow, h: oh };
+}
 async function stopNative(id: number): Promise<void> {
   const s = natives.get(id);
   natives.delete(id);
@@ -74,6 +91,18 @@ ipcMain.handle('vault:native:start', async (e, metrics: number[]) => {
   sdk.on('validationStatus', ((c: number, t: number, h: string) => send('validationStatus', c, Number(t), h)) as never);
   sdk.on('error', ((c: number, m: string, r: boolean) => { console.warn(`[smartspectra] error ${c}: ${m}`); send('error', c, m, r); }) as never);
   sdk.on('metrics', ((buf: Buffer, ts: number) => send('metrics', new Uint8Array(buf), Number(ts))) as never);
+  // Self view: the page cannot open the camera while the SDK holds it, so pass small copies of the
+  // SDK's own frames (320 wide, about 10 a second) as RGBA for a canvas preview.
+  let lastPreview = 0;
+  let lastPreviewLogged = false;
+  sdk.on('videoOutput', ((buf: Buffer, w: number, h: number, stride: number, fmt: number) => {
+    const now = Date.now();
+    if (now - lastPreview < 100) return;
+    lastPreview = now;
+    const rgba = smallRgba(buf, w, h, stride, fmt, 320);
+    if (rgba) { if (!lastPreviewLogged) { lastPreviewLogged = true; console.log(`[vault] preview frames flowing ${w}x${h} fmt ${fmt}`); } send('preview', rgba.data, rgba.w, rgba.h); }
+    else if (!lastPreviewLogged) { lastPreviewLogged = true; console.log(`[vault] preview format not supported: fmt ${fmt}`); }
+  }) as never);
   wc.once('destroyed', () => { void stopNative(wc.id); });
   const cams = mod.SmartSpectraSDK.availableCameras();
   sdk.useCamera(cams.length ? mod.CameraSelection.byId(cams[0]!.id) : mod.CameraSelection.default);
