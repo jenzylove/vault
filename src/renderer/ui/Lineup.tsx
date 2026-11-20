@@ -100,7 +100,7 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
   const v = status?.validation ?? null;
   let big: string;
   let small: string | undefined;
-  if (!stream || processing === 'starting') { big = 'Turning the camera on.'; small = 'This takes a few seconds.'; }
+  if (processing === 'starting') { big = 'Turning the camera on.'; small = 'This takes a few seconds.'; }
   else if (read.ready) { big = 'You are lined up.'; small = 'He can see your breathing. Stay like this.'; }
   else if (v && v.code !== V_OK && performance.now() - v.at < STALE_MS) { ({ big, small } = validationWords(v.code, v.hint)); }
   else if (read.waiting === 'validation') { big = 'Hold still.'; small = 'Checking the picture.'; }

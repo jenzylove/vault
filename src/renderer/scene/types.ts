@@ -30,6 +30,8 @@ export interface VaultSceneProps {
   heat: number; // 0..1 banker suspicion
   onBoxClick?: (id: number) => void;
   quality: 'high' | 'medium';
+  /** Live camera mode: the SDK copies every camera frame on this same thread, so draw lighter (about 20 fps, lower resolution, no post effects). */
+  lite?: boolean;
   /**
    * Optional practice round. While set, the practice tray sits behind the ten boxes with one box per entry
    * (usually two). Omit it (or pass []) once practice is over and the tray is cleared away.

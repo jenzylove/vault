@@ -111,9 +111,16 @@ function SceneContents(props: VaultSceneProps) {
         <Box key={b.id} index={i} box={b} isActive={props.activeBoxId === b.id} peekContents={props.activeBoxId === b.id ? props.peekContents : null} mats={mats} onClick={props.onBoxClick} />
       ))}
       {props.practice && props.practice.length > 0 && <PracticeTray practice={props.practice} mats={mats} />}
-      {!devOff('fx') && <Effects quality={props.quality} />}
+      {!devOff('fx') && !props.lite && <Effects quality={props.quality} />}
     </>
   );
+}
+
+/** In lite mode the canvas only draws on demand; this asks for a frame at a fixed low rate. */
+function LiteTicker({ fps }: { fps: number }): null {
+  const invalidate = useThree((st) => st.invalidate);
+  useEffect(() => { const id = setInterval(() => invalidate(), 1000 / fps); return () => clearInterval(id); }, [invalidate, fps]);
+  return null;
 }
 
 export function VaultScene(props: VaultSceneProps): JSX.Element {
@@ -122,16 +129,19 @@ export function VaultScene(props: VaultSceneProps): JSX.Element {
   const base = high ? 0.9 : 0.7;
   const [dpr, setDpr] = useState(base);
   useEffect(() => setDpr(base), [base]);
+  const lite = !!props.lite;
   return (
     <Canvas
+      frameloop={lite ? 'demand' : 'always'}
       shadows={devOff('shadows') ? false : { type: THREE.PCFShadowMap }}
-      dpr={dpr}
+      dpr={lite ? 0.5 : dpr}
       gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.NoToneMapping, stencil: false }}
       camera={{ fov: 52, near: 0.03, far: 40, position: CAMERA_POS.toArray() }}
       style={{ position: 'absolute', inset: 0, background: '#050403' }}
     >
       <color attach="background" args={['#050403']} />
-      {!devOff('adapt') && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(high ? 0.65 : 0.5, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
+      {lite && <LiteTicker fps={20} />}
+      {!devOff('adapt') && !lite && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(high ? 0.65 : 0.5, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
       <Suspense fallback={null}>
         <SceneContents {...props} />
       </Suspense>

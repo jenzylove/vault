@@ -6,6 +6,7 @@
 import { SmartSpectraSDK, breathingMetrics, cardioMetrics } from '@smartspectra/node-sdk/renderer';
 import { decodeMetrics } from '@smartspectra/node-sdk/messages';
 import { framesFromMetrics, type MetricsLike } from './decode';
+import { nativeBridge, nativeSdk } from './native';
 import { E_NETWORK, E_NOT_AUTHORIZED, E_PROCESSING, StatusHub, sdkError } from './status';
 import type { ProcessingState, SignalFrame, SignalSource, SourceStatus } from './types';
 
@@ -34,7 +35,8 @@ export interface LiveDeps {
   now(): number;
 }
 const realDeps: LiveDeps = {
-  create: (o) => new SmartSpectraSDK(o) as unknown as SdkLike,
+  // Prefer the native camera session in the main process (keeps 30 fps); fall back to the renderer SDK.
+  create: (o) => { const b = nativeBridge(); return b ? nativeSdk(b, o) : (new SmartSpectraSDK(o) as unknown as SdkLike); },
   decode: (b) => decodeMetrics(b),
   now: () => performance.now(),
 };

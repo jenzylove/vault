@@ -38,6 +38,50 @@ if (process.env.VAULT_NO_SDK !== '1') {
 
 ipcMain.handle('vault:presage', () => ({ key: bindIpc ? readKey() : null, sdk: !!bindIpc }));
 
+// Native camera session. The renderer SDK copies every 1280x720 frame out of the page and over IPC,
+// which cannot keep 30 fps on a busy laptop (SDK error "frame rate too low"). Here the SDK reads the
+// camera itself in this process and only the small metrics packets cross to the page.
+// One session per window; it is stopped on stop, on a new start, and when the window goes away.
+type NativeSdk = {
+  on(ev: string, cb: (...a: never[]) => void): unknown;
+  useCamera(sel: unknown): unknown;
+  start(): unknown;
+  stopAsync(): Promise<void>;
+  destroy(): unknown;
+};
+const natives = new Map<number, NativeSdk>();
+async function stopNative(id: number): Promise<void> {
+  const s = natives.get(id);
+  natives.delete(id);
+  if (!s) return;
+  try { await Promise.race([s.stopAsync(), new Promise((r) => setTimeout(r, 4000))]); } catch { /* already stopped */ }
+  try { await s.destroy(); } catch { /* already gone */ }
+}
+ipcMain.handle('vault:native:start', async (e, metrics: number[]) => {
+  const wc = e.sender;
+  await stopNative(wc.id);
+  const key = readKey();
+  if (!bindIpc || !key) throw new Error('Live mode is off: no SDK or no Presage key.');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mod = require('@smartspectra/node-sdk') as {
+    SmartSpectraSDK: { new (o: { apiKey: string; requestedMetrics: number[] }): NativeSdk; availableCameras(): { id: string }[] };
+    CameraSelection: { byId(id: string): unknown; default: unknown };
+  };
+  const sdk = new mod.SmartSpectraSDK({ apiKey: key, requestedMetrics: metrics });
+  natives.set(wc.id, sdk);
+  const send = (type: string, ...args: unknown[]) => { if (natives.get(wc.id) === sdk && !wc.isDestroyed()) wc.send('vault:native:evt', type, ...args); };
+  sdk.on('processingStatus', ((s: number) => send('processingStatus', s)) as never);
+  sdk.on('validationStatus', ((c: number, t: number, h: string) => send('validationStatus', c, Number(t), h)) as never);
+  sdk.on('error', ((c: number, m: string, r: boolean) => { console.warn(`[smartspectra] error ${c}: ${m}`); send('error', c, m, r); }) as never);
+  sdk.on('metrics', ((buf: Buffer, ts: number) => send('metrics', new Uint8Array(buf), Number(ts))) as never);
+  wc.once('destroyed', () => { void stopNative(wc.id); });
+  const cams = mod.SmartSpectraSDK.availableCameras();
+  sdk.useCamera(cams.length ? mod.CameraSelection.byId(cams[0]!.id) : mod.CameraSelection.default);
+  try { await Promise.resolve(sdk.start()); } catch (err) { await stopNative(wc.id); throw err; }
+});
+ipcMain.handle('vault:native:stop', (e) => stopNative(e.sender.id));
+app.on('before-quit', () => { for (const id of [...natives.keys()]) void stopNative(id); });
+
 function ownPage(url: string): boolean {
   if (url.startsWith('file://')) return true;
   const dev = process.env.ELECTRON_RENDERER_URL;

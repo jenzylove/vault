@@ -544,6 +544,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         heat={screen === 'play' ? game.heat : 0}
         onBoxClick={screen === 'play' && game.phase === 'board' && !paused ? onBoxClick : undefined}
         quality="high"
+        lite={live}
       />
       <div className="vui" data-screen={screen} data-phase={game.phase} data-stage={readStage} data-practice={`${practice.idx}:${practice.stage}`} data-paused={paused ? '1' : '0'}>
         {menu ? <div className="scrim-full" style={game.phase === 'over' && screen === 'play' ? { background: 'radial-gradient(ellipse at 30% 40%, rgba(12,9,6,0.78), rgba(5,4,3,0.95) 70%)' } : undefined} /> : <><div className="scrim-top" /><div className="scrim-bottom" /></>}
