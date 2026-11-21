@@ -13,7 +13,7 @@ const PR = (a: ScenePracticeBox['state'], b: ScenePracticeBox['state']): ScenePr
 const set = (b: SceneBox[], id: number, state: SceneBox['state']) => b.map((x) => (x.id === id ? { ...x, state } : x));
 
 const SCRIPT: Step[] = [
-  { label: 'practice tray, both sealed', banker: 'idle', active: null, heat: 0, boxes: () => fresh(), practice: PR('sealed', 'sealed') },
+  { label: 'practice plinth, both sealed', banker: 'idle', active: null, heat: 0, boxes: () => fresh(), practice: PR('sealed', 'sealed') },
   { label: 'practice I peek (trap)', banker: 'reading', active: null, heat: 0, boxes: (b) => b, practice: PR('peeking', 'sealed') },
   { label: 'practice II peek (treasure)', banker: 'reading', active: null, heat: 0, boxes: (b) => b, practice: PR('sealed', 'peeking') },
   { label: 'idle, all sealed', banker: 'idle', active: null, heat: 0, boxes: (b) => b },
@@ -47,6 +47,10 @@ export default function ScenePreview() {
   const [catchPulse, setCatchPulse] = useState<number | undefined>(undefined);
   const [lite, setLite] = useState(false);
   const [hud, setHud] = useState(true);
+  const [payout, setPayout] = useState<VaultSceneProps['payout']>(undefined);
+  const [busted, setBusted] = useState<number | undefined>(undefined);
+  const payNow = useCallback((amount = 900) => setPayout({ at: performance.now(), amount }), []);
+  const bustNow = useCallback(() => setBusted(performance.now()), []);
   const catchNow = useCallback(() => setCatchPulse(performance.now()), []);
   const sim = useRef({ t: 0, phase: 0, hold: 0, nextBeat: 0, beat: 0, buf: [] as number[] });
   const boxesRef = useRef(boxes); boxesRef.current = boxes;
@@ -114,11 +118,13 @@ export default function ScenePreview() {
         case 'z': setAlert((x) => Math.max(0, +(x - 0.25).toFixed(2))); break;
         case 'x': catchNow(); break;
         case 'l': setLite((x) => !x); break;
+        case 'm': payNow(); break;
+        case 'u': bustNow(); break;
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [active, stepIdx, applyStep, catchNow]);
+  }, [active, stepIdx, applyStep, catchNow, payNow, bustNow]);
 
   const onBoxClick = useCallback((id: number) => {
     setAuto(false); setActive(id);
@@ -129,18 +135,18 @@ export default function ScenePreview() {
 
   // expose a hook for the screenshot script
   useEffect(() => {
-    (window as unknown as { __vaultPreview: unknown }).__vaultPreview = { applyStep, steps: SCRIPT.length, labels: SCRIPT.map((x) => x.label), setAuto, setQuality, setAlert, catchNow, setLite, setHud, setBanker };
-  }, [applyStep, catchNow]);
+    (window as unknown as { __vaultPreview: unknown }).__vaultPreview = { applyStep, steps: SCRIPT.length, labels: SCRIPT.map((x) => x.label), setAuto, setQuality, setAlert, catchNow, setLite, setHud, setBanker, setBoxes, setActive, setHeat, setPractice, payNow, bustNow };
+  }, [applyStep, catchNow, payNow, bustNow]);
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: '#050403' }}>
-      <VaultScene boxes={boxes} activeBoxId={active} peekContents={peek} bankerState={banker} breath={breath} heartbeat={beatEnv} heat={heat} onBoxClick={onBoxClick} quality={quality} practice={practice} alert={alert} catchPulse={catchPulse} lite={lite} />
+      <VaultScene boxes={boxes} activeBoxId={active} peekContents={peek} bankerState={banker} breath={breath} heartbeat={beatEnv} heat={heat} onBoxClick={onBoxClick} quality={quality} practice={practice} alert={alert} catchPulse={catchPulse} lite={lite} payout={payout} busted={busted} />
       {hud && (
       <div style={{ position: 'absolute', left: 12, top: 10, font: '12px/1.45 ui-monospace, Consolas, monospace', color: '#d8cdb4', background: 'rgba(0,0,0,0.55)', padding: '8px 10px', borderRadius: 4, pointerEvents: 'none', maxWidth: 360 }}>
         <div style={{ color: '#ffb36b', fontWeight: 700, letterSpacing: 1 }}>SCENE PREVIEW (mock props, dev only)</div>
         <div>{fps.toFixed(0)} fps · {quality}{lite ? ' lite' : ''} · heat {heat.toFixed(1)} · alert {alert.toFixed(2)} · banker {banker} · active {active ?? '-'}</div>
         <div>step {stepIdx + 1}/{SCRIPT.length}: {SCRIPT[stepIdx].label} {auto ? '(auto)' : '(paused)'}</div>
-        <div style={{ opacity: 0.75, marginTop: 4 }}>space auto · n next · 1-0 select · click box peek · p peek · o open · s sell · b burn · c seal · k kind · i/e/t/w/f banker · h/j heat · a/z alert · x catch · l lite · q quality · r reset</div>
+        <div style={{ opacity: 0.75, marginTop: 4 }}>space auto · n next · 1-0 select · click box peek · p peek · o open · s sell · b burn · c seal · k kind · i/e/t/w/f banker · h/j heat · a/z alert · x catch · m payout · u bust · l lite · q quality · r reset</div>
       </div>
       )}
     </div>

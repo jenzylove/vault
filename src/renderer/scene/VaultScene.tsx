@@ -1,138 +1,178 @@
-// The Vault: a 1950s Swiss bank vault after hours, rendered from the seated player's eyes.
-import { Suspense, useEffect, useRef, useState } from 'react';
+// The Vault, heist cut: a red velvet wall of safe deposit doors, the active safe turning like a prize in the
+// middle of the screen, and The Fence watching from his lit booth window. The scene renders props only.
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Environment, PerformanceMonitor } from '@react-three/drei';
-import type { VaultSceneProps } from './types';
-import { useVaultMaterials, applyEnvStrength } from './materials';
-import { Room } from './Room';
-import { Table, TellerScreen, BankerLamp } from './Table';
-import { Box } from './Box';
-import { PracticeTray } from './Practice';
-import { Banker } from './Banker';
-import { Gauge, StripRecorder } from './Polygraph';
+import { Environment, Lightformer, PerformanceMonitor } from '@react-three/drei';
+import type { SceneBox, SceneBoxKind, SceneBoxState, VaultSceneProps } from './types';
+import { useHeistMaterials } from './heistMaterials';
+import { Wall } from './Wall';
+import { Fence } from './Fence';
+import { Safe, type SafeLook } from './Safe';
+import { Payout } from './Payout';
 import { Effects } from './Effects';
-import { CAMERA_POS, CAMERA_TARGET } from './layout';
-import { sceneFx, flareEnvelope, pushEnvelope } from './fx';
-import { AimedSpot } from './AimedSpot';
+import { CAMERA_POS, CAMERA_TARGET, PRACTICE, SAFE, GRID, slotPos, practicePos } from './layout';
+import { sceneFx, flareEnvelope, pushEnvelope, alarmEnvelope, shakeEnvelope } from './fx';
+import { PAL } from './heistTextures';
 
 export type { VaultSceneProps, SceneBox, SceneBoxState, ScenePracticeBox } from './types';
 
-/** Eases the banker's alert and turns the latest breath catch into the shared flare and push envelopes. Runs first each frame. */
-function ReactionDriver({ alert, catchPulse }: { alert: React.MutableRefObject<number>; catchPulse: React.MutableRefObject<number | undefined> }) {
-  useFrame((_, dt) => {
+/** Eases alert, turns catch and bust stamps into envelopes, drives the shared lights. Runs first each frame. */
+function Driver({ alert, catchPulse, busted, beat, heat, lite }: {
+  alert: React.MutableRefObject<number>; catchPulse: React.MutableRefObject<number | undefined>; busted: React.MutableRefObject<number | undefined>;
+  beat: React.MutableRefObject<number>; heat: React.MutableRefObject<number>; lite: boolean;
+}) {
+  const heroLight = useRef<THREE.PointLight>(null);
+  const wash = useRef<THREE.PointLight>(null);
+  const scene = useThree((st) => st.scene);
+  const hemi = useRef<THREE.HemisphereLight>(null);
+  const key = useRef<THREE.DirectionalLight>(null);
+  const fps = useRef({ n: 0, t: 0 });
+  const SKY = useMemo(() => new THREE.Color('#fff0dc'), []);
+  const RED = useMemo(() => new THREE.Color(PAL.alarm), []);
+  const KEY = useMemo(() => new THREE.Color('#ffe8cc'), []);
+  useFrame((_, dtRaw) => {
+    const dt = Math.min(dtRaw, 0.1);
     const want = Math.max(0, Math.min(1, alert.current || 0));
-    // rises a little faster than it settles: he notices quickly, forgives slowly
-    const rate = want > sceneFx.alert ? 2.4 : 1.1;
-    sceneFx.alert += (want - sceneFx.alert) * (1 - Math.exp(-Math.min(dt, 0.1) * rate));
+    const rate = want > sceneFx.alert ? 2.4 : 1.1; // he notices quickly, forgives slowly
+    sceneFx.alert += (want - sceneFx.alert) * (1 - Math.exp(-dt * rate));
     if (typeof catchPulse.current === 'number' && catchPulse.current > sceneFx.catchAt) sceneFx.catchAt = catchPulse.current;
-    const ms = performance.now() - sceneFx.catchAt;
-    sceneFx.flare = flareEnvelope(ms);
-    sceneFx.push = pushEnvelope(ms);
-  }, -1);
-  return null;
+    if (typeof busted.current === 'number' && busted.current > sceneFx.bustAt) sceneFx.bustAt = busted.current;
+    const now = performance.now();
+    sceneFx.flare = flareEnvelope(now - sceneFx.catchAt);
+    sceneFx.push = pushEnvelope(now - sceneFx.catchAt);
+    sceneFx.alarm = alarmEnvelope(now - sceneFx.bustAt);
+    sceneFx.shake = shakeEnvelope(now - sceneFx.bustAt);
+    sceneFx.beat = beat.current;
+    // the hero light carries last frame's open-door glow from the safes, then resets for this frame
+    sceneFx.heroLight = sceneFx.heroAccLight; sceneFx.heroAccLight = 0;
+    sceneFx.heroWeight = sceneFx.heroAccWeight; sceneFx.heroAccWeight = 0;
+    if (heroLight.current) {
+      heroLight.current.position.copy(sceneFx.heroLightPos);
+      heroLight.current.color.copy(sceneFx.heroLightColor);
+      heroLight.current.intensity = sceneFx.heroLight * 7;
+    }
+    // a bust floods the room red; suspicion warms it a little
+    const al = sceneFx.alarm, pulse = al * (0.6 + 0.4 * Math.sin(now / 1000 * 18));
+    if (hemi.current) { hemi.current.color.copy(SKY).lerp(RED, Math.min(1, pulse * 0.8 + heat.current * 0.08)); hemi.current.intensity = (lite ? 1.1 : 1.15) * (1 - al * 0.35); }
+    if (wash.current) wash.current.intensity = pulse * 30;
+    scene.environmentIntensity = 0.55 * (1 - al * 0.75);
+    if (key.current) { key.current.intensity = (lite ? 2.2 : 2.3) * (1 - al * 0.3); key.current.color.copy(KEY).lerp(RED, pulse * 0.85); }
+    fps.current.n++; fps.current.t += dt;
+    if (fps.current.t >= 0.5) { sceneFx.fps = fps.current.n / fps.current.t; fps.current.n = 0; fps.current.t = 0; }
+  }, -2);
+  return (
+    <>
+      <hemisphereLight ref={hemi} args={['#fff0dc', PAL.velvet, 1.15]} />
+      <directionalLight ref={key} position={[-3.5, 7, 8]} intensity={2.3} color="#ffe8cc" castShadow
+        shadow-mapSize-width={1024} shadow-mapSize-height={1024} shadow-bias={-0.0004} shadow-normalBias={0.02}
+        shadow-camera-left={-5} shadow-camera-right={5} shadow-camera-top={4.5} shadow-camera-bottom={-1} shadow-camera-near={1} shadow-camera-far={20} />
+      {/* soft warm fill from the right so the wall never goes muddy */}
+      <directionalLight position={[5, 3, 6]} intensity={0.6} color="#ffd2b0" />
+      {/* alarm wash: dark until a bust, then a pulsing red flood from over your shoulder */}
+      <pointLight ref={wash} position={[0.5, 3, 4.5]} intensity={0} distance={14} decay={1.2} color={PAL.alarm} />
+      <pointLight ref={heroLight} intensity={0} distance={3.2} decay={1.6} color="#ffb54a" />
+    </>
+  );
 }
 
 function CameraRig() {
   const { camera, size } = useThree();
   const look = useRef(CAMERA_TARGET.clone());
   const tmp = useRef(new THREE.Vector3());
-  useFrame((st, dt) => {
+  useFrame((st, dtRaw) => {
+    const dt = Math.min(dtRaw, 0.1);
     const t = st.clock.elapsedTime;
     const cam = camera as THREE.PerspectiveCamera;
-    // keep all ten boxes in frame on narrow windows: guarantee ~68 deg horizontal
+    // keep the whole wall and the booth in frame on narrow windows: about 62 degrees across
     const aspect = size.width / Math.max(1, size.height);
-    const needV = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(34)) / aspect));
-    const fov = Math.max(52, Math.min(75, needV));
+    const needV = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(31)) / aspect));
+    const fov = Math.max(36, Math.min(70, needV));
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
-    // seated breathing drift + lean toward the box being peeked
-    const w = sceneFx.focusWeight;
-    const lean = tmp.current.copy(sceneFx.focus).sub(CAMERA_POS).multiplyScalar(0.07 * w);
-    cam.position.set(
-      CAMERA_POS.x + Math.sin(t * 0.37) * 0.004 + Math.sin(t * 0.11) * 0.003 + lean.x,
-      CAMERA_POS.y + Math.sin(t * 1.25) * 0.0035 + Math.sin(t * 0.21) * 0.002 + lean.y * 0.5,
-      CAMERA_POS.z + Math.sin(t * 0.17) * 0.003 + lean.z,
-    );
-    const want = w > 0 ? tmp.current.copy(CAMERA_TARGET).lerp(sceneFx.focus, 0.3) : CAMERA_TARGET;
+    const hw = sceneFx.heroWeight;
+    const want = tmp.current.copy(CAMERA_TARGET).lerp(sceneFx.heroPos, 0.12 * hw);
     look.current.lerp(want, 1 - Math.exp(-dt * 2));
-    // breath catch: a small involuntary push toward the glass (about 7 cm, eased both ways), plus a hair closer as he grows suspicious
-    const push = sceneFx.push * 0.07 + sceneFx.alert * 0.012;
+    const sh = sceneFx.shake;
+    cam.position.set(
+      CAMERA_POS.x + Math.sin(t * 0.37) * 0.02 + (Math.random() - 0.5) * sh * 0.12,
+      CAMERA_POS.y + Math.sin(t * 0.53) * 0.012 + (Math.random() - 0.5) * sh * 0.1,
+      CAMERA_POS.z - hw * 0.25,
+    );
+    // a breath catch pulls you a little toward the wall
+    const push = sceneFx.push * 0.35 + sceneFx.alert * 0.1;
     if (push > 0.0001) cam.position.addScaledVector(tmp.current.copy(look.current).sub(cam.position).normalize(), push);
-    cam.lookAt(look.current.x + Math.sin(t * 0.29) * 0.004, look.current.y + Math.sin(t * 0.43) * 0.003, look.current.z);
+    cam.lookAt(look.current);
   });
   return null;
 }
 
-// dev-only profiling switches, e.g. ?fx=0&shadows=0
-const DEV_FLAGS = import.meta.env.DEV ? new URLSearchParams(location.search) : new URLSearchParams();
-const devOff = (k: string) => DEV_FLAGS.get(k) === '0';
+/** Map a practice entry to a wall-style state. */
+function practiceState(p: { kind: SceneBoxKind; state: 'sealed' | 'peeking' | 'opened' }): SceneBoxState {
+  return p.state === 'peeking' ? 'peeking' : p.state === 'opened' ? (p.kind === 'trap' ? 'opened-trap' : 'opened-treasure') : 'sealed';
+}
+
+const ROMAN = ['I', 'II', 'III', 'IV'];
 
 function SceneContents(props: VaultSceneProps) {
-  const mats = useVaultMaterials();
+  const mats = useHeistMaterials();
+  const lite = !!props.lite;
   const breath = useRef(props.breath); breath.current = props.breath;
   const beat = useRef(props.heartbeat); beat.current = props.heartbeat;
   const heat = useRef(props.heat); heat.current = props.heat;
   const alert = useRef(props.alert ?? 0); alert.current = props.alert ?? 0;
   const catchPulse = useRef(props.catchPulse); catchPulse.current = props.catchPulse;
-  const { scene } = useThree();
-  const glow = useRef<THREE.PointLight>(null);
-  const fps = useRef({ n: 0, t: 0 });
+  const busted = useRef(props.busted); busted.current = props.busted;
+  const { gl, scene } = useThree();
 
-  const { gl } = useThree();
   useEffect(() => { if (import.meta.env.DEV) Object.assign(window, { __vaultGL: gl, __vaultScene: scene }); }, [gl, scene]);
-  useEffect(() => {
-    // the frosted screen only needs a blurred copy of the room behind it
-    (gl as THREE.WebGLRenderer & { transmissionResolutionScale: number }).transmissionResolutionScale = props.quality === 'high' ? 0.5 : 0.35;
-  }, [gl, props.quality]);
-  useEffect(() => {
-    scene.fog = new THREE.FogExp2('#08090a', 0.07);
-    return () => { scene.fog = null; };
-  }, [scene]);
-
-  useFrame((_, dt) => {
-    applyEnvStrength(mats, scene.environment);
-    // shadows re-render only while something on the player's side moves
+  // The renderer always tone maps with ACES: three skips it while the post stack renders into its own target (the
+  // stack tone maps instead), and applies it when lite mode draws straight to the screen. Nothing is toggled on the
+  // renderer, so switching to lite never forces every shader to rebuild. Lite refreshes shadows at about 2 fps.
+  const shadowTick = useRef(0);
+  useFrame(() => {
+    if (!lite) { gl.shadowMap.autoUpdate = true; return; }
     gl.shadowMap.autoUpdate = false;
-    if (sceneFx.shadowFrames > 0) { gl.shadowMap.needsUpdate = true; sceneFx.shadowFrames--; }
-    const h = heat.current;
-    const fog = scene.fog as THREE.FogExp2 | null;
-    if (fog) { fog.density = 0.06 + h * 0.12; fog.color.setRGB(0.032 + h * 0.03, 0.034, 0.038 - h * 0.01); }
-    // one shared gold light follows the brightest open casket (constant light count: no shader recompiles)
-    let best = 0, bi = -1;
-    for (let i = 0; i < sceneFx.boxGlow.length; i++) if (sceneFx.boxGlow[i] > best) { best = sceneFx.boxGlow[i]; bi = i; }
-    if (glow.current) {
-      glow.current.intensity = best * 0.12;
-      if (bi >= 0) glow.current.position.copy(sceneFx.boxGlowPos[bi]);
-    }
-    mats.gold.emissiveIntensity = 0.08 + best * 0.12;
-    // active box focus decays when nothing is active
-    const practicePeek = props.practice?.some((p) => p.state === 'peeking') ?? false;
-    if (props.activeBoxId == null && !practicePeek) sceneFx.focusWeight = Math.max(0, sceneFx.focusWeight - dt * 1.5);
-    fps.current.n++; fps.current.t += dt;
-    if (fps.current.t >= 0.5) { sceneFx.fps = fps.current.n / fps.current.t; fps.current.n = 0; fps.current.t = 0; }
+    if (shadowTick.current++ % 10 === 0) gl.shadowMap.needsUpdate = true;
   });
+
+  const practice = props.practice ?? [];
+  const practicePeeking = practice.some((p) => p.state === 'peeking');
+  const boxes = props.boxes.slice(0, GRID.cols * GRID.rows);
+  const homes = useMemo(() => Array.from({ length: GRID.cols * GRID.rows }, (_, i) => slotPos(i)), []);
+  const pHomes = useMemo(() => practice.map((_, i) => practicePos(i, practice.length)), [practice.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
-      <Environment files="./assets/hdri/bank_vault_1k.hdr" environmentIntensity={0.06} />
-      <hemisphereLight args={['#2a2e33', '#0a0a0a', 0.1]} />
-      {/* cool fill spilling from the open vault, opposite the warm key */}
-      <AimedSpot position={[-2.3, 2.6, -3.4]} target={[0.9, 0.9, -1.9]} angle={0.85} penumbra={1} intensity={5} distance={8} color="#a9bedb" />
-      <pointLight ref={glow} intensity={0} distance={0.9} decay={2} color="#ffb347" />
-      <ReactionDriver alert={alert} catchPulse={catchPulse} />
+      <Environment resolution={64} frames={1}>
+        <color attach="background" args={['#3a1410']} />
+        <Lightformer form="rect" intensity={3} color="#fff0dc" scale={[12, 4, 1]} position={[0, 6, 4]} rotation-x={Math.PI / 2} />
+        <Lightformer form="rect" intensity={1.6} color="#ffd9a8" scale={[6, 4, 1]} position={[-6, 2, 3]} rotation-y={Math.PI / 2} />
+        <Lightformer form="rect" intensity={1.2} color={PAL.crimson} scale={[8, 4, 1]} position={[6, 1, 0]} rotation-y={-Math.PI / 2} />
+        <Lightformer form="ring" intensity={2.5} color="#ffb070" scale={2} position={[2, 3, 6]} />
+      </Environment>
+      <Driver alert={alert} catchPulse={catchPulse} busted={busted} beat={beat} heat={heat} lite={lite} />
       <CameraRig />
-      {!devOff('room') && <Room mats={mats} heat={heat} />}
-      <Table mats={mats} />
-      {!devOff('glass') && <TellerScreen mats={mats} quality={props.quality} />}
-      {!devOff('lamp') && <BankerLamp mats={mats} heat={heat} beat={beat} quality={props.quality} />}
-      <Banker state={props.bankerState} mats={mats} heat={heat} />
-      <Gauge mats={mats} breath={breath} beat={beat} />
-      <StripRecorder mats={mats} breath={breath} />
-      {props.boxes.slice(0, 10).map((b, i) => (
-        <Box key={b.id} index={i} box={b} isActive={props.activeBoxId === b.id} peekContents={props.activeBoxId === b.id ? props.peekContents : null} mats={mats} onClick={props.onBoxClick} />
-      ))}
-      {props.practice && props.practice.length > 0 && <PracticeTray practice={props.practice} mats={mats} />}
-      {!devOff('fx') && !props.lite && <Effects quality={props.quality} />}
+      <Wall mats={mats} breath={breath} beat={beat} />
+      <Fence state={props.bankerState} mats={mats} heat={heat} lite={lite} />
+      {boxes.map((b, i) => {
+        const hero = props.activeBoxId === b.id && !practicePeeking;
+        const look: SafeLook = { state: b.state, kind: b.kind, peekContents: props.activeBoxId === b.id ? props.peekContents : null, hero };
+        return <Safe key={b.id} id={b.id} label={String(i + 1)} home={homes[i]} look={look} mats={mats} onClick={props.onBoxClick} />;
+      })}
+      {practice.length > 0 && (
+        <group>
+          <mesh position={[GRID.x0, PRACTICE.y / 2 - SAFE.h * PRACTICE.scale / 4, PRACTICE.z - 0.05]} material={mats.crimsonDeep} castShadow receiveShadow>
+            <boxGeometry args={[practice.length * PRACTICE.gap + 0.2, PRACTICE.y - SAFE.h * PRACTICE.scale / 2, 0.6]} />
+          </mesh>
+          {practice.slice(0, 4).map((p, i) => {
+            const st = practiceState(p);
+            const look: SafeLook = { state: st, kind: p.kind, peekContents: p.state === 'peeking' ? p.kind : null, hero: p.state === 'peeking' };
+            return <Safe key={'p' + i} id={1000 + i} label={ROMAN[i] ?? String(i + 1)} home={pHomes[i]} homeScale={PRACTICE.scale} look={look} mats={mats} practiceTag={p.kind} />;
+          })}
+        </group>
+      )}
+      <Payout payout={props.payout} />
+      {!lite && <Effects quality={props.quality} />}
     </>
   );
 }
@@ -146,7 +186,7 @@ function LiteTicker({ fps }: { fps: number }): null {
 
 export function VaultScene(props: VaultSceneProps): JSX.Element {
   const high = props.quality === 'high';
-  // adaptive resolution: drop render scale when the GPU is busy (the SDK shares it), recover when it frees up
+  // adaptive resolution: drop render scale when the GPU is busy, recover when it frees up
   const base = high ? 0.9 : 0.7;
   const [dpr, setDpr] = useState(base);
   useEffect(() => setDpr(base), [base]);
@@ -154,15 +194,15 @@ export function VaultScene(props: VaultSceneProps): JSX.Element {
   return (
     <Canvas
       frameloop={lite ? 'demand' : 'always'}
-      shadows={devOff('shadows') ? false : { type: THREE.PCFShadowMap }}
+      shadows={{ type: THREE.PCFShadowMap }}
       dpr={lite ? 0.5 : dpr}
-      gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.NoToneMapping, stencil: false }}
-      camera={{ fov: 52, near: 0.03, far: 40, position: CAMERA_POS.toArray() }}
-      style={{ position: 'absolute', inset: 0, background: '#050403' }}
+      gl={{ antialias: false, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0, stencil: false }}
+      camera={{ fov: 38, near: 0.1, far: 40, position: CAMERA_POS.toArray() }}
+      style={{ position: 'absolute', inset: 0, background: '#2a070d' }}
     >
-      <color attach="background" args={['#050403']} />
+      <color attach="background" args={['#2a070d']} />
       {lite && <LiteTicker fps={20} />}
-      {!devOff('adapt') && !lite && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(high ? 0.65 : 0.5, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
+      {!lite && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(high ? 0.65 : 0.5, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
       <Suspense fallback={null}>
         <SceneContents {...props} />
       </Suspense>
