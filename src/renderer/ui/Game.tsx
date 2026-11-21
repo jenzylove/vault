@@ -813,13 +813,23 @@ function LadderScreen({ sel, setSel, unlocked, history, onPlay, onDaily, onWipe 
 }): JSX.Element {
   const best = (lv: number) => history.games.filter((g) => g.level === lv).reduce((m, g) => Math.max(m, g.pile), -1);
   const beaten = (lv: number) => history.games.some((g) => g.level === lv && g.won);
-  const d = new Date();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const midnight = new Date(now); midnight.setHours(24, 0, 0, 0);
+  const s = Math.max(0, Math.floor((midnight.getTime() - now) / 1000));
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const left = `${pad(Math.floor(s / 3600))}:${pad(Math.floor((s % 3600) / 60))}:${pad(s % 60)}`;
   return (
     <div className="center">
       <div className="ladder">
         <div>
           <div className="eyebrow enter">The banks</div>
-          <div className="display enter" style={{ fontSize: 'var(--fs-xl)', margin: '10px 0 22px', ['--d' as string]: 1 }}>Five bankers. Each reads more of you.</div>
+          <div className="display enter" style={{ fontSize: 'var(--fs-xl)', margin: '10px 0 10px', ['--d' as string]: 1 }}>Five bankers. Each reads more of you.</div>
+          <div className="howto enter" style={{ ['--d' as string]: 1 }}>
+            <div><span className="n">1</span>Peek in a box. Treasure or trap.</div>
+            <div><span className="n">2</span>He reads your body, then buys it or walks.</div>
+            <div><span className="n">3</span>Sell him traps. Keep your treasure. Reach his target to win.</div>
+          </div>
           {LEVELS.map((L, i) => {
             const locked = L.level > unlocked;
             const b = best(L.level);
@@ -832,9 +842,9 @@ function LadderScreen({ sel, setSel, unlocked, history, onPlay, onDaily, onWipe 
                   <div className="reads">{locked ? `Beat bank ${ROMAN[i - 1]} to open this vault.` : readsLine(L.level)}</div>
                 </div>
                 <div className="terms">
-                  Bank {money(L.target)}<br />
-                  He catches {L.maxTrapsCaught === 0 ? 'no' : `at most ${L.maxTrapsCaught}`} trap{L.maxTrapsCaught === 1 ? '' : 's'}
-                  {b >= 0 && <><br /><span className="brass">Best {money(b)}</span></>}
+                  <div><span>Target</span><b>{money(L.target)}</b></div>
+                  <div><span>Traps he can catch</span><b>{L.maxTrapsCaught === 0 ? 'None' : L.maxTrapsCaught}</b></div>
+                  {b >= 0 && <div className="brass"><span>Your best</span><b>{money(b)}</b></div>}
                 </div>
               </div>
             );
@@ -842,8 +852,9 @@ function LadderScreen({ sel, setSel, unlocked, history, onPlay, onDaily, onWipe 
         </div>
         <div className="daily enter" style={{ ['--d' as string]: 7 }}>
           <div className="eyebrow">Today&rsquo;s vault</div>
-          <div className="display" style={{ fontSize: 'var(--fs-l)', margin: '10px 0' }}>{d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}</div>
-          <div className="body">The same ten boxes for everyone today, against the highest banker you have opened. Share how often he read you.</div>
+          <div className="small" style={{ marginTop: 12 }}>Closes in</div>
+          <div className="display countdown" style={{ fontSize: 'var(--fs-xl)', margin: '2px 0 12px' }}>{left}</div>
+          <div className="body">Ten boxes, the same for every player, until the clock runs out. Then a new vault opens.</div>
           <div className={`actions${sel === 5 ? ' sel' : ''}`} style={{ justifyContent: 'flex-start' }} onMouseEnter={() => setSel(5)}>
             <Btn primary={sel === 5} k="D" onClick={onDaily}>Play today&rsquo;s vault</Btn>
           </div>

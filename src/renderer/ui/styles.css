@@ -89,7 +89,13 @@
 .bank .roman { font-family: var(--display); font-style: italic; font-size: var(--fs-xl); color: var(--brass-lo); transition: color 0.3s; line-height: 1; }
 .bank .name { font-family: var(--display); font-size: var(--fs-l); color: var(--paper); }
 .bank .reads { font-size: var(--fs-s); color: var(--paper-faint); margin-top: 4px; }
-.bank .terms { font-size: var(--fs-xs); color: var(--paper-faint); letter-spacing: 0.06em; text-align: right; line-height: 1.6; }
+.bank .terms { font-size: var(--fs-s); color: var(--paper-faint); display: grid; gap: 4px; min-width: 230px; }
+.bank .terms > div { display: flex; justify-content: space-between; gap: 18px; }
+.bank .terms b { font-weight: 500; color: var(--paper); font-variant-numeric: tabular-nums; }
+.bank .terms .brass b { color: inherit; }
+.howto { display: grid; gap: 8px; margin: 4px 0 24px; font-size: var(--fs-m, 1.05rem); color: var(--paper-dim); }
+.howto .n { display: inline-block; width: 26px; font-family: var(--display); font-style: italic; color: var(--brass); }
+.countdown { font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
 .bank.sel { transform: translateX(12px); }
 .bank.sel .roman { color: var(--brass-hi); }
 .bank.sel::before { content: ''; position: absolute; left: -26px; top: 50%; width: 12px; height: 1px; background: var(--brass); }
