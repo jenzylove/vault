@@ -196,3 +196,55 @@ export function unlockedLevel(history: TellHistory): LevelNo {
   const beaten = history.games.filter((g) => g.won).reduce((m, g) => Math.max(m, g.level), 0);
   return Math.min(LEVELS.length, beaten + 1) as LevelNo;
 }
+
+// ---------- he remembers you ----------
+
+const PHRASE: Record<TellKey, { you: string; me: string; past: string }> = {
+  breath: { you: 'You hold your breath', me: 'I hold my breath', past: 'you held your breath' },
+  shallow: { you: 'Your breathing goes shallow', me: 'My breathing goes shallow', past: 'your breathing went shallow' },
+  rate: { you: 'Your breathing changes pace', me: 'My breathing changes pace', past: 'your breathing changed pace' },
+  blinks: { you: 'You blink more', me: 'I blink more', past: 'you blinked more' },
+  smile: { you: 'You smile', me: 'I smile', past: 'you smiled' },
+  surprise: { you: 'Your face shows surprise', me: 'My face shows surprise', past: 'your face showed surprise' },
+  fear: { you: 'Your face tightens', me: 'My face tightens', past: 'your face tightened' },
+  pulse: { you: 'Your pulse climbs', me: 'My pulse climbs', past: 'your pulse climbed' },
+};
+
+/** "You hold your breath when you see a trap." The side the tell is bigger on decides trap or treasure. */
+export function tellLine(key: TellKey, effect: number): string {
+  return `${PHRASE[key].you} when you see ${effect >= 0 ? 'a trap' : 'treasure'}.`;
+}
+
+/** Share card: "My tell: I hold my breath. Can you hide yours?" */
+export function shareTellLine(key: TellKey | null): string {
+  return key ? `My tell: ${PHRASE[key].me}. Can you hide yours?` : 'He could not find my tell. Can he find yours?';
+}
+
+/** The line that opens the next run, from the last game in the history (null on a first game). */
+export function memoryLine(history: TellHistory): string | null {
+  const last = history.games[history.games.length - 1];
+  if (!last) return null;
+  if (!last.biggest) return 'Last time I could not find your tell. I am looking harder now.';
+  const e = last.tells[last.biggest]?.effect ?? 1;
+  return `Last time ${PHRASE[last.biggest].past} at ${e >= 0 ? 'traps' : 'treasure'}. I am watching for that now.`;
+}
+
+export interface HideTrend { key: TellKey | null; trend: 'first' | 'better' | 'worse' | 'same' | 'unknown'; line: string; }
+
+/**
+ * Did you hide the tell he was watching for? Compares this run with the previous one on the tell he
+ * named last time (or this run's tell on a first game), by how far it separated traps from treasure.
+ */
+export function hideTrend(prev: TellHistoryEntry | null, sheet: TellSheet): HideTrend {
+  const key = prev?.biggest ?? sheet.biggest?.key ?? null;
+  if (!prev || !key) return { key: sheet.biggest?.key ?? null, trend: 'first', line: 'First read. Next run he watches for it.' };
+  const cur = sheet.tells.find((t) => t.key === key);
+  const before = prev.tells[key];
+  if (!cur || !before || cur.nTrap === 0 || cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no trap from you this run, so he could not check.' };
+  const was = Math.abs(before.effect);
+  const now = cur.strength;
+  const nums = `${sayTell(key, before.trap)} at traps last time, ${sayTell(key, cur.trap)} now.`;
+  if (now < 0.8 * was || (now < TELL_THRESHOLD && was >= TELL_THRESHOLD)) return { key, trend: 'better', line: `You hid it better: ${nums}` };
+  if (now > 1.2 * was) return { key, trend: 'worse', line: `It showed more: ${nums}` };
+  return { key, trend: 'same', line: `About the same: ${nums}` };
+}

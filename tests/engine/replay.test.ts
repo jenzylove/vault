@@ -1,0 +1,124 @@
+import { describe, expect, test } from 'vitest';
+import {
+  SimBody, makeSimPlayer, learnBaseline, extractFeatures, liveRead, restingAlert, replayVerdict, newGame, step, bankerView,
+  playSimGame, tellSheet, updateHistory, emptyHistory, memoryLine, hideTrend, tellLine, shareTellLine,
+  BASELINE_MS, PEEK_MS, PEEK_LEAD_MS, type PeekFeatures, type SimPlayerParams,
+} from '../../src/renderer/engine';
+import { emptyModel } from '../../src/renderer/engine/banker';
+
+const banned = /\b(lie|lies|lying|liar|stress|stressed|anxiety|anxious|poker|straight face)\b/i;
+const dashes = /[-‐-―−]/;
+
+function quiet(seed: number, extra: Partial<SimPlayerParams> = {}): SimPlayerParams {
+  return { ...makeSimPlayer('honest', seed), talkProb: 0, dropoutPerMin: 0, bigExcite: 0, ...extra };
+}
+
+describe('catch times for the replay', () => {
+  test('a held breath is marked where it happened, and its span covers the reported hold', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const body = new SimBody(quiet(seed, { trapCatch: 1, catchMs: [1500, 1500] }), seed, 30);
+      const bl = learnBaseline(body.run(BASELINE_MS));
+      body.run(PEEK_LEAD_MS); body.react('trap');
+      const f = extractFeatures(body.run(PEEK_MS), bl);
+      expect(f.breathCatchMs).toBeGreaterThan(0);
+      expect(f.catchStartMs).not.toBeNull();
+      expect(f.catchStartMs!).toBeGreaterThanOrEqual(0);
+      expect(f.catchEndMs!).toBeLessThanOrEqual(PEEK_MS + 50);
+      expect(f.catchEndMs! - f.catchStartMs!).toBeGreaterThanOrEqual(f.breathCatchMs - 1);
+    }
+  });
+});
+
+describe('live read during a peek', () => {
+  test('flags a hold before the peek ends and his alert climbs; a calm peek stays near his resting level', () => {
+    let flagged = 0;
+    let calmMax = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const body = new SimBody(quiet(seed, { trapCatch: 1, catchMs: [1800, 1800] }), seed, 30);
+      const bl = learnBaseline(body.run(BASELINE_MS));
+      let s = step(step(step(newGame(seed), { type: 'begin' }), { type: 'baselineDone', baseline: bl }), { type: 'practiceDone', peeks: [] });
+      const rest = restingAlert(s.model, bankerView(s));
+      body.run(PEEK_LEAD_MS); body.react('trap');
+      const frames = body.run(4000); // before the 5 s peek is over
+      const r = liveRead(frames, bl, s.model, bankerView(s));
+      if (r.catchSpan) { flagged++; expect(r.alert).toBeGreaterThan(0.9); }
+      body.run(3000); body.react('small');
+      const calm = liveRead(body.run(PEEK_MS), bl, s.model, bankerView(s));
+      calmMax = Math.max(calmMax, calm.alert - rest);
+      s = { ...s };
+    }
+    expect(flagged).toBeGreaterThanOrEqual(17);
+    expect(calmMax).toBeLessThan(0.45);
+  });
+
+  test('before any signal he sits at his resting level', () => {
+    const bl = learnBaseline(new SimBody(quiet(2), 2, 30).run(BASELINE_MS));
+    const s = step(step(step(newGame(2), { type: 'begin' }), { type: 'baselineDone', baseline: bl }), { type: 'practiceDone', peeks: [] });
+    const r = liveRead([], bl, emptyModel(), bankerView(s));
+    expect(r.catchSpan).toBeNull();
+    expect(r.alert).toBeCloseTo(restingAlert(emptyModel(), bankerView(s)), 6);
+  });
+});
+
+describe('replay verdict', () => {
+  const calm: PeekFeatures = { breathCatchMs: 0, shallowing: 0, rateChange: 0, blinkBurst: 0, exprDelta: {}, talking: false, pulseDelta: 0, quality: 1 };
+  const held: PeekFeatures = { ...calm, breathCatchMs: 1400, catchStartMs: 900, catchEndMs: 2600 };
+
+  test('a walk on a catch names the real hold, a missed trap says so', () => {
+    const walk = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'trap', 3);
+    expect(walk.line).toBe('There. You stopped breathing for 1.4 seconds. I knew.');
+    expect(walk.caught).toBe(true);
+    expect(walk.marks[0]).toMatchObject({ kind: 'catch', start: 900, end: 2600, label: 'Held 1.4 seconds' });
+    const miss = replayVerdict(calm, { pTrap: 0.2, pBig: 0.2, decision: 'offer', offer: 200, reason: '', signal: 'none', driver: null }, 'trap', 3);
+    expect(miss.line).toBe('I saw nothing. You got me.');
+    expect(miss.marks).toHaveLength(0);
+    const burnt = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'big', 3);
+    expect(burnt.line).toBe('There. You stopped breathing for 1.4 seconds. I walked.');
+  });
+
+  test('every replay line from simulated games is plain words', () => {
+    for (let seed = 1; seed <= 30; seed++) {
+      for (const st of ['honest', 'steady', 'freeze', 'hide'] as const) {
+        const { state } = playSimGame(st, seed, { level: 5 });
+        for (const o of state.log) {
+          const v = replayVerdict(o.features, { pTrap: o.pTrap, pBig: 0, decision: o.decision, reason: '', signal: 'none', driver: o.decision === 'walk' ? 'breath' : null }, o.kind, 5);
+          expect(v.line).not.toMatch(banned);
+          expect(v.line).not.toMatch(dashes);
+          for (const m of v.marks) expect(m.label).not.toMatch(dashes);
+        }
+      }
+    }
+  });
+});
+
+describe('he remembers you', () => {
+  test('names the tell, opens the next run with it, and tracks whether you hid it', () => {
+    expect(tellLine('breath', 1.2)).toBe('You hold your breath when you see a trap.');
+    expect(tellLine('smile', -1.2)).toBe('You smile when you see treasure.');
+    expect(shareTellLine('breath')).toBe('My tell: I hold my breath. Can you hide yours?');
+    expect(shareTellLine(null)).toBe('He could not find my tell. Can he find yours?');
+    let h = emptyHistory();
+    expect(memoryLine(h)).toBeNull();
+    const first = tellSheet(playSimGame('honest', 3, { practice: true }).state);
+    expect(hideTrend(null, first).trend).toBe('first');
+    h = updateHistory(h, first);
+    if (first.biggest?.key === 'breath') expect(memoryLine(h)).toBe('Last time you held your breath at traps. I am watching for that now.');
+    else expect(memoryLine(h)).toMatch(/^Last time .* I am /);
+    const second = tellSheet(playSimGame('steady', 3, { practice: true }).state);
+    const tr = hideTrend(h.games[0]!, second);
+    expect(['better', 'same', 'worse', 'unknown']).toContain(tr.trend);
+    expect(tr.line).not.toMatch(dashes);
+  });
+
+  test('a steady player hides the breath better than an honest one did', () => {
+    let better = 0;
+    for (let seed = 1; seed <= 20; seed++) {
+      const a = tellSheet(playSimGame('honest', seed, { practice: true }).state);
+      if (a.biggest?.key !== 'breath') continue;
+      const h = updateHistory(emptyHistory(), a);
+      const b = tellSheet(playSimGame('steady', seed, { practice: true }).state);
+      if (hideTrend(h.games[0]!, b).trend === 'better') better++;
+    }
+    expect(better).toBeGreaterThanOrEqual(8);
+  });
+});

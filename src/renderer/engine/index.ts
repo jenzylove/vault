@@ -14,10 +14,11 @@ export { runSimGame, playSimGame, PEEK_MS, BASELINE_MS, type Policy, type SimGam
 export { createRng, type Rng } from './rng';
 export { LEVELS, DEFAULT_LEVEL, levelConfig, type BankerLevel, type LevelNo } from './levels';
 export {
-  tellSheet, sayTell, trendSentence, updateHistory, emptyHistory, tellTrend, unlockedLevel, labelledPeeks, TELL_KEYS, TELL_THRESHOLD,
+  tellSheet, sayTell, trendSentence, tellLine, shareTellLine, memoryLine, hideTrend, type HideTrend, updateHistory, emptyHistory, tellTrend, unlockedLevel, labelledPeeks, TELL_KEYS, TELL_THRESHOLD,
   type Tell, type TellKey, type TellSheet, type TellHistory, type TellHistoryEntry,
 } from './tells';
 export { dailySeed, shareLine } from './daily';
 export { liveRead, restingAlert, type LiveRead } from './live';
 export { findCatch, catchAllowance, MIN_GOOD_MS, type CatchSpan } from './features';
 export { PEEK_LEAD_MS } from './timing';
+export { replayVerdict, replayMarks, detailFor, type ReplayVerdict, type ReplayMark, type MarkKind } from './replay';
