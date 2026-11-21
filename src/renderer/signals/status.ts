@@ -42,10 +42,10 @@ export function noDashes(s: string): string {
 /** The SDK's validation hint in plain words: a big line and an optional smaller one. */
 export function validationWords(code: number, hint: string): { big: string; small?: string } {
   switch (code) {
-    case V_NO_FACE: return { big: 'No face found.', small: 'Put your face inside the gold oval.' };
+    case V_NO_FACE: return { big: 'No face found.', small: 'Put your face inside the oval.' };
     case V_MANY_FACES: return { big: 'Only one face, please.', small: 'He reads one player at a time.' };
     case V_TOO_DARK: return { big: 'More light on your face.', small: 'Put a lamp or a window in front of you, not behind.' };
-    case V_CHEST_HIDDEN: return { big: 'Show more of your chest.', small: 'Sit back until your shoulders reach the gold curve.' };
+    case V_CHEST_HIDDEN: return { big: 'Show more of your chest.', small: 'Sit back until your shoulders reach the curve.' };
     case V_FACE_TOO_LOW: return { big: 'Move up, or tilt the camera down.' };
     default: {
       const h = noDashes(hint || '');

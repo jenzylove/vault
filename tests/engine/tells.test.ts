@@ -19,7 +19,7 @@ describe('tell sheet', () => {
       expect(sheet.tells).toHaveLength(TELL_KEYS.length);
       expect(sheet.readLine).toMatch(/^The Fence read \d+ of \d+ safes right\.$/);
       const breath = sheet.tells.find((t) => t.key === 'breath')!;
-      expect(breath.sentence).toMatch(/^At duds your breath stopped for \d+\.\d seconds on average\. At loot, \d+\.\d seconds\.$/);
+      expect(breath.sentence).toMatch(/^At duds your breath (never stopped|stopped for \d+\.\d seconds on average)\. At loot it (never stopped|stopped for \d+\.\d seconds)\.$/);
       if (breath.trap > breath.treasure) breathHigher++; // a sim player catches at 70 to 95% of traps, so not every run
       if (sheet.biggest && ['breath', 'shallow', 'rate'].includes(sheet.biggest.key)) breathTop++;
       for (const t of sheet.tells) expect(t.sentence).not.toMatch(banned);

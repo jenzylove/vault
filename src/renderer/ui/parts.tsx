@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { VaultScene, type VaultSceneProps } from '../scene/VaultScene';
-import { PEEK_MS, RULES, VALUE_TABLE, levelConfig, type Baseline, type GameState, type LevelNo, type ReplayMark } from '../engine';
+import { PEEK_MS, VALUE_TABLE, type Baseline, type GameState, type Job, type ReplayMark } from '../engine';
 import type { SignalFrame } from '../signals/types';
 import type { SignalBus } from './signalBus';
 
@@ -24,7 +24,7 @@ export function LiveScene({ bus, ...rest }: Omit<VaultSceneProps, 'breath' | 'he
 
 export function BreathLine({ bus, small, big }: { bus: SignalBus | null; small?: boolean; big?: boolean }): JSX.Element {
   const pts = usePoll(() => (bus ? bus.breath() : []), [bus]);
-  const W = 720, H = big ? 150 : 90;
+  const W = 720, H = big ? 150 : small ? 70 : 90;
   const n = pts.length;
   const poly = pts.map((v, i) => `${((i / Math.max(1, n - 1)) * W).toFixed(1)},${(H / 2 - v * (H / 2 - 8)).toFixed(1)}`).join(' ');
   const last = n ? pts[n - 1] as number : 0;
@@ -32,20 +32,20 @@ export function BreathLine({ bus, small, big }: { bus: SignalBus | null; small?:
     <svg className={`breathline${small ? ' small' : ''}${big ? ' big' : ''}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Your breathing, live">
       <line className="mid" x1="0" y1={H / 2} x2={W} y2={H / 2} />
       {n > 1 && <polyline points={poly} />}
-      {big && n > 1 && <circle className="head" cx={W} cy={H / 2 - last * (H / 2 - 8)} r="5" />}
+      {n > 1 && <circle className="head" cx={W - 4} cy={H / 2 - last * (H / 2 - 8)} r={big ? 6 : 8} />}
     </svg>
   );
 }
 
 /**
- * The catch replay: this peek's own breath trace, drawn big, with what the banker measured marked on it.
+ * The catch replay: this look's own breath trace, drawn big, with what the Fence measured marked on it.
  * Scaled against the calm swing he learned, so a held breath looks as flat as it really was.
  */
-export function ReplayTrace({ frames, baseline, marks }: { frames: SignalFrame[]; baseline: Baseline; marks: ReplayMark[] }): JSX.Element {
-  const W = 900, H = 210, PADY = 26;
+export function ReplayTrace({ frames, baseline, marks, peekMs = PEEK_MS }: { frames: SignalFrame[]; baseline: Baseline; marks: ReplayMark[]; peekMs?: number }): JSX.Element {
+  const W = 900, H = 200, PADY = 34;
   const t0 = frames.length ? (frames[0] as SignalFrame).t : 0;
   const good = frames.filter((f) => f.conf >= 0.5 && f.stable && typeof f.chest === 'number');
-  const span = Math.max(PEEK_MS, frames.length ? (frames[frames.length - 1] as SignalFrame).t - t0 : 0);
+  const span = Math.max(peekMs, frames.length ? (frames[frames.length - 1] as SignalFrame).t - t0 : 0);
   const ts = good.map((f) => f.t - t0);
   const raw = good.map((f) => f.chest as number);
   // 300 ms centred average, the same smoothing the read uses
@@ -66,22 +66,27 @@ export function ReplayTrace({ frames, baseline, marks }: { frames: SignalFrame[]
   const hold = marks.find((m) => m.kind === 'catch' && m.start !== undefined && m.end !== undefined);
   const blinks = marks.find((m) => m.kind === 'blinks')?.ticks ?? [];
   return (
-    <svg className="replaytrace" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Your breathing during that peek">
-      {[0.25, 0.5, 0.75].map((f) => <line key={f} className="grid" x1={W * f} y1={0} x2={W * f} y2={H} />)}
-      <line className="mid" x1="0" y1={H / 2} x2={W} y2={H / 2} />
+    <div className="replaytrace-wrap">
+      <svg className="replaytrace" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Your breathing during that look">
+        {[0.25, 0.5, 0.75].map((f) => <line key={f} className="grid" x1={W * f} y1={0} x2={W * f} y2={H} />)}
+        <line className="mid" x1="0" y1={H / 2} x2={W} y2={H / 2} />
+        {hold && (
+          <g className="hold">
+            <rect x={x(hold.start!)} y={4} width={Math.max(2, x(hold.end!) - x(hold.start!))} height={H - 8} />
+            <line x1={x(hold.start!)} y1={4} x2={x(hold.start!)} y2={H - 4} />
+            <line x1={x(hold.end!)} y1={4} x2={x(hold.end!)} y2={H - 4} />
+          </g>
+        )}
+        {blinks.map((b, i) => <line key={i} className="blink" x1={x(b)} y1={H - 18} x2={x(b)} y2={H - 4} />)}
+        {ts.length > 1 && <polyline points={poly} />}
+      </svg>
       {hold && (
-        <g className="hold">
-          <rect x={x(hold.start!)} y={4} width={Math.max(2, x(hold.end!) - x(hold.start!))} height={H - 8} />
-          <line x1={x(hold.start!)} y1={4} x2={x(hold.start!)} y2={H - 4} />
-          <line x1={x(hold.end!)} y1={4} x2={x(hold.end!)} y2={H - 4} />
-          <text x={(x(hold.start!) + x(hold.end!)) / 2} y={20}>{hold.label}</text>
-        </g>
+        <div className="hold-tag" style={{ left: `${Math.min(80, Math.max(0, (x((hold.start! + hold.end!) / 2) / W) * 100 - 10))}%` }}>
+          He caught you here
+        </div>
       )}
-      {blinks.map((b, i) => <line key={i} className="blink" x1={x(b)} y1={H - 16} x2={x(b)} y2={H - 4} />)}
-      {ts.length > 1 && <polyline points={poly} />}
-      <text className="axis" x={4} y={H - 4}>0</text>
-      <text className="axis" x={W - 4} y={H - 4} textAnchor="end">{Math.round(span / 1000)} seconds</text>
-    </svg>
+      <div className="trace-axis"><span>You looked</span><span>{Math.round(span / 1000)} seconds later</span></div>
+    </div>
   );
 }
 
@@ -97,69 +102,99 @@ export function Ring({ progress, label }: { progress: number; label: string }): 
 }
 
 /** Words fade in one at a time, roughly with the voice. */
-export function Subtitle({ text, who = 'The banker' }: { text: string; who?: string }): JSX.Element {
+export function Subtitle({ text, who = 'The Fence' }: { text: string; who?: string }): JSX.Element {
   const words = text.split(' ');
   return (
-    <div className="subtitle shadowed" key={text}>
-      <span className="eyebrow who">{who}</span>
-      {words.map((w, i) => (
-        <span key={i} className="w" style={{ animationDelay: `${i * 170}ms` }}>{w} </span>
-      ))}
+    <div className="subtitle" key={text}>
+      <span className="who">{who}</span>
+      <span className="said">
+        {words.map((w, i) => (
+          <span key={i} className="w" style={{ animationDelay: `${i * 150}ms` }}>{w} </span>
+        ))}
+      </span>
     </div>
   );
 }
 
-export function Btn({ k, children, onClick, primary, big, danger }: { k?: string; children: ReactNode; onClick: () => void; primary?: boolean; big?: boolean; danger?: boolean }): JSX.Element {
+export function Btn({ k, children, onClick, primary, big, ghost, disabled }: { k?: string; children: ReactNode; onClick: () => void; primary?: boolean; big?: boolean; ghost?: boolean; disabled?: boolean }): JSX.Element {
   return (
-    <button className={`btn${primary ? ' primary' : ''}${big ? ' big' : ''}${danger ? ' danger' : ''}`} onClick={onClick}>
-      {children}{k && <span className="key">{k}</span>}
+    <button className={`btn${primary ? ' primary' : ''}${big ? ' big' : ''}${ghost ? ' ghost' : ''}`} onClick={onClick} disabled={disabled}>
+      <span className="lbl">{children}</span>{k && <span className="key">{k}</span>}
     </button>
   );
 }
 
 export const money = (n: number): string => Math.round(n).toLocaleString('en-US');
-export const ROMAN = ['I', 'II', 'III', 'IV', 'V'] as const;
 
-export function readsLine(level: LevelNo): string {
-  const s = levelConfig(level).signals;
-  const parts = [s.breath && 'your breath', s.blinks && 'your blinks', s.face && 'your face', s.pulseHeat && 'your pulse'].filter(Boolean) as string[];
-  const list = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}` : parts[0];
-  return `Reads ${list}.`;
+/** A number that rolls up to its value. */
+export function RollNum({ value, className }: { value: number; className?: string }): JSX.Element {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    const start = performance.now();
+    const a = from.current;
+    let raf = 0;
+    const tick = () => {
+      const p = Math.min(1, (performance.now() - start) / 700);
+      const e = 1 - (1 - p) ** 3;
+      setShown(a + (value - a) * e);
+      if (p < 1) raf = requestAnimationFrame(tick); else from.current = value;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); from.current = value; };
+  }, [value]);
+  return <span className={className}>{money(shown)}</span>;
 }
 
-/** Goal (one line), pile and heat: always on screen during play. */
-export function Hud({ game, daily }: { game: GameState; daily: boolean }): JSX.Element {
-  const cfg = levelConfig(game.level);
-  const caught = game.log.filter((o) => o.kind === 'trap' && (o.result === 'burned' || o.decision === 'unread')).length;
-  const burned = game.log.filter((o) => o.kind !== 'trap' && o.result === 'burned').length;
-  const heatPct = Math.round(game.heat * 100);
+/** Signals icons: which tells the Fence reads on a job. */
+export function Reads({ list }: { list: string[] }): JSX.Element {
+  return <div className="reads">{list.map((s) => <span key={s} className={`read ${s}`}>{s}</span>)}</div>;
+}
+
+export function caughtCount(game: GameState): number {
+  return game.log.filter((o) => o.kind === 'trap' && (o.result === 'burned' || o.decision === 'unread')).length;
+}
+
+/** Goal and progress: always on screen during a job. */
+export function Hud({ game, job, daily }: { game: GameState; job: Job; daily: boolean }): JSX.Element {
+  const r = game.rules;
+  const caught = caughtCount(game);
   const played = game.log.length;
-  const boxNo = Math.min(RULES.boxesPerRun, played + (game.phase === 'peek' || game.phase === 'bankerRead' ? 1 : 0));
-  const traps = cfg.maxTrapsCaught === 0 ? 'he catches no trap' : `he catches at most ${cfg.maxTrapsCaught} trap${cfg.maxTrapsCaught === 1 ? '' : 's'}`;
+  const active = game.phase === 'peek' || game.phase === 'bankerRead' ? 1 : 0;
+  const may = r.maxTrapsCaught === 0 ? 'He may catch no duds' : `He may catch ${r.maxTrapsCaught} dud${r.maxTrapsCaught === 1 ? '' : 's'}`;
   return (
-    <div className="hud shadowed">
-      <div className="goal">
-        <div className="eyebrow">{daily ? 'Daily vault  ·  ' : ''}Bank {ROMAN[game.level - 1]}  ·  The {cfg.rank}</div>
-        <div className="goalline">
-          Goal: bank <b className="num">{money(cfg.target)}</b> in {RULES.boxesPerRun} boxes, {traps}.
-          <span className={`count${caught > cfg.maxTrapsCaught || burned > cfg.maxBurned ? ' over' : ''}`}>
-            Box {Math.max(1, boxNo)} of {RULES.boxesPerRun}  ·  caught {caught}  ·  burned {burned}
-          </span>
-        </div>
-      </div>
-      <div className="purse">
-        <div className={`pile num${game.pile >= cfg.target ? ' met' : ''}`} aria-label="Your pile">{money(game.pile)}</div>
-        <div className="heat">
-          <div className="row"><span>Heat</span><span className="num">{heatPct}</span></div>
-          <div className="bar"><div className="fill" style={{ width: `${heatPct}%` }} /></div>
-          <div className="small" style={{ marginTop: 6, fontSize: 'var(--fs-xs)' }}>Sell him {Math.ceil(RULES.bustAt / RULES.heatPerTrapBought)} traps and he throws you out</div>
-        </div>
+    <div className="hud panel">
+      <div className="hud-job">{daily ? 'Daily Heist' : job.name}</div>
+      <div className="hud-goal">Take <b>{money(r.target)}</b> from {r.safes} safes. {may}.</div>
+      <div className="pips" aria-label={`Safe ${Math.min(r.safes, played + active)} of ${r.safes}`}>
+        {Array.from({ length: r.safes }, (_, i) => {
+          const o = game.log[i];
+          const cls = o ? (o.kind === 'trap' ? (o.result === 'sold' ? 'dumped' : 'caught') : o.result === 'burned' ? 'lost' : 'kept') : i === played && active ? 'now' : '';
+          return <span key={i} className={`pip ${cls}`} />;
+        })}
+        <span className={`caught${caught > r.maxTrapsCaught ? ' over' : ''}`}>Caught {caught} of {r.maxTrapsCaught}</span>
       </div>
     </div>
   );
 }
 
-/** What's still on the board, Deal or No Deal style: values you have seen are struck out. */
+/** Take (this run), Stash (lifetime) and heat, bottom right where the coins land. */
+export function Purse({ game, stash }: { game: GameState; stash: number }): JSX.Element {
+  const heatPct = Math.round(game.heat * 100);
+  return (
+    <div className="purse panel">
+      <div className="lab">Take</div>
+      <RollNum value={game.pile} className={`take num${game.pile >= game.rules.target ? ' met' : ''}`} />
+      <div className="stashline">Stash <b className="num">{money(stash)}</b></div>
+      <div className="heat">
+        <div className="row"><span>Heat</span><span className="num">{heatPct}</span></div>
+        <div className="bar"><div className="fill" style={{ width: `${heatPct}%` }} /></div>
+      </div>
+    </div>
+  );
+}
+
+/** What is still in the vault: values you have seen are struck out. */
 export function ValuesBoard({ game }: { game: GameState }): JSX.Element {
   const seen = game.boxes.filter((b) => b.state !== 'sealed');
   const count = (kind: string, value: number) => seen.filter((b) => b.kind === kind && b.value === value).length;
@@ -171,63 +206,61 @@ export function ValuesBoard({ game }: { game: GameState }): JSX.Element {
     return n < count(kind, value);
   };
   return (
-    <div className="values shadowed" aria-label="Values on the board">
-      <div className="eyebrow" style={{ marginBottom: 6 }}>On the board</div>
+    <div className="values panel" aria-label="What is still in the vault">
+      <div className="lab">In the vault</div>
       {VALUE_TABLE.small.map((v) => <div key={`s${v}`} className={`v num${gone('small', v) ? ' gone' : ''}`}>{money(v)}</div>)}
-      <div className="gap" />
       {VALUE_TABLE.big.map((v) => <div key={`b${v}`} className={`v big num${gone('big', v) ? ' gone' : ''}`}>{money(v)}</div>)}
-      <div className="gap" />
-      {VALUE_TABLE.trap.map((v, i) => <div key={`t${i}`} className={`v trap${gone('trap', v) ? ' gone' : ''}`}>Trap</div>)}
+      {VALUE_TABLE.trap.map((v, i) => <div key={`t${i}`} className={`v trap${gone('trap', v) ? ' gone' : ''}`}>Dud</div>)}
     </div>
   );
 }
 
-/**
- * Live check: one random cue per game ("blink twice"), so a recorded video cannot stand in for the player.
- * Pure display; the flow counts blinks from the signal bus and decides pass or fail.
- */
-export interface BlinkCueProps {
-  /** blinks counted since the cue appeared */
-  blinks: number;
-  /** blinks wanted, default 2 */
-  needed?: number;
-  status: 'waiting' | 'passed' | 'failed';
-  /** whole seconds left while waiting; hidden when undefined */
-  secondsLeft?: number;
-  /** shown as a Try again button when the check failed */
-  onRetry?: () => void;
-}
-
-function Eye({ shut, idx }: { shut: boolean; idx: number }): JSX.Element {
+/** The first minute, always visible on the job screen. */
+export function RuleStrip({ step }: { step: number }): JSX.Element {
+  const steps = ['Crack a safe', 'Look inside', 'He reads you', 'Dump duds, keep loot'];
   return (
-    <svg className={`eye${shut ? ' shut' : ''}`} viewBox="0 0 64 36" aria-hidden="true" style={{ animationDelay: `${idx * 90}ms` }}>
-      <path className="lid" d="M4 18 C 18 2, 46 2, 60 18 C 46 34, 18 34, 4 18 Z" />
-      <circle className="iris" cx="32" cy="18" r="8" />
-      <path className="closed" d="M4 18 C 18 30, 46 30, 60 18" />
-    </svg>
+    <div className="rulestrip">
+      {steps.map((s, i) => <span key={s} className={`rs${i === step ? ' on' : ''}`}><i>{i + 1}</i>{s}</span>)}
+    </div>
   );
 }
 
-export function BlinkCue({ blinks, needed = 2, status, secondsLeft, onRetry }: BlinkCueProps): JSX.Element {
-  const got = Math.min(needed, Math.max(0, Math.floor(blinks)));
-  const prompt = status === 'passed' ? 'Thank you.' : status === 'failed' ? 'He missed that.' : 'Blink twice.';
-  const line = status === 'passed'
-    ? 'That was you, live. On with the game.'
-    : status === 'failed'
-      ? 'Face the camera in good light and blink twice, slowly.'
-      : 'One quick check that he is watching you live, not a recording.';
+/** A heart that beats with the pulse the bus hears. */
+export function Heart({ bus, bpm, sim }: { bus: SignalBus | null; bpm: number | null; sim: boolean }): JSX.Element {
+  const beat = usePoll(() => (bus ? bus.heartbeat() : 0), [bus]);
   return (
-    <div className={`blinkcue ${status}`} role="status" aria-live="polite">
-      <div className="eyebrow">Live check</div>
-      <div className="prompt shadowed">{prompt}</div>
-      <div className="eyes" aria-label={`${got} of ${needed} blinks seen`}>
-        {Array.from({ length: needed }, (_, i) => <Eye key={i} idx={i} shut={i < got || status === 'passed'} />)}
+    <div className="heart">
+      <svg viewBox="0 0 32 30" style={{ transform: `scale(${1 + 0.28 * beat})` }} aria-hidden="true">
+        <path d="M16 28 C 6 20, 1 14, 1 8.5 C 1 4, 4.5 1, 8.5 1 C 12 1, 14.5 3, 16 6 C 17.5 3, 20 1, 23.5 1 C 27.5 1, 31 4, 31 8.5 C 31 14, 26 20, 16 28 Z" />
+      </svg>
+      <span className="num">{bpm === null ? '...' : bpm}</span><span className="unit">{sim ? 'bpm, simulated' : 'bpm'}</span>
+    </div>
+  );
+}
+
+/** What the Fence sees: your self view, your breath line and your pulse. */
+export function BodyPanel({ bus, stream, sim, bpm }: { bus: SignalBus | null; stream: MediaStream | null; sim: boolean; bpm: number | null }): JSX.Element {
+  const video = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const v = video.current;
+    if (!v) return;
+    if (v.srcObject !== stream) v.srcObject = stream;
+    if (stream) void v.play().catch(() => undefined);
+  }, [stream]);
+  return (
+    <div className="body-panel panel">
+      <div className="lab">What he sees</div>
+      <div className="selfview">
+        {stream ? <video ref={video} muted playsInline autoPlay aria-label="You, mirrored" />
+          : (
+            <div className="sample-face">
+              <svg viewBox="0 0 80 60" aria-hidden="true"><ellipse cx="40" cy="24" rx="11" ry="14" /><path d="M 14 60 C 16 46, 28 40, 40 40 C 52 40, 64 46, 66 60" /></svg>
+              <span>{sim ? 'Sample body, no camera' : 'Camera off'}</span>
+            </div>
+          )}
       </div>
-      <div className="rulebar shadowed">
-        {line}
-        {status === 'waiting' && secondsLeft !== undefined && <span className="left"> {Math.max(0, Math.ceil(secondsLeft))} seconds left.</span>}
-      </div>
-      {status === 'failed' && onRetry && <div className="actions"><Btn primary k="Enter" onClick={onRetry}>Try again</Btn></div>}
+      <div className="mini-breath"><span className="lab">Breath</span><BreathLine bus={bus} small /></div>
+      <Heart bus={bus} bpm={bpm} sim={sim} />
     </div>
   );
 }

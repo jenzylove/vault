@@ -2,7 +2,7 @@
  * Local only storage. Game results and tell summaries (never raw signals), the Presage key the player
  * pasted (never logged), and whether they have read the consent screen this session.
  */
-import { emptyHistory, type TellHistory } from '../engine';
+import { emptyHistory, emptyStash, parseStash, type Stash, type TellHistory } from '../engine';
 
 const HISTORY_KEY = 'vault.history.v1';
 const KEY_KEY = 'vault.presageKey';
@@ -23,7 +23,21 @@ export function loadHistory(): TellHistory {
   } catch { return emptyHistory(); }
 }
 export function saveHistory(h: TellHistory): void { safeSet(HISTORY_KEY, JSON.stringify(h)); }
-export function wipeHistory(): void { safeSet(HISTORY_KEY, null); }
+/** Wipes results, tells, the Stash and the first job flag: everything this game saved. */
+export function wipeHistory(): void { safeSet(HISTORY_KEY, null); safeSet(STASH_KEY, null); safeSet(FIRST_KEY, null); }
+
+const STASH_KEY = 'vault.stash.v1';
+export function loadStash(): Stash {
+  const raw = safeGet(STASH_KEY);
+  if (!raw) return emptyStash();
+  try { return parseStash(JSON.parse(raw)); } catch { return emptyStash(); }
+}
+export function saveStash(s: Stash): void { safeSet(STASH_KEY, JSON.stringify(s)); }
+
+/** First time players land straight on First Job once; after that, the jobs menu. */
+const FIRST_KEY = 'vault.firstJobOffered.v1';
+export function firstJobOffered(): boolean { return safeGet(FIRST_KEY) === '1'; }
+export function markFirstJobOffered(): void { safeSet(FIRST_KEY, '1'); }
 
 export function loadKey(): string { return safeGet(KEY_KEY) ?? ''; }
 export function saveKey(k: string): void { safeSet(KEY_KEY, k.trim() || null); }

@@ -89,8 +89,8 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
         <div className="body measure enter" style={{ ['--d' as string]: 2 }}>{TIP}</div>
         <div className="actions enter" style={{ ['--d' as string]: 3 }}>
           <Btn primary k="Enter" onClick={onRetry}>Try again</Btn>
-          <Btn k="S" onClick={onSim}>Play with a simulated body</Btn>
-          <Btn k="Esc" onClick={onBack}>Back to the banks</Btn>
+          <Btn k="S" onClick={onSim}>Try a sample run (no camera)</Btn>
+          <Btn k="Esc" onClick={onBack}>Back to the jobs</Btn>
         </div>
       </div>
     );
@@ -101,15 +101,15 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
   let big: string;
   let small: string | undefined;
   if (processing === 'starting') { big = 'Turning the camera on.'; small = 'This takes a few seconds.'; }
-  else if (read.ready) { big = 'You are lined up.'; small = 'He can see your breathing. Stay like this.'; }
+  else if (read.ready) { big = 'You are lined up.'; small = 'The Fence can see your breathing. Stay like this.'; }
   else if (v && v.code !== V_OK && performance.now() - v.at < STALE_MS) { ({ big, small } = validationWords(v.code, v.hint)); }
   else if (read.waiting === 'validation') { big = 'Hold still.'; small = 'Checking the picture.'; }
   else { big = 'Hold still. Finding your breathing.'; small = 'Breathe as you normally do.'; }
 
-  const gold = 'var(--brass, #c9a45c)';
+  const gold = 'var(--cream, #f4e8d3)';
   const ok = read.ready;
   return (
-    <div className="center" style={{ pointerEvents: 'auto', background: 'rgba(5,4,3,0.82)', justifyContent: 'center', gap: 0 }}>
+    <div className="center" style={{ pointerEvents: 'auto', background: 'rgba(58,7,16,0.9)', justifyContent: 'center', gap: 0 }}>
       <style>{`
         @keyframes lineup-pulse { 0%,100% { opacity: 0.55 } 50% { opacity: 1 } }
         .lineup-guide { animation: lineup-pulse 2.4s ease-in-out infinite; }
@@ -118,8 +118,8 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
       <div className="eyebrow enter">Line up</div>
       <div style={{
         position: 'relative', width: 'min(62vw, 96vh, 900px)', aspectRatio: '16 / 9', marginTop: 14,
-        borderRadius: 4, overflow: 'hidden', background: '#0b0906',
-        boxShadow: `0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px ${ok ? gold : 'rgba(201,164,92,0.35)'}`,
+        borderRadius: 4, overflow: 'hidden', background: '#2a050c',
+        boxShadow: `0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px ${ok ? gold : 'rgba(244,232,211,0.35)'}`,
         transition: 'box-shadow 0.4s',
       }}>
         <video ref={video} muted playsInline autoPlay aria-label="Your camera, mirrored"
@@ -131,10 +131,10 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
               <ellipse cx="80" cy="35" rx="13.5" ry="18" fill="black" />
             </mask>
           </defs>
-          <rect width="160" height="90" fill="rgba(5,4,3,0.38)" mask="url(#lineup-hole)" />
+          <rect width="160" height="90" fill="rgba(58,7,16,0.38)" mask="url(#lineup-hole)" />
           <g className={`lineup-guide${ok ? ' ok' : ''}`} fill="none" stroke={gold} strokeLinecap="round"
             strokeWidth={ok ? 0.9 : 0.6} strokeDasharray={ok ? undefined : '2.2 1.6'}
-            style={{ filter: ok ? 'drop-shadow(0 0 1.6px rgba(234,215,166,0.9))' : undefined }}>
+            style={{ filter: ok ? 'drop-shadow(0 0 1.6px rgba(244,232,211,0.9))' : undefined }}>
             <ellipse cx="80" cy="35" rx="13.5" ry="18" />
             <path d="M 34 90 C 38 74, 54 64.5, 80 63.5 C 106 64.5, 122 74, 126 90" />
           </g>

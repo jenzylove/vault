@@ -68,7 +68,7 @@ const SPECS: Record<TellKey, Spec> = {
   breath: {
     label: 'Breath catch', unit: 'seconds', floor: 0.25, get: (f) => f.breathCatchMs / 1000,
     say: (x) => `${one(x)} seconds`,
-    line: (t, r) => `At duds your breath stopped for ${one(t)} seconds on average. At loot, ${one(r)} seconds.`,
+    line: (t, r) => `At duds your breath ${one(t) === '0.0' ? 'never stopped' : `stopped for ${one(t)} seconds on average`}. At loot ${one(r) === '0.0' ? 'it never stopped' : `it stopped for ${one(r)} seconds`}.`,
   },
   shallow: {
     label: 'Shallow breathing', unit: 'percent', floor: 8, get: (f) => 100 * f.shallowing,
@@ -84,7 +84,7 @@ const SPECS: Record<TellKey, Spec> = {
   blinks: {
     label: 'Blinks', unit: 'blinks', floor: 0.8, get: (f) => f.blinkCount ?? 0,
     say: (x) => `${one(x)} blinks`,
-    line: (t, r) => `At duds you blinked ${one(t)} times a peek. At loot, ${one(r)} times.`,
+    line: (t, r) => `At duds you blinked ${one(t)} times a look. At loot, ${one(r) === '0.0' ? 'not at all' : `${one(r)} times`}.`,
   },
   smile: face('Smile', (f) => f.exprDelta.happy ?? 0, 'you smiled', ''),
   surprise: face('Surprise', (f) => f.exprDelta.surprise ?? 0, 'your face showed', ' surprise'),
