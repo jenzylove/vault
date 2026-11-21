@@ -1122,7 +1122,7 @@ function EndScreen({ game, end, cardUrl, daily, onAgain, onNextBank, onLadder, o
         <div className="headline enter" style={{ ['--d' as string]: 4 }}>&ldquo;{end.tell}&rdquo;</div>
         {sheet.biggest && <div className="small enter" style={{ ['--d' as string]: 4 }}>{sheet.biggest.sentence}</div>}
         <div className={`trendline ${trend.trend} enter`} style={{ ['--d' as string]: 5 }}>
-          <span className="eyebrow">{trend.trend === 'better' ? 'Hidden better' : trend.trend === 'worse' ? 'Showing more' : trend.trend === 'same' ? 'No change' : 'Last time'}</span>
+          <span className="eyebrow">{trend.trend === 'better' ? 'Hidden better' : trend.trend === 'worse' ? 'Showing more' : trend.trend === 'same' ? 'No change' : trend.trend === 'first' ? 'Next run' : 'Last time'}</span>
           <span>{trend.line}</span>
         </div>
         <div className={`unlock enter${newlyUnlocked ? '' : ' next'}`} style={{ ['--d' as string]: 6 }}>{unlockLine}</div>
