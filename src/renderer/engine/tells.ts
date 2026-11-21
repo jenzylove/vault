@@ -237,7 +237,8 @@ export interface HideTrend { key: TellKey | null; trend: 'first' | 'better' | 'w
  */
 export function hideTrend(prev: TellHistoryEntry | null, sheet: TellSheet): HideTrend {
   const key = prev?.biggest ?? sheet.biggest?.key ?? null;
-  if (!prev || !key) return { key: sheet.biggest?.key ?? null, trend: 'first', line: 'First read. Next run he watches for it.' };
+  if (!prev) return { key, trend: 'first', line: key ? 'First read. Next run he watches for it.' : 'First read. He found nothing yet.' };
+  if (!key) return { key, trend: 'unknown', line: 'He has not found a tell on you yet.' };
   const cur = sheet.tells.find((t) => t.key === key);
   const before = prev.tells[key];
   if (!cur || !before || cur.nTrap === 0 || cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no trap from you this run, so he could not check.' };
