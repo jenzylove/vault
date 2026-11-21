@@ -24,7 +24,8 @@ const browGeo = new THREE.BoxGeometry(0.1, 0.024, 0.03);
 const noseGeo = new THREE.SphereGeometry(0.058, 16, 12);
 const earGeo = new THREE.SphereGeometry(0.045, 12, 10);
 const stacheGeo = new THREE.CapsuleGeometry(0.022, 0.07, 4, 10).rotateZ(Math.PI / 2);
-const mouthGeo = new THREE.TorusGeometry(0.055, 0.012, 8, 18, Math.PI);
+const mouthGeo = new THREE.TorusGeometry(0.06, 0.014, 8, 18, Math.PI);
+const hairGeo = new THREE.SphereGeometry(0.205, 24, 16, Math.PI * 0.15, Math.PI * 0.7, Math.PI * 0.35, Math.PI * 0.4);
 const cigarGeo = new THREE.CylinderGeometry(0.014, 0.016, 0.16, 10).rotateZ(Math.PI / 2);
 const emberGeo = new THREE.SphereGeometry(0.017, 10, 8);
 const tieGeo = mergeGeometries([
@@ -59,7 +60,7 @@ export const Fence = memo(function Fence({ state, mats, heat, lite }: { state: B
   const brows = useRef<THREE.Mesh[]>([]);
   const pupils = useRef<THREE.Mesh[]>([]);
   const mouth = useRef<THREE.Mesh>(null);
-  const armR = useRef<THREE.Group>(null);
+  const arms = useRef<THREE.Group[]>([]);
   const fan = useRef<THREE.Group>(null);
   const lamp = useRef<THREE.PointLight>(null);
   const st = useRef({ turn: 0, lean: 0, lamp: 1, smirk: 0, reach: 0, nextBlink: 2, blink: 0 });
@@ -82,18 +83,18 @@ export const Fence = memo(function Fence({ state, mats, heat, lite }: { state: B
     a.blink = Math.max(0, a.blink - dt * 7);
 
     if (fig.current) {
-      fig.current.position.z = -0.62 + a.lean * 0.28 + push * 0.08 - fl * 0.06;
+      fig.current.position.z = -0.62 + a.lean * 0.07 + push * 0.04 - fl * 0.06;
       fig.current.rotation.y = a.turn * Math.PI * 0.92;
     }
     if (body.current) {
-      body.current.rotation.x = 0.04 + a.lean * 0.2 + Math.sin(now * 1.3) * 0.01 - fl * 0.12;
+      body.current.rotation.x = 0.04 + a.lean * 0.12 + Math.sin(now * 1.3) * 0.01 - fl * 0.12;
       body.current.position.y = Math.sin(now * 1.3) * 0.006;
     }
     if (head.current) {
       const talk = state === 'speaking' ? Math.sin(now * 6) * 0.03 : 0;
       const nod = state === 'offering' ? Math.max(0, Math.sin(now * 3.2)) * 0.08 : 0;
       const tilt = state === 'reading' ? Math.sin(now * 0.7) * 0.06 : 0;
-      head.current.rotation.x = talk + nod - fl * 0.22 + a.lean * 0.08;
+      head.current.rotation.x = talk + nod - fl * 0.22 + a.lean * 0.16;
       head.current.rotation.z = tilt + a.lean * 0.12 + a.smirk * 0.06;
       head.current.rotation.y = tilt * 0.5 + a.lean * -0.12;
     }
@@ -116,7 +117,8 @@ export const Fence = memo(function Fence({ state, mats, heat, lite }: { state: B
       mouth.current.rotation.z = Math.PI + a.smirk * 0.35 - a.lean * 0.1;
       mouth.current.position.x = a.smirk * 0.025;
     }
-    if (armR.current) armR.current.rotation.x = -0.9 - a.reach * 1.1;
+    // arms stay planted on the counter as he leans (the body tips forward, the arms tip back to match)
+    arms.current.forEach((g, i) => { if (g) g.rotation.x = -0.9 + a.lean * 0.42 + fl * 0.12 - (i === 1 ? a.reach * 1.1 : 0); });
     if (fan.current) { fan.current.visible = a.reach > 0.05; fan.current.scale.setScalar(Math.max(0.01, a.reach)); }
     // the booth lamp: brighter as he reads, flares on a catch, dims when he turns away
     const want = LAMP[state] * (1 + al * 0.3);
@@ -149,7 +151,7 @@ export const Fence = memo(function Fence({ state, mats, heat, lite }: { state: B
           <mesh geometry={tieGeo} material={mats.crimson} position={[0, 0.64, 0.135]} rotation={[-0.12, 0, 0]} />
           {/* arms on the counter */}
           {[-1, 1].map((sx) => (
-            <group key={sx} ref={sx === 1 ? armR : undefined} position={[sx * 0.26, 0.6, 0]} rotation={[-0.9, 0, sx * -0.12]}>
+            <group key={sx} ref={(g) => { if (g) arms.current[sx === 1 ? 1 : 0] = g; }} position={[sx * 0.26, 0.6, 0]} rotation={[-0.9, 0, sx * -0.12]}>
               <mesh geometry={FIG.upperArm} material={suit} scale={1.15} />
               <group position={[0, -0.3, 0]} rotation={[-0.5, 0, sx * 0.3]}>
                 <mesh geometry={FIG.foreArm} material={suit} scale={1.15} />
@@ -179,7 +181,9 @@ export const Fence = memo(function Fence({ state, mats, heat, lite }: { state: B
               </group>
             ))}
             {[-1, 1].map((sx) => <mesh key={sx} geometry={stacheGeo} material={hair} position={[sx * 0.05, -0.075, 0.205]} rotation={[0, sx * -0.3, sx * -0.25]} />)}
-            <mesh ref={mouth} geometry={mouthGeo} material={lip} position={[0, -0.115, 0.19]} rotation={[0, 0, Math.PI]} />
+            <mesh ref={mouth} geometry={mouthGeo} material={lip} position={[0, -0.135, 0.185]} rotation={[0, 0, Math.PI]} />
+            {/* hair round the back, seen when he turns away */}
+            <mesh geometry={hairGeo} material={hair} rotation={[0, Math.PI, 0]} scale={[0.97, 1.06, 0.97]} />
             <group position={[0.09, -0.12, 0.2]} rotation={[0, -0.5, -0.12]}>
               <mesh geometry={cigarGeo} material={cigar} position={[0.07, 0, 0]} />
               <mesh geometry={emberGeo} material={ember} position={[0.15, 0, 0]} />
