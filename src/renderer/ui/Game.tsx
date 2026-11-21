@@ -435,7 +435,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     saveHistory(next);
     saveHowSeen();
     setHistory(next);
-    const trend = hideTrend(prev.games[prev.games.length - 1] ?? null, sheet);
+    const trend = hideTrend(prev.games, sheet);
     const tell = sheet.biggest ? tellLine(sheet.biggest.key, sheet.biggest.effect) : 'I could not find your tell this time.';
     setEnd({ sheet, prev, next, unlockedBefore: unlockedLevel(prev), unlockedNow: unlockedLevel(next), trend, tell });
     bus?.clear(); // the session's signal numbers are not kept past the game

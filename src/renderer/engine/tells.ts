@@ -232,19 +232,25 @@ export function memoryLine(history: TellHistory): string | null {
 export interface HideTrend { key: TellKey | null; trend: 'first' | 'better' | 'worse' | 'same' | 'unknown'; line: string; }
 
 /**
- * Did you hide the tell he was watching for? Compares this run with the previous one on the tell he
- * named last time (or this run's tell on a first game), by how far it separated traps from treasure.
+ * Did you hide the tell he was watching for? `earlier` is the history before this run, oldest first.
+ * He watches for the tell he last named (or this run's tell if he never named one), and this run is
+ * compared with the most recent earlier run that measured it (a run with no trap measures nothing).
  */
-export function hideTrend(prev: TellHistoryEntry | null, sheet: TellSheet): HideTrend {
-  const key = prev?.biggest ?? sheet.biggest?.key ?? null;
-  if (!prev) return { key, trend: 'first', line: key ? 'First read. Next run he watches for it.' : 'First read. He found nothing yet.' };
+export function hideTrend(earlier: readonly TellHistoryEntry[], sheet: TellSheet): HideTrend {
+  if (earlier.length === 0) {
+    const k = sheet.biggest?.key ?? null;
+    return { key: k, trend: 'first', line: k ? 'First read. Next run he watches for it.' : 'First read. He found nothing yet.' };
+  }
+  const named = [...earlier].reverse().find((g) => g.biggest !== null)?.biggest ?? null;
+  const key = named ?? sheet.biggest?.key ?? null;
   if (!key) return { key, trend: 'unknown', line: 'He has not found a tell on you yet.' };
   const cur = sheet.tells.find((t) => t.key === key);
-  const before = prev.tells[key];
-  if (!cur || !before || cur.nTrap === 0 || cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no trap from you this run, so he could not check.' };
+  if (!cur || cur.nTrap === 0 || cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no trap from you this run, so he could not check.' };
+  const before = [...earlier].reverse().map((g) => g.tells[key]).find((t) => t && t.effect !== 0);
+  if (!before) return { key, trend: 'unknown', line: 'No earlier run to compare it with yet.' };
   const was = Math.abs(before.effect);
   const now = cur.strength;
-  const nums = `${sayTell(key, before.trap)} at traps last time, ${sayTell(key, cur.trap)} now.`;
+  const nums = `${sayTell(key, before.trap)} at traps before, ${sayTell(key, cur.trap)} now.`;
   if (now < 0.8 * was || (now < TELL_THRESHOLD && was >= TELL_THRESHOLD)) return { key, trend: 'better', line: `You hid it better: ${nums}` };
   if (now > 1.2 * was) return { key, trend: 'worse', line: `It showed more: ${nums}` };
   return { key, trend: 'same', line: `About the same: ${nums}` };

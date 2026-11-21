@@ -100,14 +100,18 @@ describe('he remembers you', () => {
     let h = emptyHistory();
     expect(memoryLine(h)).toBeNull();
     const first = tellSheet(playSimGame('honest', 3, { practice: true }).state);
-    expect(hideTrend(null, first).trend).toBe('first');
+    expect(hideTrend([], first).trend).toBe('first');
     h = updateHistory(h, first);
     if (first.biggest?.key === 'breath') expect(memoryLine(h)).toBe('Last time you held your breath at traps. I am watching for that now.');
     else expect(memoryLine(h)).toMatch(/^Last time .* I am /);
     const second = tellSheet(playSimGame('steady', 3, { practice: true }).state);
-    const tr = hideTrend(h.games[0]!, second);
+    const tr = hideTrend(h.games, second);
     expect(['better', 'same', 'worse', 'unknown']).toContain(tr.trend);
     expect(tr.line).not.toMatch(dashes);
+    // a run with no trap in between measures nothing: compare with the last run that did
+    const blank = { ...h.games[0]!, biggest: null, tells: Object.fromEntries(Object.entries(h.games[0]!.tells).map(([k]) => [k, { trap: 0, treasure: 0, effect: 0 }])) } as typeof h.games[0];
+    const tr2 = hideTrend([...h.games, blank], second);
+    expect(tr2.line).toBe(tr.line);
   });
 
   test('a steady player hides the breath better than an honest one did', () => {
@@ -117,7 +121,7 @@ describe('he remembers you', () => {
       if (a.biggest?.key !== 'breath') continue;
       const h = updateHistory(emptyHistory(), a);
       const b = tellSheet(playSimGame('steady', seed, { practice: true }).state);
-      if (hideTrend(h.games[0]!, b).trend === 'better') better++;
+      if (hideTrend(h.games, b).trend === 'better') better++;
     }
     expect(better).toBeGreaterThanOrEqual(8);
   });
