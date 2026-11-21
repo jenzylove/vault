@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { VaultScene, type VaultSceneProps } from '../scene/VaultScene';
-import { RULES, VALUE_TABLE, levelConfig, type GameState, type LevelNo } from '../engine';
+import { PEEK_MS, RULES, VALUE_TABLE, levelConfig, type Baseline, type GameState, type LevelNo, type ReplayMark } from '../engine';
+import type { SignalFrame } from '../signals/types';
 import type { SignalBus } from './signalBus';
 
 /** Poll something off the signal bus at ~30 Hz without re-rendering the whole game. */
@@ -21,15 +22,65 @@ export function LiveScene({ bus, ...rest }: Omit<VaultSceneProps, 'breath' | 'he
   return <VaultScene {...rest} breath={sig.breath} heartbeat={sig.beat} />;
 }
 
-export function BreathLine({ bus, small }: { bus: SignalBus | null; small?: boolean }): JSX.Element {
+export function BreathLine({ bus, small, big }: { bus: SignalBus | null; small?: boolean; big?: boolean }): JSX.Element {
   const pts = usePoll(() => (bus ? bus.breath() : []), [bus]);
-  const W = 720, H = 90;
+  const W = 720, H = big ? 150 : 90;
   const n = pts.length;
-  const poly = pts.map((v, i) => `${((i / Math.max(1, n - 1)) * W).toFixed(1)},${(H / 2 - v * (H / 2 - 6)).toFixed(1)}`).join(' ');
+  const poly = pts.map((v, i) => `${((i / Math.max(1, n - 1)) * W).toFixed(1)},${(H / 2 - v * (H / 2 - 8)).toFixed(1)}`).join(' ');
+  const last = n ? pts[n - 1] as number : 0;
   return (
-    <svg className={`breathline${small ? ' small' : ''}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Your breathing, live">
+    <svg className={`breathline${small ? ' small' : ''}${big ? ' big' : ''}`} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Your breathing, live">
       <line className="mid" x1="0" y1={H / 2} x2={W} y2={H / 2} />
       {n > 1 && <polyline points={poly} />}
+      {big && n > 1 && <circle className="head" cx={W} cy={H / 2 - last * (H / 2 - 8)} r="5" />}
+    </svg>
+  );
+}
+
+/**
+ * The catch replay: this peek's own breath trace, drawn big, with what the banker measured marked on it.
+ * Scaled against the calm swing he learned, so a held breath looks as flat as it really was.
+ */
+export function ReplayTrace({ frames, baseline, marks }: { frames: SignalFrame[]; baseline: Baseline; marks: ReplayMark[] }): JSX.Element {
+  const W = 900, H = 210, PADY = 26;
+  const t0 = frames.length ? (frames[0] as SignalFrame).t : 0;
+  const good = frames.filter((f) => f.conf >= 0.5 && f.stable && typeof f.chest === 'number');
+  const span = Math.max(PEEK_MS, frames.length ? (frames[frames.length - 1] as SignalFrame).t - t0 : 0);
+  const ts = good.map((f) => f.t - t0);
+  const raw = good.map((f) => f.chest as number);
+  // 300 ms centred average, the same smoothing the read uses
+  const sm = raw.map((_, i) => {
+    let sum = 0, k = 0;
+    for (let j = i; j >= 0 && (ts[i] as number) - (ts[j] as number) <= 150; j--) { sum += raw[j] as number; k++; }
+    for (let j = i + 1; j < raw.length && (ts[j] as number) - (ts[i] as number) <= 150; j++) { sum += raw[j] as number; k++; }
+    return sum / Math.max(1, k);
+  });
+  const sorted = [...sm].sort((a, b) => a - b);
+  const lo = sorted[Math.floor(sorted.length * 0.03)] ?? 0;
+  const hi = sorted[Math.floor(sorted.length * 0.97)] ?? 1;
+  const mid = (lo + hi) / 2;
+  const half = Math.max((hi - lo) / 2, baseline.windowAmp / 2, 1e-6) * 1.12;
+  const x = (t: number): number => (t / span) * W;
+  const y = (v: number): number => H / 2 - ((v - mid) / half) * (H / 2 - PADY);
+  const poly = ts.map((t, i) => `${x(t).toFixed(1)},${y(sm[i] as number).toFixed(1)}`).join(' ');
+  const hold = marks.find((m) => m.kind === 'catch' && m.start !== undefined && m.end !== undefined);
+  const blinks = marks.find((m) => m.kind === 'blinks')?.ticks ?? [];
+  return (
+    <svg className="replaytrace" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" aria-label="Your breathing during that peek">
+      {[0.25, 0.5, 0.75].map((f) => <line key={f} className="grid" x1={W * f} y1={0} x2={W * f} y2={H} />)}
+      <line className="mid" x1="0" y1={H / 2} x2={W} y2={H / 2} />
+      {hold && (
+        <g className="hold">
+          <rect x={x(hold.start!)} y={4} width={Math.max(2, x(hold.end!) - x(hold.start!))} height={H - 8} />
+          <line x1={x(hold.start!)} y1={4} x2={x(hold.start!)} y2={H - 4} />
+          <line x1={x(hold.end!)} y1={4} x2={x(hold.end!)} y2={H - 4} />
+          <text x={(x(hold.start!) + x(hold.end!)) / 2} y={20}>{hold.label}</text>
+        </g>
+      )}
+      {blinks.map((b, i) => <line key={i} className="blink" x1={x(b)} y1={H - 16} x2={x(b)} y2={H - 4} />)}
+      {ts.length > 1 && <polyline points={poly} />}
+      <text className="axis" x={4} y={H - 4}>0</text>
+      <text className="axis" x={W - 4} y={H - 4} textAnchor="end">{Math.round(span / 1000)} seconds</text>
     </svg>
   );
 }
@@ -76,29 +127,32 @@ export function readsLine(level: LevelNo): string {
   return `Reads ${list}.`;
 }
 
-/** Goal, pile and heat: always on screen during play. */
+/** Goal (one line), pile and heat: always on screen during play. */
 export function Hud({ game, daily }: { game: GameState; daily: boolean }): JSX.Element {
   const cfg = levelConfig(game.level);
   const caught = game.log.filter((o) => o.kind === 'trap' && (o.result === 'burned' || o.decision === 'unread')).length;
   const burned = game.log.filter((o) => o.kind !== 'trap' && o.result === 'burned').length;
   const heatPct = Math.round(game.heat * 100);
+  const played = game.log.length;
+  const boxNo = Math.min(RULES.boxesPerRun, played + (game.phase === 'peek' || game.phase === 'bankerRead' ? 1 : 0));
+  const traps = cfg.maxTrapsCaught === 0 ? 'he catches no trap' : `he catches at most ${cfg.maxTrapsCaught} trap${cfg.maxTrapsCaught === 1 ? '' : 's'}`;
   return (
     <div className="hud shadowed">
       <div className="goal">
         <div className="eyebrow">{daily ? 'Daily vault  ·  ' : ''}Bank {ROMAN[game.level - 1]}  ·  The {cfg.rank}</div>
-        <div className="bankline">Bank <span className="num">{money(cfg.target)}</span> and keep your tells quiet</div>
-        <div className="terms">
-          <span className={game.pile >= cfg.target ? 'met' : ''}>Pile <b className="num">{money(game.pile)}</b> of {money(cfg.target)}</span>
-          <span className={caught > cfg.maxTrapsCaught ? 'over' : ''}>Traps he caught <b>{caught}</b> of {cfg.maxTrapsCaught} allowed</span>
-          <span className={burned > cfg.maxBurned ? 'over' : ''}>Treasure he burned <b>{burned}</b> of {cfg.maxBurned} allowed</span>
+        <div className="goalline">
+          Goal: bank <b className="num">{money(cfg.target)}</b> in {RULES.boxesPerRun} boxes, {traps}.
+          <span className={`count${caught > cfg.maxTrapsCaught || burned > cfg.maxBurned ? ' over' : ''}`}>
+            Box {Math.max(1, boxNo)} of {RULES.boxesPerRun}  ·  caught {caught}  ·  burned {burned}
+          </span>
         </div>
       </div>
       <div className="purse">
-        <div className="pile num" aria-label="Your pile">{money(game.pile)}</div>
+        <div className={`pile num${game.pile >= cfg.target ? ' met' : ''}`} aria-label="Your pile">{money(game.pile)}</div>
         <div className="heat">
           <div className="row"><span>Heat</span><span className="num">{heatPct}</span></div>
           <div className="bar"><div className="fill" style={{ width: `${heatPct}%` }} /></div>
-          <div className="small" style={{ marginTop: 6, fontSize: 'var(--fs-xs)' }}>At {Math.round(RULES.bustAt * 100)} he throws you out</div>
+          <div className="small" style={{ marginTop: 6, fontSize: 'var(--fs-xs)' }}>Sell him {Math.ceil(RULES.bustAt / RULES.heatPerTrapBought)} traps and he throws you out</div>
         </div>
       </div>
     </div>

@@ -229,3 +229,47 @@
   .values { font-size: var(--fs-s); gap: 3px; }
   .tell { padding: 4px 0; }
 }
+
+/* ---------- fast run: goal line, big live breath, catch replay, memory ---------- */
+.goal .goalline { font-family: var(--display); font-size: var(--fs-m); color: var(--paper); line-height: 1.3; margin-top: 6px; max-width: 62vw; }
+.goal .goalline b { font-weight: 500; color: var(--brass-hi); }
+.goal .goalline .count { display: block; font-family: var(--sans); font-size: var(--fs-xs); letter-spacing: 0.18em; text-transform: uppercase; color: var(--paper-faint); margin-top: 6px; }
+.goal .goalline .count.over { color: var(--ember); }
+.pile.met { color: var(--verd); }
+
+.stage:has(.bigbreath), .stage:has(.replay) { max-height: 52vh; }
+.bigbreath { position: relative; width: min(900px, 86vw); margin: clamp(6px, 1.2vh, 14px) 0 clamp(4px, 1vh, 10px); padding: 8px 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(8,6,4,0.72), rgba(8,6,4,0) 72%); }
+.stage .bigbreath .breathline.big, .breathline.big { width: 100%; height: clamp(80px, 15vh, 160px); }
+.breathline.big polyline { stroke-width: 2.4; }
+.breathline .head { fill: var(--brass-hi); filter: drop-shadow(0 0 8px rgba(234,215,166,0.9)); }
+.bigbreath.caught .breathline polyline { stroke: #f0b58a; filter: drop-shadow(0 0 10px rgba(208,96,63,0.85)); }
+.bigbreath.caught .breathline .head { fill: var(--ember); }
+.sawit { position: absolute; right: 2%; top: -6px; font-family: var(--display); font-style: italic; font-size: var(--fs-l); color: var(--ember); animation: stamp 0.5s var(--ease) both; text-shadow: 0 0 18px rgba(0,0,0,0.9); }
+
+.replay { display: flex; flex-direction: column; align-items: center; width: min(980px, 90vw); animation: rise 0.5s var(--ease) both; }
+.replay-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; justify-content: center; }
+.replay-head .stamp { font-size: var(--fs-l); padding: 0 12px; }
+.replay-out { font-family: var(--display); font-size: var(--fs-m); color: var(--paper-dim); }
+.replay-panel { width: 100%; margin-top: clamp(6px, 1.2vh, 12px); padding: clamp(8px, 1.4vh, 14px) clamp(12px, 1.6vw, 22px); text-align: left;
+  background: rgba(8,6,4,0.86); box-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 0 0 1px rgba(201,164,92,0.22); }
+.replaytrace { display: block; width: 100%; height: clamp(90px, 17vh, 200px); margin-top: 6px; overflow: visible; }
+.replaytrace polyline { fill: none; stroke: var(--brass-hi); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; filter: drop-shadow(0 0 5px rgba(234,215,166,0.5)); vector-effect: non-scaling-stroke; }
+.replaytrace .mid, .replaytrace .grid { stroke: rgba(239,230,210,0.1); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.replaytrace .hold rect { fill: rgba(208,96,63,0.2); }
+.replaytrace .hold line { stroke: var(--ember); stroke-width: 1.5; stroke-dasharray: 4 4; vector-effect: non-scaling-stroke; }
+.replaytrace .hold text { fill: #f0b58a; font-family: var(--display); font-style: italic; font-size: 20px; text-anchor: middle; }
+.replaytrace .blink { stroke: var(--verd); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.replaytrace .axis { fill: var(--paper-faint); font-family: var(--sans); font-size: 12px; letter-spacing: 0.1em; }
+.replay.missed .replaytrace polyline { stroke: var(--verd); filter: drop-shadow(0 0 5px rgba(143,184,162,0.5)); }
+.replay-chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }
+.chip { font-size: var(--fs-xs); letter-spacing: 0.16em; text-transform: uppercase; padding: 4px 10px; border-radius: 2px; color: var(--paper-dim); box-shadow: inset 0 0 0 1px rgba(239,230,210,0.22); }
+.chip.catch { color: #f0b58a; box-shadow: inset 0 0 0 1px rgba(208,96,63,0.7); }
+.chip.calm { color: var(--verd); box-shadow: inset 0 0 0 1px rgba(143,184,162,0.5); }
+.replay .subtitle { margin-top: clamp(6px, 1.2vh, 12px); min-height: 0; }
+.replay.caught .subtitle { color: #f6d2b8; }
+
+.trendline { display: grid; gap: 4px; font-family: var(--display); font-size: var(--fs-m); color: var(--paper-dim); line-height: 1.35; }
+.trendline.better span:last-child { color: var(--verd); }
+.trendline.worse span:last-child { color: var(--ember); }
+.unlock.next { color: var(--brass-hi); font-size: var(--fs-m); }

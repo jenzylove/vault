@@ -36,3 +36,8 @@ export function pace(): number {
     return v > 1 ? Math.min(20, v) : 1;
   } catch { return 1; }
 }
+
+/** Whether the player has been through (or skipped) the practice boxes once. After that, practice is opt in. */
+const HOW_KEY = 'vault.howItWorks.v1';
+export function loadHowSeen(): boolean { return safeGet(HOW_KEY) === '1'; }
+export function saveHowSeen(): void { safeSet(HOW_KEY, '1'); }

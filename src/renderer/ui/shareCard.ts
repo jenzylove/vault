@@ -10,6 +10,8 @@ export interface ShareInput {
   bankerCalls: number;
   daily: string | null; // ISO day when this was the daily vault
   won: boolean;
+  /** The big line; defaults to how often he read you. */
+  line?: string;
 }
 
 const INK = '#0c0a07';
@@ -65,8 +67,11 @@ export async function renderShareCard(d: ShareInput): Promise<Blob> {
   g.globalAlpha = 1;
 
   g.fillStyle = PAPER;
-  g.font = '500 58px "Vault Display", Georgia, serif';
-  g.fillText(shareLine(d.bankerCorrect, d.bankerCalls), W / 2, 456);
+  const line = d.line ?? shareLine(d.bankerCorrect, d.bankerCalls);
+  let size = 58;
+  g.font = `500 ${size}px "Vault Display", Georgia, serif`;
+  while (size > 30 && g.measureText(line).width > W - 160) { size -= 2; g.font = `500 ${size}px "Vault Display", Georgia, serif`; }
+  g.fillText(line, W / 2, 456);
 
   g.fillStyle = BRASS; g.globalAlpha = 0.75;
   g.font = '400 22px "Vault Sans", sans-serif';

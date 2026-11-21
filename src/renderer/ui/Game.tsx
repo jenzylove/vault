@@ -6,10 +6,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   LEVELS, MIN_QUALITY, BASELINE_MS, PEEK_MS, RULES,
-  dailySeed, extractFeatures, learnBaseline, levelConfig, newGame, sayTell, step, tellSheet, tellTrend, trendSentence, unlockedLevel, updateHistory,
-  type Baseline, type BoxKind, type GameAction, type GameState, type LevelNo, type PeekFeatures, type TellHistory, type TellSheet,
+  bankerView, dailySeed, extractFeatures, hideTrend, learnBaseline, levelConfig, liveRead, memoryLine, newGame, replayVerdict, restingAlert, runLeft,
+  sayTell, shareTellLine, step, tellLine, tellSheet, unlockedLevel, updateHistory,
+  type Baseline, type BoxKind, type GameAction, type GameState, type HideTrend, type LevelNo, type PeekFeatures, type ReplayVerdict, type TellHistory, type TellSheet,
 } from '../engine';
-import type { SignalSource, SourceStatus } from '../signals/types';
+import type { SignalFrame, SignalSource, SourceStatus } from '../signals/types';
+import { useHeartbeat } from './heartbeat';
 import { FaceWatch, STALE_MS, type FaceProblem } from '../signals/lineup';
 import { V_MANY_FACES, V_NO_FACE, V_OK, validationWords } from '../signals/status';
 import { Lineup } from './Lineup';
@@ -17,10 +19,10 @@ import type { BankerState, SceneBox, SceneBoxKind, ScenePracticeBox } from '../s
 import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
 import { speak, stopSpeaking, setMuted, isMuted } from './speech';
-import { loadHistory, saveHistory, wipeHistory, loadKey, saveKey, forgetKey, pace } from './storage';
+import { loadHistory, saveHistory, wipeHistory, loadKey, saveKey, forgetKey, pace, loadHowSeen, saveHowSeen } from './storage';
 import { renderShareCard } from './shareCard';
 import { loadFonts } from './fonts';
-import { BreathLine, Btn, Hud, LiveScene, ROMAN, Ring, Subtitle, ValuesBoard, money, readsLine, usePoll } from './parts';
+import { BreathLine, Btn, Hud, LiveScene, ReplayTrace, ROMAN, Ring, Subtitle, ValuesBoard, money, readsLine, usePoll } from './parts';
 import './styles.css';
 
 export type SourceChoice = { mode: 'live'; key: string } | { mode: 'simulated' };
@@ -33,7 +35,9 @@ export interface GameProps {
 type Screen = 'title' | 'ladder' | 'consent' | 'key' | 'lineup' | 'play';
 type ReadStage = 'none' | 'speak' | 'after';
 interface PracticeState { idx: number; stage: 'intro' | 'peek' | 'noted'; peeks: { kind: BoxKind; features: PeekFeatures }[] }
-interface EndInfo { sheet: TellSheet; prev: TellHistory; next: TellHistory; unlockedBefore: LevelNo; unlockedNow: LevelNo; }
+interface EndInfo { sheet: TellSheet; prev: TellHistory; next: TellHistory; unlockedBefore: LevelNo; unlockedNow: LevelNo; trend: HideTrend; tell: string; }
+/** The last peek's own frames, kept in memory only until its replay is shown. */
+interface PeekTape { frames: SignalFrame[]; baseline: Baseline; logIndex: number }
 
 const today = (): string => new Date().toLocaleDateString('en-CA');
 const kindName = (k: BoxKind, v?: number): string => (k === 'trap' ? 'Trap' : k === 'big' ? `Big treasure${v ? `, ${money(v)}` : ''}` : `Treasure${v ? `, ${money(v)}` : ''}`);
@@ -72,6 +76,16 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const [pauseWhy, setPauseWhy] = useState<string | null>(null);
   const [srcStatus, setSrcStatus] = useState<SourceStatus | null>(null);
   const [facePause, setFacePause] = useState<FaceProblem>(null);
+  const [wantPractice, setWantPractice] = useState<boolean>(() => !loadHowSeen());
+  const [liveAlert, setLiveAlert] = useState(0);
+  const [catchPulse, setCatchPulse] = useState<number | undefined>(undefined);
+  const [liveCaught, setLiveCaught] = useState(false);
+  const [replayedN, setReplayedN] = useState(0);
+  const [memLine, setMemLine] = useState<string | null>(null);
+  const [openSaid, setOpenSaid] = useState(false);
+  const tape = useRef<PeekTape | null>(null);
+  const gameRef = useRef(game);
+  gameRef.current = game;
   const lineupFor = useRef<'new' | 'resume'>('new');
   const faceWatch = useRef(new FaceWatch());
   const lastInput = useRef(performance.now());
@@ -132,6 +146,13 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     setCalmFailed(false);
     setBoardSeen(0);
     setErr(null);
+    setReplayedN(0);
+    setLiveAlert(0);
+    setLiveCaught(false);
+    setOpenSaid(false);
+    tape.current = null;
+    setWantPractice(!loadHowSeen());
+    setMemLine(memoryLine(loadHistory()));
     if (!consented) { setScreen('consent'); return; }
     if (!source || !bus) { setScreen('key'); return; }
     void beginPlay(source, bus);
@@ -155,6 +176,14 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     lastBaseline.current = null; // a new body needs a new calm
     await beginPlay(src, b);
   }, [createSource, beginPlay, keyOnFile, source]);
+
+  // First minute: consent goes straight to the camera when a key is already on this computer.
+  const afterConsent = useCallback(() => {
+    setConsented(true);
+    if (source && bus) { void beginPlay(source, bus); return; }
+    if (keyOnFile) { void choose({ mode: 'live', key: '' }); return; }
+    setScreen('key');
+  }, [source, bus, beginPlay, keyOnFile, choose]);
 
   const stopCamera = useCallback(() => {
     stopSpeaking();
@@ -258,6 +287,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
   // ---------- face pause and idle guard (live only) ----------
   const live = source?.kind === 'live';
+  // a replay is owed for every settled box until it has been shown
+  const replayOwed = screen === 'play' && game.log.length > replayedN && (game.phase === 'audit' || game.phase === 'reveal') && readStage !== 'speak';
   const reading = screen === 'play' && !paused && (
     (game.phase === 'baseline' && !calmFailed)
     || (game.phase === 'practice' && practice.stage === 'peek')
@@ -289,13 +320,13 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   useEffect(() => {
     if (!live || screen !== 'play' || paused || game.phase === 'reveal' || game.phase === 'over') return;
     const id = setInterval(() => {
-      if (reading || readStage === 'speak') { lastInput.current = performance.now(); return; }
+      if (reading || readStage === 'speak' || replayOwed) { lastInput.current = performance.now(); return; }
       if (performance.now() - lastInput.current > IDLE_MS) pause('You were away, so he turned the camera off.');
     }, 2000);
     const hide = () => { if (document.hidden) pause('The window was hidden, so he turned the camera off.'); };
     document.addEventListener('visibilitychange', hide);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', hide); };
-  }, [live, screen, paused, game.phase, reading, readStage, pause]);
+  }, [live, screen, paused, game.phase, reading, readStage, replayOwed, pause]);
 
   // ---------- timed windows (signal time) ----------
   // learn your calm
@@ -313,6 +344,11 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     });
     return () => { live = false; rec.cancel(); recRef.current = null; };
   }, [screen, halted, bus, game.phase, calmFailed, calmTry, dispatch]);
+
+  // practice is optional: skipped straight to the board unless the player asked for it
+  useEffect(() => {
+    if (screen === 'play' && game.phase === 'practice' && !wantPractice) dispatch({ type: 'practiceDone', peeks: practice.peeks });
+  }, [screen, game.phase, wantPractice, practice.peeks, dispatch]);
 
   // practice peeks
   const practiceKind: BoxKind | null = game.practice[practice.idx]?.kind ?? null;
@@ -340,12 +376,33 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     recRef.current = rec;
     let live = true;
     const baseline = game.baseline;
+    // the live read: he watches the breath as it happens, and a hold he would count is a catch now
+    const buf: SignalFrame[] = [];
+    const unsub = source.subscribe((f) => { buf.push(f); });
+    let caught = false;
+    setLiveCaught(false);
+    setLiveAlert(restingAlert(gameRef.current.model, bankerView(gameRef.current)));
+    const tick = setInterval(() => {
+      const g = gameRef.current;
+      const r = liveRead(buf, baseline, g.model, bankerView(g));
+      setLiveAlert(r.alert);
+      if (r.catchSpan && !caught) {
+        caught = true;
+        const at = performance.now();
+        setCatchPulse(at);
+        setLiveCaught(true);
+        window.dispatchEvent(new CustomEvent('vault:catch', { detail: { at, ms: r.catchSpan.ms } }));
+      }
+    }, 150);
     void rec.promise.then((frames) => {
       if (!live || !frames.length) return;
-      dispatch({ type: 'peekDone', features: extractFeatures(frames, baseline) });
-      setReadStage('speak');
+      const nxt = step(gameRef.current, { type: 'peekDone', features: extractFeatures(frames, baseline) });
+      tape.current = { frames, baseline, logIndex: nxt.log.length - (nxt.phase === 'bankerRead' ? 0 : 1) };
+      setGame(nxt);
+      // a walk goes straight to the replay (its line is the reason); an offer is spoken first
+      setReadStage(nxt.phase === 'bankerRead' ? 'speak' : 'none');
     });
-    return () => { live = false; rec.cancel(); recRef.current = null; };
+    return () => { live = false; rec.cancel(); recRef.current = null; unsub(); clearInterval(tick); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, halted, bus, source, game.phase, activeBox?.id, game.baseline, dispatch]);
 
@@ -362,11 +419,11 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   // reveal every box still hidden, one at a time
   const hidden = useMemo(() => game.boxes.filter((b) => b.state === 'burned' || b.state === 'sealed').map((b) => b.id), [game.boxes]);
   useEffect(() => {
-    if (screen !== 'play' || game.phase !== 'reveal' || readStage === 'speak') return;
+    if (screen !== 'play' || game.phase !== 'reveal' || readStage === 'speak' || replayOwed) return;
     if (revealN >= hidden.length) return;
-    const id = setTimeout(() => setRevealN((n) => n + 1), (revealN === 0 ? 900 : 650) / P);
+    const id = setTimeout(() => setRevealN((n) => n + 1), (revealN === 0 ? 700 : 380) / P);
     return () => clearTimeout(id);
-  }, [screen, game.phase, readStage, revealN, hidden.length, P]);
+  }, [screen, game.phase, readStage, replayOwed, revealN, hidden.length, P]);
 
   // game over: tell sheet, history, unlocks, share card (once per game)
   useEffect(() => {
@@ -376,15 +433,63 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     const prev = history;
     const next = updateHistory(prev, sheet, new Date().toISOString());
     saveHistory(next);
+    saveHowSeen();
     setHistory(next);
-    setEnd({ sheet, prev, next, unlockedBefore: unlockedLevel(prev), unlockedNow: unlockedLevel(next) });
+    const trend = hideTrend(prev.games[prev.games.length - 1] ?? null, sheet);
+    const tell = sheet.biggest ? tellLine(sheet.biggest.key, sheet.biggest.effect) : 'I could not find your tell this time.';
+    setEnd({ sheet, prev, next, unlockedBefore: unlockedLevel(prev), unlockedNow: unlockedLevel(next), trend, tell });
     bus?.clear(); // the session's signal numbers are not kept past the game
+    tape.current = null;
     const sc = game.score;
     if (sc) {
-      void renderShareCard({ pile: sc.pile, bankNo: game.level, rank: sc.rank, bankerCorrect: sc.bankerCorrect, bankerCalls: sc.bankerCalls, daily: daily ? today() : null, won: sc.won })
-        .then((blob) => setCardUrl(URL.createObjectURL(blob))).catch(() => setCardUrl(null));
+      void renderShareCard({
+        pile: sc.pile, bankNo: game.level, rank: sc.rank, bankerCorrect: sc.bankerCorrect, bankerCalls: sc.bankerCalls,
+        daily: daily ? today() : null, won: sc.won, line: shareTellLine(sheet.biggest?.key ?? null),
+      }).then((blob) => setCardUrl(URL.createObjectURL(blob))).catch(() => setCardUrl(null));
     }
   }, [game, history, daily, bus]);
+
+  // he names your tell out loud at the end of the run
+  useEffect(() => {
+    if (!end || screen !== 'play' || game.phase !== 'over') return;
+    const s = speak(end.tell, P > 1 ? 2 : 1);
+    return () => s.cancel();
+  }, [end, screen, game.phase, P]);
+
+  // he opens the next run with what he remembers, once, when the board first shows
+  useEffect(() => {
+    if (screen !== 'play' || game.phase !== 'board' || openSaid || !memLine || paused) return;
+    setOpenSaid(true);
+    speak(memLine, P > 1 ? 2 : 1);
+  }, [screen, game.phase, openSaid, memLine, paused, P]);
+
+  // the catch replay after every settled box
+  const replay: { verdict: ReplayVerdict; tape: PeekTape | null } | null = useMemo(() => {
+    if (!replayOwed || !game.lastOutcome || !game.read) return null;
+    const o = game.lastOutcome;
+    const t = tape.current && tape.current.logIndex === game.log.length - 1 ? tape.current : null;
+    return { verdict: replayVerdict(o.features, game.read, o.kind, game.level), tape: t };
+  }, [replayOwed, game.lastOutcome, game.read, game.log.length, game.level]);
+  const finishReplay = useCallback(() => {
+    if (!replayOwed) return;
+    stopSpeaking();
+    setReplayedN(game.log.length);
+    if (game.phase === 'audit') { setReadStage('none'); dispatch({ type: 'next' }); }
+  }, [replayOwed, game.log.length, game.phase, dispatch]);
+  useEffect(() => {
+    if (!replay || paused) return;
+    const t0 = performance.now();
+    const s = speak(replay.verdict.line, P > 1 ? 2 : 1);
+    let live = true;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    void s.done.then(() => {
+      if (!live) return;
+      const wait = Math.max(700, 3000 / P - (performance.now() - t0));
+      timer = setTimeout(() => { if (live) finishReplay(); }, wait);
+    });
+    return () => { live = false; s.cancel(); if (timer) clearTimeout(timer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [replay, paused, P]);
 
   // ---------- actions ----------
   const pick = useCallback((id: number) => {
@@ -399,13 +504,10 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     setReadStage('none');
   }, [game.phase, readStage, dispatch]);
 
-  const next = useCallback(() => {
-    if (game.phase === 'audit' && readStage !== 'speak') { setReadStage('none'); dispatch({ type: 'next' }); }
-  }, [game.phase, readStage, dispatch]);
 
   const leave = useCallback(() => {
-    if ((game.phase === 'audit' && readStage !== 'speak') || game.phase === 'board') { setReadStage('none'); dispatch({ type: 'leave' }); }
-  }, [game.phase, readStage, dispatch]);
+    if ((game.phase === 'audit' && readStage !== 'speak') || game.phase === 'board') { stopSpeaking(); setReplayedN(game.log.length); setReadStage('none'); dispatch({ type: 'leave' }); }
+  }, [game.phase, game.log.length, readStage, dispatch]);
 
   const finishReveal = useCallback(() => {
     if (game.phase === 'reveal' && revealN >= hidden.length) { stopCamera(); dispatch({ type: 'reveal' }); }
@@ -418,6 +520,12 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     if (practice.idx + 1 < game.practice.length) setPractice((p) => ({ ...p, idx: p.idx + 1, stage: 'intro' }));
     else dispatch({ type: 'practiceDone', peeks: practice.peeks });
   }, [game.phase, game.practice.length, practice, dispatch]);
+
+  const skipPractice = useCallback(() => {
+    if (game.phase !== 'practice') return;
+    saveHowSeen();
+    setWantPractice(false);
+  }, [game.phase]);
 
   const saveCard = useCallback(() => {
     if (!cardUrl) return;
@@ -444,7 +552,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     }
     switch (screen) {
       case 'title':
-        if (k === 'enter' || k === ' ') setScreen('ladder');
+        if (k === 'enter' || k === ' ') { if (history.games.length === 0) startGame(1, false); else setScreen('ladder'); }
         return;
       case 'ladder': {
         if (k === 'arrowdown') setSel((s) => Math.min(5, s + 1));
@@ -456,7 +564,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         return;
       }
       case 'consent':
-        if (k === 'enter') { setConsented(true); setScreen(source ? 'play' : 'key'); if (source && bus) void beginPlay(source, bus); }
+        if (k === 'enter') afterConsent();
         else if (k === 'escape' || k === 'backspace') setScreen('ladder');
         return;
       case 'key':
@@ -470,6 +578,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     if (k === 'escape') { e.preventDefault(); if (game.phase !== 'over') pause(); return; }
     if (facePause) return;
     if (calmFailed && game.phase === 'baseline' && k === 'enter') { setCalmFailed(false); setCalmTry((n) => n + 1); return; }
+    if (game.phase === 'baseline' && k === 'h') { setWantPractice((w) => !w); return; }
+    if (game.phase === 'practice' && k === 'k') { skipPractice(); return; }
     if (game.phase === 'practice' && (k === 'enter' || k === ' ')) { e.preventDefault(); practiceNext(); return; }
     if (readStage === 'speak' && (k === ' ' || k === 'enter')) { e.preventDefault(); speechRef.current?.cancel(); return; }
     if (game.phase === 'board') {
@@ -478,7 +588,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
       return;
     }
     if (game.phase === 'bankerRead') { if (k === 's') sellOrOpen('sell'); if (k === 'o') sellOrOpen('open'); return; }
-    if (game.phase === 'audit') { if (k === 'enter' || k === ' ') { e.preventDefault(); next(); } if (k === 'l') leave(); return; }
+    if (replayOwed) { if (k === 'enter' || k === ' ') { e.preventDefault(); finishReplay(); } else if (k === 'l' && game.phase === 'audit' && runLeft(game) > 0) leave(); return; }
     if (game.phase === 'reveal' && (k === 'enter' || k === ' ')) { finishReveal(); return; }
     if (game.phase === 'over') {
       if (k === 'enter') startGame(game.level, false);
@@ -521,14 +631,26 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const sceneActive: number | null = inPractice
     ? null
     : game.phase === 'peek' || game.phase === 'bankerRead' ? game.activeBoxId
-      : readStage !== 'none' && game.lastOutcome ? game.lastOutcome.boxId : null;
+      : (readStage !== 'none' || replay) && game.lastOutcome ? game.lastOutcome.boxId : null;
   const bankerState: BankerState = screen !== 'play' ? 'idle'
-    : readStage === 'speak' ? 'speaking'
+    : replay ? (replay.verdict.caught ? 'walking' : 'speaking')
+      : readStage === 'speak' ? 'speaking'
       : game.phase === 'peek' || game.phase === 'baseline' || (game.phase === 'practice' && practice.stage === 'peek') ? 'reading'
         : game.phase === 'bankerRead' ? 'offering'
           : game.phase === 'audit' && game.lastOutcome?.decision === 'walk' && readStage === 'after' ? 'walking'
             : 'idle';
   const onBoxClick = useCallback((id: number) => pick(id), [pick]);
+
+  // how suspicious he is right now (0..1), for the scene and the heartbeat
+  const alert = screen !== 'play' || paused || game.phase === 'over' ? 0
+    : game.phase === 'peek' ? liveAlert
+      : replay ? (replay.verdict.caught ? 0.95 : 0.12)
+        : game.phase === 'bankerRead' && game.read ? Math.max(game.read.pTrap, game.read.decision === 'unread' ? 0.5 : 0)
+          : game.phase === 'board' ? restingAlert(game.model, bankerView(game))
+            : 0.08;
+  const bpmRaw = usePoll(() => bus?.pulse() ?? null, [bus], 1000);
+  const bpm = bpmRaw === null ? null : Math.round(bpmRaw);
+  useHeartbeat({ bpm, level: alert, muted, enabled: screen === 'play' && !paused && game.phase !== 'over' && game.phase !== 'reveal' });
 
   const menu = screen !== 'play' || game.phase === 'over';
 
@@ -542,6 +664,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         practice={inPractice ? scenePractice : undefined}
         bankerState={bankerState}
         heat={screen === 'play' ? game.heat : 0}
+        alert={alert}
+        catchPulse={catchPulse}
         onBoxClick={screen === 'play' && game.phase === 'board' && !paused ? onBoxClick : undefined}
         quality="high"
         lite={live}
@@ -549,14 +673,14 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
       <div className="vui" data-screen={screen} data-phase={game.phase} data-stage={readStage} data-practice={`${practice.idx}:${practice.stage}`} data-paused={paused ? '1' : '0'}>
         {menu ? <div className="scrim-full" style={game.phase === 'over' && screen === 'play' ? { background: 'radial-gradient(ellipse at 30% 40%, rgba(12,9,6,0.78), rgba(5,4,3,0.95) 70%)' } : undefined} /> : <><div className="scrim-top" /><div className="scrim-bottom" /></>}
 
-        {screen === 'title' && <TitleScreen onGo={() => setScreen('ladder')} />}
+        {screen === 'title' && <TitleScreen onGo={() => (history.games.length === 0 ? startGame(1, false) : setScreen('ladder'))} />}
         {screen === 'ladder' && (
           <LadderScreen sel={sel} setSel={setSel} unlocked={unlocked} history={history}
             onPlay={(lv) => startGame(lv, false)} onDaily={() => startGame(unlocked, true)}
             onWipe={() => { wipeHistory(); setHistory(loadHistory()); setSel(0); }} />
         )}
         {screen === 'consent' && (
-          <ConsentScreen onAgree={() => { setConsented(true); if (source && bus) void beginPlay(source, bus); else setScreen('key'); }} onBack={() => setScreen('ladder')} />
+          <ConsentScreen onAgree={afterConsent} onBack={() => setScreen('ladder')} />
         )}
         {screen === 'key' && (
           <KeyScreen draft={keyDraft} setDraft={setKeyDraft} err={err} keyOnFile={keyOnFile}
@@ -571,8 +695,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
         {screen === 'play' && game.phase !== 'over' && (
           <>
-            {game.phase !== 'baseline' && game.phase !== 'practice' && <Hud game={game} daily={daily} />}
-            {(game.phase === 'board' || game.phase === 'peek' || game.phase === 'bankerRead' || game.phase === 'audit') && <ValuesBoard game={game} />}
+            <Hud game={game} daily={daily} />
+            {(game.phase === 'board' || game.phase === 'bankerRead') && <ValuesBoard game={game} />}
             <div className="stage">
               {game.phase === 'baseline' && (
                 calmFailed ? (
@@ -583,19 +707,21 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                     <div className="actions"><Btn primary k="Enter" onClick={() => { setCalmFailed(false); setCalmTry((n) => n + 1); }}>Try again</Btn></div>
                   </>
                 ) : (
-                  <CalmStage bus={bus} recRef={recRef} />
+                  <CalmStage bus={bus} recRef={recRef} wantPractice={wantPractice} howSeen={loadHowSeen()} onToggle={() => setWantPractice((w) => !w)} />
                 )
               )}
               {game.phase === 'practice' && practiceKind && (
                 <PracticeStage idx={practice.idx} total={game.practice.length} kind={practiceKind} stage={practice.stage}
-                  last={practice.peeks[practice.peeks.length - 1]?.features ?? null} recRef={recRef} bus={bus} reusedCalm={reusedCalm} onNext={practiceNext} />
+                  last={practice.peeks[practice.peeks.length - 1]?.features ?? null} recRef={recRef} bus={bus} reusedCalm={reusedCalm} onNext={practiceNext} onSkip={skipPractice} />
               )}
               {game.phase === 'board' && (
                 <>
-                  <div className="prompt shadowed">Pick a box.</div>
+                  {game.log.length === 0 && memLine
+                    ? <Subtitle text={memLine} />
+                    : <div className="prompt shadowed">Pick a box. {runLeft(game)} left this run.</div>}
                   <div className="rulebar shadowed">
                     {boardSeen === 0
-                      ? 'Only you see inside. Then he reads you: he makes an offer, or he walks and the box burns.'
+                      ? 'Only you see inside. He reads your breath: he makes an offer, or he walks and the box burns.'
                       : 'Look safe at traps so he buys them. Stay quiet at treasure so he does not burn it.'}
                   </div>
                   <div className="actions">
@@ -604,16 +730,17 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                   </div>
                 </>
               )}
-              {game.phase === 'peek' && activeBox && <PeekStage kind={activeBox.kind} value={activeBox.value} recRef={recRef} />}
+              {game.phase === 'peek' && activeBox && <PeekStage kind={activeBox.kind} value={activeBox.value} recRef={recRef} bus={bus} caught={liveCaught} />}
               {readStage === 'speak' && game.read && <Subtitle text={game.read.reason} />}
               {game.phase === 'bankerRead' && readStage === 'after' && game.read && activeBox && (
                 <OfferStage offer={game.read.offer ?? 0} blind={game.read.decision === 'unread'} reason={game.read.reason}
                   saw={kindName(activeBox.kind, activeBox.value)} onSell={() => sellOrOpen('sell')} onOpen={() => sellOrOpen('open')} />
               )}
-              {game.phase === 'audit' && readStage !== 'speak' && game.lastOutcome && (
-                <AuditStage game={game} onNext={next} onLeave={leave} />
+              {replay && game.lastOutcome && (
+                <ReplayStage game={game} verdict={replay.verdict} tape={replay.tape} onNext={finishReplay}
+                  onLeave={game.phase === 'audit' && runLeft(game) > 0 ? leave : null} />
               )}
-              {game.phase === 'reveal' && readStage !== 'speak' && (
+              {game.phase === 'reveal' && readStage !== 'speak' && !replay && (
                 <RevealStage game={game} hidden={hidden} revealN={revealN} onDone={finishReveal} />
               )}
             </div>
@@ -782,52 +909,62 @@ function KeyScreen({ draft, setDraft, err, keyOnFile, onLive, onSim, onForget }:
   );
 }
 
-function CalmStage({ bus, recRef }: { bus: SignalBus | null; recRef: React.MutableRefObject<{ progress: () => number } | null> }): JSX.Element {
+function CalmStage({ bus, recRef, wantPractice, howSeen, onToggle }: {
+  bus: SignalBus | null; recRef: React.MutableRefObject<{ progress: () => number } | null>; wantPractice: boolean; howSeen: boolean; onToggle: () => void;
+}): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
   const left = Math.max(0, Math.ceil((BASELINE_MS / 1000) * (1 - p)));
   return (
     <>
-      <div className="eyebrow enter">Step one  ·  Learn your calm</div>
-      <div className="prompt shadowed" style={{ marginTop: 10 }}>Sit still. Breathe as you normally do.</div>
-      <div style={{ margin: '22px 0 6px', width: '100%' }}><BreathLine bus={bus} /></div>
+      <div className="eyebrow enter">Learn your calm</div>
+      <div className="prompt shadowed" style={{ marginTop: 10 }}>Breathe normally. He is learning you.</div>
+      <div className="bigbreath"><BreathLine bus={bus} big /></div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
         <Ring progress={p} label={String(left)} />
-        <div className="rulebar shadowed" style={{ marginTop: 0, textAlign: 'left', maxWidth: 440 }}>That line is your breathing. He spends 30 seconds learning what calm looks like on you.</div>
+        <div className="rulebar shadowed" style={{ marginTop: 0, textAlign: 'left', maxWidth: 440 }}>
+          That line is your breathing. {BASELINE_MS / 1000} seconds, then the boxes.
+        </div>
+      </div>
+      <div className="actions" style={{ marginTop: 10 }}>
+        <Btn k="H" onClick={onToggle}>
+          {wantPractice ? (howSeen ? 'Practice on: two labelled boxes first' : 'Skip the two practice boxes') : 'How it works: two practice boxes first'}
+        </Btn>
       </div>
     </>
   );
 }
 
-function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm, onNext }: {
+function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm, onNext, onSkip }: {
   idx: number; total: number; kind: BoxKind; stage: PracticeState['stage']; last: PeekFeatures | null;
-  recRef: React.MutableRefObject<{ progress: () => number } | null>; bus: SignalBus | null; reusedCalm: boolean; onNext: () => void;
+  recRef: React.MutableRefObject<{ progress: () => number } | null>; bus: SignalBus | null; reusedCalm: boolean; onNext: () => void; onSkip: () => void;
 }): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
   const what = kind === 'trap' ? 'a trap' : kind === 'big' ? 'a big treasure' : 'a small treasure';
   if (stage === 'intro') {
     return (
       <>
-        <div className="eyebrow enter">Practice {idx + 1} of {total}  ·  Labelled</div>
+        <div className="eyebrow enter">How it works  ·  Practice {idx + 1} of {total}</div>
         <div className="prompt shadowed" style={{ marginTop: 10 }}>He knows this one holds {what}.</div>
         <div className="rulebar shadowed">
           {idx === 0 && reusedCalm ? 'He remembers your calm from last game. ' : ''}
-          He watches how your body reacts to a box he already knows. That is how he learns your tells.
+          Look inside and he watches how your breath reacts to a box he already knows.
         </div>
-        <div className="actions"><Btn primary k="Space" onClick={onNext}>Look inside</Btn></div>
+        <div className="actions">
+          <Btn primary k="Space" onClick={onNext}>Look inside</Btn>
+          <Btn k="K" onClick={onSkip}>Skip to the boxes</Btn>
+        </div>
       </>
     );
   }
   if (stage === 'peek') {
     return (
       <>
+        <div className={`contents ${kind} shadowed`}>{kindName(kind)}</div>
+        <div className="bigbreath"><BreathLine bus={bus} big /></div>
         <div className="peekrow">
           <Ring progress={p} label={String(Math.max(0, Math.ceil((PEEK_MS / 1000) * (1 - p))))} />
-          <div style={{ textAlign: 'left' }}>
-            <div className={`contents ${kind} shadowed`}>{kindName(kind)}</div>
-            <div className="rulebar shadowed" style={{ marginTop: 4 }}>Only you can see inside. Keep breathing. He is watching.</div>
-          </div>
+          <div className="rulebar shadowed" style={{ marginTop: 0, textAlign: 'left' }}>Only you can see inside. Keep breathing. He is watching.</div>
         </div>
-        <div style={{ marginTop: 6, width: '100%', opacity: 0.8 }}><BreathLine bus={bus} small /></div>
       </>
     );
   }
@@ -840,25 +977,31 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   }
   return (
     <>
-      <div className="eyebrow enter">Practice {idx + 1} of {total}  ·  Noted</div>
+      <div className="eyebrow enter">How it works  ·  Noted</div>
       <div className="prompt shadowed" style={{ marginTop: 10 }}>{note}</div>
       <div className="rulebar shadowed">{idx + 1 < total ? 'He wrote that down. One more.' : 'He has seen you at a trap and at treasure. Now the real boxes.'}</div>
-      <div className="actions"><Btn primary k="Space" onClick={onNext}>{idx + 1 < total ? 'Next practice box' : 'To the board'}</Btn></div>
+      <div className="actions"><Btn primary k="Space" onClick={onNext}>{idx + 1 < total ? 'Next practice box' : 'To the boxes'}</Btn></div>
     </>
   );
 }
 
-function PeekStage({ kind, value, recRef }: { kind: BoxKind; value: number; recRef: React.MutableRefObject<{ progress: () => number } | null> }): JSX.Element {
+function PeekStage({ kind, value, recRef, bus, caught }: {
+  kind: BoxKind; value: number; recRef: React.MutableRefObject<{ progress: () => number } | null>; bus: SignalBus | null; caught: boolean;
+}): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
   return (
-    <div className="peekrow">
-      <Ring progress={p} label={String(Math.max(0, Math.ceil((PEEK_MS / 1000) * (1 - p))))} />
-      <div style={{ textAlign: 'left' }}>
-        <div className="eyebrow">Only you can see this</div>
-        <div className={`contents ${kind} shadowed`} style={{ marginTop: 6 }}>{kindName(kind, value)}</div>
-        <div className="rulebar shadowed" style={{ marginTop: 4 }}>Keep breathing. He is reading you.</div>
+    <>
+      <div className="eyebrow">Only you can see this</div>
+      <div className={`contents ${kind} shadowed`} style={{ marginTop: 4 }}>{kindName(kind, value)}</div>
+      <div className={`bigbreath${caught ? ' caught' : ''}`}>
+        <BreathLine bus={bus} big />
+        {caught && <div className="sawit">He saw that.</div>}
       </div>
-    </div>
+      <div className="peekrow">
+        <Ring progress={p} label={String(Math.max(0, Math.ceil((PEEK_MS / 1000) * (1 - p))))} />
+        <div className="rulebar shadowed" style={{ marginTop: 0, textAlign: 'left' }}>Keep breathing. He is reading that line.</div>
+      </div>
+    </>
   );
 }
 
@@ -885,63 +1028,67 @@ function OfferStage({ offer, blind, reason, saw, onSell, onOpen }: { offer: numb
   );
 }
 
-function AuditStage({ game, onNext, onLeave }: { game: GameState; onNext: () => void; onLeave: () => void }): JSX.Element {
+/** What the box did to your pile, in one line, with a stamp. */
+function outcomeCopy(game: GameState): { stamp: JSX.Element; line: string } {
   const o = game.lastOutcome!;
   const trap = o.kind === 'trap';
-  let stamp: JSX.Element;
-  let line: string;
-  let rule: string;
   if (o.result === 'burned') {
-    stamp = <span className="stamp">He walked</span>;
-    line = trap ? 'The box burned. It held a trap, so you lost nothing.' : `The box burned. It held ${money(o.value)}, and now it is gone.`;
-    rule = 'He walks when he reads a trap on you. Burned boxes are opened at the end.';
-  } else if (o.result === 'sold' && trap) {
-    stamp = <span className="stamp good">Heist</span>;
-    line = `You sold him a trap for ${money(o.offer ?? 0)}. His audit found it, and it paid you ${money(Math.round((o.offer ?? 0) * RULES.heistBonus))} more.`;
-    rule = `Every trap he finds makes him warier: heat rose ${Math.round(o.heatAdded * 100)} points. He walks sooner and pays less.`;
-  } else if (o.result === 'sold') {
-    stamp = <span className="stamp brassy">Sold</span>;
-    line = (o.offer ?? 0) >= o.value ? `Sold for ${money(o.offer ?? 0)}. It held ${money(o.value)}. Good trade.` : `Sold for ${money(o.offer ?? 0)}. It held ${money(o.value)}.`;
-    rule = 'He audits every box he buys and learns from what he finds.';
-  } else if (trap) {
-    stamp = <span className="stamp">Trap</span>;
-    line = 'You opened a trap. Nothing added.';
-    rule = 'A trap is worth nothing to you. Sell it to him if he will buy.';
-  } else {
-    stamp = <span className="stamp good">Opened</span>;
-    line = `${money(o.value)} added to your pile.`;
-    rule = 'He saw what was inside, and he learns from it.';
+    return { stamp: <span className="stamp">He walked</span>, line: trap ? 'It was a trap. You lost nothing.' : `It held ${money(o.value)}. He burned it.` };
   }
-  const anyLeft = game.boxes.some((b) => b.state === 'sealed');
+  if (o.result === 'sold' && trap) {
+    const heist = o.decision === 'offer';
+    return {
+      stamp: <span className="stamp good">{heist ? 'Heist' : 'Sold'}</span>,
+      line: heist ? `You sold him a trap for ${money(o.offer ?? 0)} and it paid ${money(Math.round((o.offer ?? 0) * RULES.heistBonus))} more.` : `You sold him a trap blind for ${money(o.offer ?? 0)}.`,
+    };
+  }
+  if (o.result === 'sold') return { stamp: <span className="stamp brassy">Sold</span>, line: `Sold for ${money(o.offer ?? 0)}. It held ${money(o.value)}.` };
+  if (trap) return { stamp: <span className="stamp">Trap</span>, line: 'You opened a trap. Nothing added.' };
+  return { stamp: <span className="stamp good">Opened</span>, line: `${money(o.value)} added to your pile.` };
+}
+
+function ReplayStage({ game, verdict, tape, onNext, onLeave }: {
+  game: GameState; verdict: ReplayVerdict; tape: { frames: SignalFrame[]; baseline: Baseline } | null; onNext: () => void; onLeave: (() => void) | null;
+}): JSX.Element {
+  const { stamp, line } = outcomeCopy(game);
+  const left = runLeft(game);
   return (
-    <>
-      {stamp}
-      <div className="prompt shadowed" style={{ fontSize: 'var(--fs-l)', marginTop: 16 }}>{line}</div>
-      <div className="rulebar shadowed">{rule}</div>
-      <div className="actions">
-        <Btn primary k="Enter" onClick={onNext}>{anyLeft ? 'Next box' : 'Open the rest'}</Btn>
-        {anyLeft && <Btn k="L" onClick={onLeave}>Leave the vault with {money(game.pile)}</Btn>}
+    <div className={`replay${verdict.caught ? ' caught' : ' missed'}`} key={game.log.length}>
+      <div className="replay-head">
+        {stamp}
+        <span className="replay-out shadowed">{line}</span>
       </div>
-    </>
+      <div className="replay-panel">
+        <div className="eyebrow">{verdict.caught ? 'Where he caught you' : 'What he saw'}</div>
+        {tape ? <ReplayTrace frames={tape.frames} baseline={tape.baseline} marks={verdict.marks} /> : <div className="small">No trace for this box.</div>}
+        <div className="replay-chips">
+          {verdict.marks.length === 0 ? <span className="chip calm">Nothing moved</span> : verdict.marks.map((m, i) => <span key={i} className={`chip ${m.kind}`}>{m.label}</span>)}
+        </div>
+      </div>
+      <Subtitle text={verdict.line} />
+      <div className="actions" style={{ marginTop: 6 }}>
+        <Btn k="Enter" onClick={onNext}>{left > 0 ? `Next box  ·  ${left} left` : game.phase === 'reveal' ? 'Go on' : 'Open the rest'}</Btn>
+        {onLeave && <Btn k="L" onClick={onLeave}>Leave with {money(game.pile)}</Btn>}
+      </div>
+    </div>
   );
 }
 
 function RevealStage({ game, hidden, revealN, onDone }: { game: GameState; hidden: number[]; revealN: number; onDone: () => void }): JSX.Element {
   const shown = hidden.slice(0, revealN);
   const done = revealN >= hidden.length;
-  const head = game.busted ? 'Full heat. He threw you out with nothing.' : game.left ? `You left the vault with ${money(game.pile)}.` : 'Every box has been played.';
+  const head = game.busted ? 'Full heat. He threw you out with nothing.' : game.left ? `You left the vault with ${money(game.pile)}.` : `Run over. You banked ${money(game.pile)}.`;
+  const burned = shown.map((id) => game.boxes.find((x) => x.id === id)!).filter((b) => b.state === 'burned');
   return (
     <>
       {game.busted ? <span className="stamp">Thrown out</span> : <span className="stamp brassy">{game.left ? 'You left' : 'Audit'}</span>}
       <div className="prompt shadowed" style={{ fontSize: 'var(--fs-l)', marginTop: 16 }}>{head}</div>
       <div className="rulebar shadowed" style={{ minHeight: '3em' }}>
-        {shown.length === 0 ? 'Now he opens every box he never saw.' : shown.map((id) => {
-          const b = game.boxes.find((x) => x.id === id)!;
-          const verdict = b.state === 'burned' ? (b.kind === 'trap' ? 'He walked from it. Right call.' : 'He walked from it. Wrong call.') : 'Unplayed.';
-          return <div key={id}>Box {id + 1}: {kindName(b.kind, b.value).toLowerCase()}. {verdict}</div>;
-        })}
+        {shown.length === 0 ? 'Now every box you did not open is revealed.' : burned.length === 0 ? 'The boxes you did not play are open.' : burned.map((b) => (
+          <div key={b.id}>Box {b.id + 1}: {kindName(b.kind, b.value).toLowerCase()}. {b.kind === 'trap' ? 'He walked from it. Right call.' : 'He walked from it. Wrong call.'}</div>
+        ))}
       </div>
-      {done && <div className="actions"><Btn primary k="Enter" onClick={onDone}>See your tells</Btn></div>}
+      {done && <div className="actions"><Btn primary k="Enter" onClick={onDone}>See your tell</Btn></div>}
     </>
   );
 }
@@ -951,49 +1098,37 @@ function EndScreen({ game, end, cardUrl, daily, onAgain, onNextBank, onLadder, o
   onAgain: () => void; onNextBank: (() => void) | null; onLadder: () => void; onSave: () => void;
 }): JSX.Element {
   const sc = game.score!;
-  const { sheet } = end;
-  const key = sheet.biggest?.key ?? sheet.tells[0]?.key ?? 'breath';
-  const trend = tellTrend(end.next, key).slice(-6);
-  const tvals = trend.map((t) => t.trap);
-  const maxV = Math.max(1e-6, ...tvals.map((v) => Math.abs(v)));
-  const pts = tvals.map((v, i) => `${(tvals.length === 1 ? 65 : 6 + (i / (tvals.length - 1)) * 118).toFixed(1)},${(30 - (Math.abs(v) / maxV) * 24).toFixed(1)}`);
+  const { sheet, trend } = end;
   const newlyUnlocked = end.unlockedNow > end.unlockedBefore ? levelConfig(end.unlockedNow) : null;
   const result = sc.busted ? 'Thrown out at full heat.' : sc.won ? `You beat the ${sc.rank}.` : `The ${sc.rank} kept the upper hand.`;
+  const cur = levelConfig(game.level);
+  const above = game.level < LEVELS.length ? levelConfig((game.level + 1) as LevelNo) : null;
+  const beatIt = `bank ${money(cur.target)} and let him catch ${cur.maxTrapsCaught === 0 ? 'no traps' : `at most ${cur.maxTrapsCaught} trap${cur.maxTrapsCaught === 1 ? '' : 's'}`}`;
+  const unlockLine = newlyUnlocked
+    ? `Unlocked: Bank ${ROMAN[newlyUnlocked.level - 1]}, the ${newlyUnlocked.rank}. ${readsLine(newlyUnlocked.level)}`
+    : !above ? (sc.won ? 'You beat every bank. Now beat your own tell.' : `The last bank. To beat him: ${beatIt}.`)
+      : end.unlockedNow > game.level ? `Bank ${ROMAN[above.level - 1]} is open: the ${above.rank}. ${readsLine(above.level)}`
+        : `Next unlock: Bank ${ROMAN[above.level - 1]}, the ${above.rank}. To open it: ${beatIt}.`;
   return (
     <div className="end">
       <div className="left">
         <div className="eyebrow enter">{daily ? 'Daily vault  ·  ' : ''}Bank {ROMAN[game.level - 1]}  ·  {result}</div>
         <div className="pile-big num enter" style={{ ['--d' as string]: 1 }}>{money(sc.pile)}</div>
         <div className="body enter" style={{ ['--d' as string]: 2 }}>
-          {sheet.readLine} Chance alone would get about {Math.round(sc.chanceAccuracy * sc.bankerCalls)}. {sc.trapsSold > 0 && `You sold him ${sc.trapsSold} trap${sc.trapsSold > 1 ? 's' : ''}.`} {sc.treasuresBurned > 0 && `He burned ${sc.treasuresBurned} of your treasures.`}
-          {!sc.won && !sc.busted && ` To beat him: bank ${money(sc.target)}, let him catch at most ${sc.maxTrapsCaught} trap${sc.maxTrapsCaught === 1 ? '' : 's'}.`}
+          {sheet.readLine} {sc.trapsSold > 0 && `You sold him ${sc.trapsSold} trap${sc.trapsSold > 1 ? 's' : ''}.`} {sc.treasuresBurned > 0 && `He burned ${sc.treasuresBurned} of your treasures.`}
         </div>
         <div className="rule enter" style={{ margin: '8px 0', ['--d' as string]: 3 }} />
-        <div className="eyebrow enter" style={{ ['--d' as string]: 3 }}>Your tell sheet</div>
-        <div className="headline enter" style={{ ['--d' as string]: 4 }}>{sheet.biggest ? `${sheet.biggest.label} gave you away.` : 'Nothing gave you away this time.'}</div>
-        <div className="enter" style={{ ['--d' as string]: 5 }}>
-          {sheet.tells.slice(0, 4).map((t, i) => (
-            <div key={t.key} className={`tell${i === 0 && sheet.biggest ? ' top' : ''}`}>
-              <div>
-                <div className="lab">{t.label}</div>
-                <div className="meter"><i style={{ width: `${Math.min(100, (t.strength / 2.5) * 100)}%`, opacity: t.strength >= 0.8 ? 1 : 0.4 }} /></div>
-              </div>
-              <div className="sen">{t.nTrap && t.nTreasure ? t.sentence : 'Not enough boxes of both kinds to compare.'}</div>
-            </div>
-          ))}
+        <div className="eyebrow enter" style={{ ['--d' as string]: 3 }}>Your tell</div>
+        <div className="headline enter" style={{ ['--d' as string]: 4 }}>&ldquo;{end.tell}&rdquo;</div>
+        {sheet.biggest && <div className="small enter" style={{ ['--d' as string]: 4 }}>{sheet.biggest.sentence}</div>}
+        <div className={`trendline ${trend.trend} enter`} style={{ ['--d' as string]: 5 }}>
+          <span className="eyebrow">{trend.trend === 'better' ? 'Hidden better' : trend.trend === 'worse' ? 'Showing more' : trend.trend === 'same' ? 'No change' : 'Last time'}</span>
+          <span>{trend.line}</span>
         </div>
-        <div className="trend enter" style={{ ['--d' as string]: 6 }}>
-          <svg viewBox="0 0 130 36">{pts.length > 1 && <polyline points={pts.join(' ')} />}{pts.map((p, i) => { const [x, y] = p.split(','); return <circle key={i} cx={x} cy={y} r={i === pts.length - 1 ? 3 : 2} />; })}</svg>
-          <span>
-            {tvals.length > 1
-              ? trendSentence(key, tvals)
-              : 'Play again to watch this tell shrink.'}
-          </span>
-        </div>
-        {newlyUnlocked && <div className="unlock enter" style={{ ['--d' as string]: 7 }}>Bank {ROMAN[newlyUnlocked.level - 1]} is open: the {newlyUnlocked.rank} reads more.</div>}
-        <div className="actions enter" style={{ justifyContent: 'flex-start', marginTop: 8, ['--d' as string]: 8 }}>
+        <div className={`unlock enter${newlyUnlocked ? '' : ' next'}`} style={{ ['--d' as string]: 6 }}>{unlockLine}</div>
+        <div className="actions enter" style={{ justifyContent: 'flex-start', marginTop: 8, ['--d' as string]: 7 }}>
           {onNextBank ? <Btn primary k="N" onClick={onNextBank}>Next bank</Btn> : null}
-          <Btn primary={!onNextBank} k="Enter" onClick={onAgain}>Play again</Btn>
+          <Btn primary={!onNextBank} k="Enter" onClick={onAgain}>Run it again</Btn>
           <Btn k="B" onClick={onLadder}>The banks</Btn>
         </div>
       </div>
