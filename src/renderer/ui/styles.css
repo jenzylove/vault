@@ -61,7 +61,7 @@
 /* buttons: chunky, rounded, with a pressed state */
 .btn { font-family: var(--sans); font-weight: 700; font-size: var(--fs-m); color: var(--velvet-deep); background: var(--cream); border: 0; border-radius: 999px;
   padding: 0.62em 1.25em 0.62em 1.35em; display: inline-flex; align-items: center; gap: 0.7em; cursor: pointer;
-  box-shadow: 0 5px 0 var(--cream-dim), 0 10px 22px rgba(20,0,4,0.45); transform: translateY(0); transition: transform 0.08s, box-shadow 0.08s, filter 0.15s; }
+  box-shadow: 0 5px 0 var(--cream-dim), 0 10px 22px rgba(20,0,4,0.45); transform: translateY(0); white-space: nowrap; transition: transform 0.08s, box-shadow 0.08s, filter 0.15s; }
 .btn:hover { filter: brightness(1.05); transform: translateY(-1px); box-shadow: 0 6px 0 var(--cream-dim), 0 12px 24px rgba(20,0,4,0.5); }
 .btn:active { transform: translateY(5px); box-shadow: 0 0 0 var(--cream-dim), 0 4px 10px rgba(20,0,4,0.4); }
 .btn:focus-visible { outline: 3px solid var(--copper); outline-offset: 3px; }
@@ -109,8 +109,7 @@
 .card .clean { color: var(--loot); }
 .card.locked { background: #e4d3b6; cursor: default; }
 .card.locked .name { color: rgba(58,7,16,0.55); }
-.card.locked .name::before { content: ''; display: inline-block; width: 0.7em; height: 0.62em; margin-right: 0.35em; border-radius: 3px; background: var(--velvet); vertical-align: 0.05em;
-  box-shadow: 0 -0.3em 0 -0.08em transparent; }
+.card .lock { width: 0.8em; height: 0.9em; margin-right: 0.3em; vertical-align: -0.05em; fill: var(--velvet); }
 .card.locked:hover { transform: none; outline: none; }
 .card .price { margin-top: auto; }
 .card .price .bar { height: 12px; border-radius: 99px; background: rgba(58,7,16,0.15); overflow: hidden; margin-top: 6px; }

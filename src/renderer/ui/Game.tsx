@@ -931,7 +931,7 @@ function JobsScreen({ sel, setSel, stash, sim, onPlay, onWipe, canWipe }: {
             <button key={j.id} className={`card${sel === i ? ' sel' : ''}${locked ? ' locked' : ''}${j.daily ? ' daily' : ''}`} style={{ ['--d' as string]: 3 + i }}
               onMouseEnter={() => setSel(i)} onFocus={() => setSel(i)} onClick={() => onPlay(j)} aria-disabled={locked}>
               <span className="no">{i + 1}</span>
-              <span className="name">{j.name}</span>
+              <span className="name">{locked && <svg className="lock" viewBox="0 0 16 18" aria-label="Locked"><path d="M4 8V5.5a4 4 0 0 1 8 0V8h1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zm2 0h4V5.5a2 2 0 0 0-4 0z" /></svg>}{j.name}</span>
               <span className="blurb">{j.blurb}</span>
               <span className="meta">{j.rules.safes} safes · take {money(j.rules.target)} · {j.peekMs / 1000} second look</span>
               <Reads list={readsList(j.level)} />
@@ -1175,7 +1175,7 @@ function ReplayStage({ game, verdict, tape, peekMs, onNext, onLeave }: {
       <Subtitle text={verdict.line} />
       <div className="actions" style={{ marginTop: 2 }}>
         <Btn primary k="Enter" onClick={onNext}>{left > 0 ? `Next safe · ${left} to go` : game.phase === 'reveal' ? 'Go on' : 'Open the rest'}</Btn>
-        {onLeave && <Btn ghost k="L" onClick={onLeave}>Walk out with {money(game.pile)}</Btn>}
+        {onLeave && game.pile > 0 && <Btn ghost k="L" onClick={onLeave}>Walk out with {money(game.pile)}</Btn>}
       </div>
     </div>
   );
@@ -1192,7 +1192,7 @@ function RevealStage({ game, hidden, revealN, onDone }: { game: GameState; hidde
       <div className="prompt big">{head}</div>
       <div className="line" style={{ minHeight: '2.8em' }}>
         {shown.length === 0 ? 'Now every safe you did not keep swings open.' : burned.length === 0 ? 'The safes you did not crack are open.' : burned.map((b) => (
-          <div key={b.id}>Safe {b.id + 1}: {kindName(b.kind, b.value).toLowerCase()}. {b.kind === 'trap' ? 'He passed on a dud. Good call for him.' : 'He passed on real loot. Bad call for him.'}</div>
+          <div key={b.id}>Safe {b.id + 1} held {b.kind === 'trap' ? 'a dud' : b.kind === 'big' ? `gold bars worth ${money(b.value)}` : `cash worth ${money(b.value)}`}. {b.kind === 'trap' ? 'He passed on a dud. Good call for him.' : 'He passed on real loot. Bad call for him.'}</div>
         ))}
       </div>
       {done && <div className="actions"><Btn primary k="Enter" onClick={onDone}>See your tell</Btn></div>}
