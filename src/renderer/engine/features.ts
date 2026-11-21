@@ -17,21 +17,61 @@ export const MIN_QUALITY = 0.5;
 function emptyFeatures(quality: number, windowMs: number): PeekFeatures {
   return {
     breathCatchMs: 0, shallowing: 0, rateChange: 0, blinkBurst: 0, exprDelta: {}, talking: false,
-    pulseDelta: 0, quality, windowMs, blinkCount: 0, expectedBlinks: 0,
+    pulseDelta: 0, quality, windowMs, blinkCount: 0, expectedBlinks: 0, catchStartMs: null, catchEndMs: null, blinkAtMs: [],
   };
 }
 
+/** A held breath the banker counts: when it ran (signal time) and how long it reads as held. */
+export interface CatchSpan { start: number; end: number; ms: number; }
+
 /**
- * Features of one peek window (about 8 s) against the player's baseline.
+ * The longest flat stretch that runs past this person's own longest normal flat for its position.
+ * A hold at the top (right after an inhale) is compared with their normal top turn; a pause at the
+ * bottom of an exhale with their normal pause, so a normal pause never counts. The reported hold
+ * subtracts half their typical turn (the ramps either side of a pause), so it reads close to the
+ * time actually held.
+ */
+export function findCatch(t: readonly number[], sm: readonly number[], baseline: Baseline): CatchSpan | null {
+  const A = baseline.breathAmp;
+  const P = baseline.breathPeriodMs;
+  const flats = flatSpans(t, sm, baseline.flatTol, baseline.driftPerMs);
+  let best: CatchSpan | null = null;
+  for (const f of flats) {
+    const d = f.end - f.start;
+    const lv = levelOf(f, t, sm, 0.75 * P, A);
+    const high = lv.ambiguous || lv.level >= 0.5;
+    const allowance = lv.ambiguous ? Math.max(baseline.pauseLowMs, baseline.pauseHighMs) : high ? baseline.pauseHighMs : baseline.pauseLowMs;
+    const turn = lv.ambiguous ? Math.min(baseline.turnLowMs, baseline.turnHighMs) : high ? baseline.turnHighMs : baseline.turnLowMs;
+    if (d > catchAllowance(allowance)) {
+      const ms = d - 0.5 * turn;
+      if (!best || ms > best.ms) best = { start: f.start, end: f.end, ms };
+    }
+  }
+  return best;
+}
+
+/** A flat stretch longer than this (for a normal flat of `allowance` ms) is a catch. */
+export function catchAllowance(allowance: number): number {
+  return Math.max(allowance * CATCH_MARGIN_X, allowance + CATCH_MARGIN_MS);
+}
+
+/** Minimum good signal in a peek before the banker will read it at all. */
+export const MIN_GOOD_MS = 3000;
+
+/**
+ * Features of one peek window (about 5 s) against the player's baseline.
  * Breath, blinks, face and talking are real time; pulse is a 12 s average so it only feeds slow heat.
+ * Times of what was measured (catchStartMs, catchEndMs, blinkAtMs) are ms from the first frame of
+ * the window, so a replay can mark them on the trace.
  */
 export function extractFeatures(frames: readonly SignalFrame[], baseline: Baseline): PeekFeatures {
-  const windowMs = frames.length > 1 ? (frames[frames.length - 1] as SignalFrame).t - (frames[0] as SignalFrame).t : 0;
+  const t0 = frames.length ? (frames[0] as SignalFrame).t : 0;
+  const windowMs = frames.length > 1 ? (frames[frames.length - 1] as SignalFrame).t - t0 : 0;
   const good = frames.filter(isGood);
   const chest = good.filter((f) => typeof f.chest === 'number');
   const quality = frames.length ? chest.length / frames.length : 0;
   const goodMs = coveredMs(good);
-  if (quality < MIN_QUALITY || goodMs < 4000 || chest.length < 20) return emptyFeatures(quality, windowMs);
+  if (quality < MIN_QUALITY || goodMs < MIN_GOOD_MS || chest.length < 20) return emptyFeatures(quality, windowMs);
 
   const t = chest.map((f) => f.t);
   const v = chest.map((f) => f.chest as number);
@@ -39,25 +79,11 @@ export function extractFeatures(frames: readonly SignalFrame[], baseline: Baseli
   const A = baseline.breathAmp;
   const P = baseline.breathPeriodMs;
 
-  // 1. Catch: the longest flat stretch that runs past this person's own longest normal flat for
-  // its position. A hold at the top (right after an inhale) is compared with their normal top
-  // turn; a pause at the bottom of an exhale with their normal pause, so a normal pause never
-  // counts. The reported hold subtracts half their typical turn (the ramps either side of a pause),
-  // so it reads close to the time actually held.
-  const flats = flatSpans(t, sm, baseline.flatTol, baseline.driftPerMs);
-  let breathCatchMs = 0;
-  for (const f of flats) {
-    const d = f.end - f.start;
-    const lv = levelOf(f, t, sm, 0.75 * P, A);
-    const high = lv.ambiguous || lv.level >= 0.5;
-    const allowance = lv.ambiguous ? Math.max(baseline.pauseLowMs, baseline.pauseHighMs) : high ? baseline.pauseHighMs : baseline.pauseLowMs;
-    const turn = lv.ambiguous ? Math.min(baseline.turnLowMs, baseline.turnHighMs) : high ? baseline.turnHighMs : baseline.turnLowMs;
-    if (d > allowance * CATCH_MARGIN_X && d > allowance + CATCH_MARGIN_MS) {
-      breathCatchMs = Math.max(breathCatchMs, d - 0.5 * turn);
-    }
-  }
+  // 1. Catch.
+  const c = findCatch(t, sm, baseline);
+  const breathCatchMs = c ? c.ms : 0;
 
-  // 2. Shallowing: swing in this window vs the typical 8 s swing at rest.
+  // 2. Shallowing: swing in this window vs the typical swing of a peek length window at rest.
   const swing = windowSwing(t, sm);
   const shallowing = clamp(1 - swing / Math.max(1e-9, baseline.windowAmp), -1.5, 1);
 
@@ -76,6 +102,13 @@ export function extractFeatures(frames: readonly SignalFrame[], baseline: Baseli
   // 4. Blinks: burst or suppression vs baseline rate.
   const minutes = goodMs / 60000;
   const blinkCount = blinkOnsets(good);
+  const blinkAtMs: number[] = [];
+  let prevBlink = false;
+  for (const f of good) {
+    const b = f.blink === true;
+    if (b && !prevBlink) blinkAtMs.push(f.t - t0);
+    prevBlink = b;
+  }
   const expectedBlinks = baseline.blinkRatePerMin * minutes;
   const blinkBurst = clamp((blinkCount / minutes - baseline.blinkRatePerMin) / Math.max(baseline.blinkRatePerMin, 6), -1, 4);
 
@@ -104,5 +137,6 @@ export function extractFeatures(frames: readonly SignalFrame[], baseline: Baseli
   return {
     breathCatchMs, shallowing, rateChange, blinkBurst, exprDelta, talking, pulseDelta, quality,
     windowMs, blinkCount, expectedBlinks,
+    catchStartMs: c ? c.start - t0 : null, catchEndMs: c ? c.end - t0 : null, blinkAtMs,
   };
 }

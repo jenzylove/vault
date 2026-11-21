@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import {
   runSimGame, readBanker, bankerView, newGame, step, signalWeights, learnBaseline, extractFeatures, SimBody,
   makeSimPlayer, RULES, BANKER_RULES, PRIOR, LEVELS, DEFAULT_LEVEL, type SimGameResult, type Strategy, type Policy,
-  type PeekFeatures, type GameState, type LevelNo,
+  type PeekFeatures, type GameState, type LevelNo, BASELINE_MS, PEEK_MS,
 } from '../../src/renderer/engine';
 import { wantsToSell } from '../../src/renderer/engine/autoplay';
 import { emptyModel, learnExample } from '../../src/renderer/engine/banker';
@@ -86,21 +86,24 @@ beforeAll(() => {
     '',
     '± is one standard error. "Chance" is the accuracy a banker with the same walk rate but no read of the player would get on the same boxes.',
     '',
+    `Fake smile: once he has seen your real smile at a big treasure, copying it at a trap can lift his price a little (${paired('fakeSmile').mean.toFixed(0)} ± ${paired('fakeSmile').se.toFixed(0)} a run at this bank, under 1%). It sells no more traps and wins no more often. Banks 1 and 2 cannot read a face, so there it changes nothing.`,
+    '',
     '## The banker ladder',
     '',
     ...levelSections,
     '## Rules in force',
     '',
     `- Heat: +${RULES.heatPerTrapBought} per trap the banker buys and finds at its audit, +${RULES.heatUnread} per unread peek, up to +${RULES.pulseHeatMax} from a rising pulse. At ${RULES.bustAt} the banker throws you out with ${RULES.bustKeep * 100}% of your pile.`,
-    `- Heist: a trap you sold pays its price again (×${RULES.heistBonus}) when the banker's audit finds it.`,
+    `- Heist: a trap you sold pays its price again (×${RULES.heistBonus}) when the banker's audit finds it (not on a blind offer).`,
     `- Heat from pulse counts only for banks that read pulse (4 and 5).`,
     `- The banker never buys a box where it saw you catch your breath. A box it lost you at that turns out to be a trap counts as caught.`,
     `- Banker walks when P(trap) ≥ its level's walk point − ${BANKER_RULES.walkHeatSlope} × heat (floor ${BANKER_RULES.walkFloor}). Offer = its estimate of a treasure's value × (1 − margin), margin = level base + ${BANKER_RULES.marginHeat} × heat + ${BANKER_RULES.marginDoubt} × (1 − banker's own hit rate).`,
     `- Unread peeks get a blind offer at ${BANKER_RULES.unreadDiscount * 100}%, priced from what this player's unread boxes turned out to be.`,
-    `- Banker model: per player Gaussian naive Bayes on breath catch, shallowing, rate change, blinks, smile, alarm; priors with ${PRIOR.breathPseudo} pseudo counts per class for breath and ${PRIOR.pseudo} for the rest, updated by 2 labelled practice peeks and every audit (each labelled box weighted by the level's learning weight). Signals a level can't read contribute nothing.`,
+    `- Banker model: per player Gaussian naive Bayes on breath catch, shallowing, rate change, blinks, smile, alarm; priors with ${PRIOR.breathPseudo} pseudo counts per class for breath and ${PRIOR.pseudo} for the rest, updated by every audit (and by 2 labelled practice peeks when the player takes them; the probe skips them, as most runs do) (each labelled box weighted by the level's learning weight). Signals a level can't read contribute nothing.`,
     '',
     '## Simulated player policy',
     '',
+    `- A run is ${RULES.boxesPerRun} peeks out of 10 boxes, picked at random; 10 s calm, 5 s peeks, no practice.`,
     '- Sells a treasure only when the offer beats its value; opens it otherwise.',
     '- Sells a trap whenever offered, unless that sale would leave too little heat budget to peek the rest of the board (rational); the greedy row sells every trap and never leaves.',
   ];
@@ -133,20 +136,21 @@ describe('incentive probe (simulated players)', () => {
   test('a fake smile alone does not fool a banker whose learned weights favour breath', () => {
     expect(col('fakeSmile', (r) => r.trapsSold)).toBeLessThanOrEqual(col('honest', (r) => r.trapsSold) + 0.05);
     expect(col('fakeSmile', (r) => r.bankerAccuracy)).toBeGreaterThanOrEqual(col('honest', (r) => r.bankerAccuracy) - 0.02);
-    // no better than being honest, and nowhere near what real breath control earns
+    // Copying the smile he learned at your real big treasure can lift his price on a trap a little.
+    // It must stay a rounding error: under 1% of the pile, and nowhere near what real breath control earns.
     const fs = paired('fakeSmile');
-    expect(fs.mean).toBeLessThan(2 * fs.se);
-    expect(paired('fakeSmile').mean).toBeLessThan(paired('steady').mean / 2);
+    expect(fs.mean).toBeLessThan(0.01 * col('honest', (r) => r.pile));
+    expect(paired('fakeSmile').mean).toBeLessThan(paired('steady').mean / 10);
     // and after the practice peeks breath carries more weight than the face for most smilers
     let breathWins = 0;
     for (let seed = 1; seed <= 60; seed++) {
       const p = { ...makeSimPlayer('fakeSmile', seed), talkProb: 0 };
       const body = new SimBody(p, seed, 15);
-      const bl = learnBaseline(body.run(30000));
+      const bl = learnBaseline(body.run(BASELINE_MS));
       let m = emptyModel();
       for (const kind of ['trap', 'small'] as const) {
         body.run(1500); body.react(kind);
-        m = learnExample(m, extractFeatures(body.run(8000), bl), kind);
+        m = learnExample(m, extractFeatures(body.run(PEEK_MS), bl), kind);
       }
       const w = signalWeights(m);
       if (w.breath > w.face) breathWins++;
@@ -187,7 +191,7 @@ describe('banker ladder (simulated players, every level)', () => {
     }
   });
 
-  test('faking, freezing, holding, hiding and ignoring heat lose to honest at every level; fake smile gains nothing', () => {
+  test('faking, freezing, holding, hiding and ignoring heat lose to honest at every level; fake smile gains under 1%', () => {
     for (const L of levels()) {
       const res = all[L]!;
       for (const k of ['fakeGasp', 'freeze', 'holdBreath', 'hide', 'steadyGreedy']) {
@@ -195,7 +199,7 @@ describe('banker ladder (simulated players, every level)', () => {
         expect(d.mean).toBeLessThan(-2 * d.se);
       }
       const fs = paired('fakeSmile', 'honest', res);
-      expect(fs.mean).toBeLessThan(2 * fs.se);
+      expect(fs.mean).toBeLessThan(0.01 * col('honest', (r) => r.pile, res)); // exactly 0 at banks that cannot read a face
     }
   });
 
@@ -217,7 +221,7 @@ describe('banker ladder (simulated players, every level)', () => {
 describe('every number on screen changes an outcome', () => {
   function boardState(): GameState {
     let s = step(newGame(5), { type: 'begin' });
-    s = step(s, { type: 'baselineDone', baseline: learnBaseline(new SimBody(makeSimPlayer('honest', 5), 5, 15).run(30000)) });
+    s = step(s, { type: 'baselineDone', baseline: learnBaseline(new SimBody(makeSimPlayer('honest', 5), 5, 15).run(BASELINE_MS)) });
     return step(s, { type: 'practiceDone', peeks: [] });
   }
   const mild: PeekFeatures = {
@@ -277,13 +281,13 @@ describe('every number on screen changes an outcome', () => {
       for (const strategy of ['honest', 'steady', 'fakeSmile', 'freeze', 'hide'] as const) {
         const p = makeSimPlayer(strategy, seed);
         const body = new SimBody(p, seed, 15);
-        const bl = learnBaseline(body.run(30000));
+        const bl = learnBaseline(body.run(BASELINE_MS));
         let s = step(step(step(newGame(seed), { type: 'begin' }), { type: 'baselineDone', baseline: bl }), { type: 'practiceDone', peeks: [] });
         for (const box of s.boxes.slice(0, 4)) {
           if (s.phase !== 'board') break;
           s = step(s, { type: 'choose', boxId: box.id });
           body.run(1000); body.react(box.kind);
-          s = step(s, { type: 'peekDone', features: extractFeatures(body.run(8000), bl) });
+          s = step(s, { type: 'peekDone', features: extractFeatures(body.run(PEEK_MS), bl) });
           if (s.read) reasons.add(s.read.reason);
           if (s.phase === 'bankerRead') s = step(s, { type: 'open' });
           if (s.phase === 'audit') s = step(s, { type: 'next' });

@@ -288,7 +288,8 @@ export class SimBody {
       addExpr('surprise', 0.12 * p.faceLeak, at, 3000);
       addExpr('fear', 0.06 * p.faceLeak, at, 3000);
       addExpr('happy', -0.4 * p.faceLeak * p.exprBase.happy, at, 4000);
-      if (p.fakeSmileAtTrap) addExpr('happy', 0.35, at + r.range(300, 900), 5000);
+      // fixed timing (no draw from the body's random stream) so a smiler's body stays paired with the honest one
+      if (p.fakeSmileAtTrap) addExpr('happy', 0.35, at + 600, 5000);
       this.pulseExtra += p.pulseLeak * 3;
     } else {
       const big = kind === 'big';

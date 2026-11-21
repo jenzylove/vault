@@ -2,13 +2,13 @@ import { describe, expect, test } from 'vitest';
 import type { SignalFrame } from '../../src/renderer/signals/types';
 import {
   SimBody, makeSimPlayer, learnBaseline, extractFeatures, readBanker, newGame, bankerView, step,
-  type SimPlayerParams,
+  type SimPlayerParams, BASELINE_MS, PEEK_MS,
 } from '../../src/renderer/engine';
 import { emptyModel } from '../../src/renderer/engine/banker';
 
 function bodyFor(p: SimPlayerParams, seed: number, fps = 30): { body: SimBody; baseline: ReturnType<typeof learnBaseline> } {
   const body = new SimBody(p, seed, fps);
-  const baseline = learnBaseline(body.run(30000));
+  const baseline = learnBaseline(body.run(BASELINE_MS));
   return { body, baseline };
 }
 
@@ -33,7 +33,7 @@ describe('baseline (simulated bodies)', () => {
   test('ignores low confidence and unstable frames', () => {
     const p = quietPlayer(3);
     const body = new SimBody(p, 3, 30);
-    const frames = body.run(30000);
+    const frames = body.run(BASELINE_MS);
     const junk: SignalFrame[] = frames.map((f, i) => (i % 3 === 0 ? { ...f, chest: 1000, conf: 0.1, stable: false } : f));
     const clean = learnBaseline(frames);
     const dirty = learnBaseline(junk);
@@ -49,7 +49,7 @@ describe('extractFeatures (simulated traces)', () => {
       for (let k = 0; k < 3; k++) {
         body.run(1500);
         body.react('small'); // no breath reaction for a small treasure
-        const f = extractFeatures(body.run(8000), baseline);
+        const f = extractFeatures(body.run(PEEK_MS), baseline);
         expect(f.breathCatchMs).toBe(0);
         peeks++;
       }
@@ -63,7 +63,7 @@ describe('extractFeatures (simulated traces)', () => {
       const { body, baseline } = bodyFor(p, seed);
       body.run(1500);
       body.react('small');
-      expect(extractFeatures(body.run(8000), baseline).breathCatchMs).toBe(0);
+      expect(extractFeatures(body.run(PEEK_MS), baseline).breathCatchMs).toBe(0);
     }
   });
 
@@ -73,7 +73,7 @@ describe('extractFeatures (simulated traces)', () => {
       const { body, baseline } = bodyFor(p, seed);
       body.run(1500);
       body.react('trap');
-      const f = extractFeatures(body.run(8000), baseline);
+      const f = extractFeatures(body.run(PEEK_MS), baseline);
       expect(f.breathCatchMs).toBeGreaterThan(1100);
       expect(f.breathCatchMs).toBeLessThan(2300);
     }
@@ -84,8 +84,8 @@ describe('extractFeatures (simulated traces)', () => {
     const { body, baseline } = bodyFor({ ...p, talkProb: 0, dropoutPerMin: 0 }, 5);
     body.run(1500);
     body.react('small');
-    const f = extractFeatures(body.run(8000), baseline);
-    expect(f.breathCatchMs).toBeGreaterThan(5000);
+    const f = extractFeatures(body.run(PEEK_MS), baseline);
+    expect(f.breathCatchMs).toBeGreaterThan(0.6 * PEEK_MS);
   });
 
   test('freezing stops the blinks and the breath', () => {
@@ -93,7 +93,7 @@ describe('extractFeatures (simulated traces)', () => {
     const { body, baseline } = bodyFor({ ...p, talkProb: 0, dropoutPerMin: 0 }, 6);
     body.run(1500);
     body.react('small');
-    const f = extractFeatures(body.run(8000), baseline);
+    const f = extractFeatures(body.run(PEEK_MS), baseline);
     expect(f.breathCatchMs).toBeGreaterThan(1500);
     expect(f.blinkBurst).toBeLessThan(0);
   });
@@ -103,7 +103,7 @@ describe('extractFeatures (simulated traces)', () => {
     const { body, baseline } = bodyFor(p, 9, 12);
     body.run(1500);
     body.react('trap');
-    const f = extractFeatures(body.run(8000), baseline);
+    const f = extractFeatures(body.run(PEEK_MS), baseline);
     expect(f.breathCatchMs).toBeGreaterThan(1100);
   });
 
@@ -111,7 +111,7 @@ describe('extractFeatures (simulated traces)', () => {
     const { body, baseline } = bodyFor(quietPlayer(4), 4);
     body.run(1500);
     body.react('trap');
-    const frames = body.run(8000).map((f, i) => (i % 5 < 3 ? { ...f, conf: 0.2, stable: false } : f));
+    const frames = body.run(PEEK_MS).map((f, i) => (i % 5 < 3 ? { ...f, conf: 0.2, stable: false } : f));
     const f = extractFeatures(frames, baseline);
     expect(f.quality).toBeLessThan(0.5);
     let s = step(step(newGame(1), { type: 'begin' }), { type: 'baselineDone', baseline });
@@ -131,7 +131,7 @@ describe('extractFeatures (simulated traces)', () => {
     for (let k = 0; k < 6; k++) {
       body.run(1500);
       body.react('trap');
-      const f = extractFeatures(body.run(8000), baseline);
+      const f = extractFeatures(body.run(PEEK_MS), baseline);
       burst += f.blinkBurst;
       if (f.talking) talking++;
     }

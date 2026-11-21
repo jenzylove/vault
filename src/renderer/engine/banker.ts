@@ -2,6 +2,7 @@ import type { BankerRead, BankerSignal, Box, BoxKind, PeekFeatures } from './typ
 import { MIN_QUALITY } from './features';
 import { clamp } from './dsp';
 import { DEFAULT_LEVEL, levelConfig, type LevelNo } from './levels';
+import { PEEK_MS } from './timing';
 
 /**
  * The banker: a per player Gaussian naive Bayes (trap vs treasure) over standardized features,
@@ -18,8 +19,9 @@ const GROUP: Record<FeatureName, BankerSignal> = {
 
 /** Priors: breath separates traps strongly, the face only weakly (faces can be trained). */
 export const PRIOR = {
-  trap: [1.2, 0.18, 0.3, 0.6, 0.0, 0.05],
-  treasure: [0.05, 0.02, 0.12, 0.3, 0.03, 0.0],
+  // The smile prior is the same for both: a smile says nothing until this player's own boxes show it does.
+  trap: [1.2, 0.18, 0.3, 0.6, 0.02, 0.05],
+  treasure: [0.05, 0.02, 0.12, 0.3, 0.02, 0.0],
   sd: [0.55, 0.2, 0.25, 0.5, 0.1, 0.1],
   pseudo: 2,           // prior counts per class (blinks, face, unread)
   breathPseudo: 6,     // breath priors are held harder: a catch stays suspicious even if you catch everywhere
@@ -110,9 +112,14 @@ export function evidence(model: BankerModel, f: PeekFeatures): number[] {
   const s = modelStats(model);
   const x = featureVector(f);
   const mask = featureMask(model.level);
-  return x.map((xi, i) => {
+  return x.map((x0, i) => {
     if (!mask[i]) return 0;
     const sd = s.sd[i] as number;
+    // An exaggerated face counts no more than a typical one: the smile is clipped to one spread
+    // beyond the class means, so a put on grin cannot outweigh the breath.
+    const lo = Math.min(s.muTrap[i] as number, s.muTreasure[i] as number) - sd;
+    const hi = Math.max(s.muTrap[i] as number, s.muTreasure[i] as number) + sd;
+    const xi = i === 4 ? clamp(x0, lo, hi) : x0;
     const a = (xi - (s.muTrap[i] as number)) / sd;
     const b = (xi - (s.muTreasure[i] as number)) / sd;
     return clamp(-0.5 * a * a + 0.5 * b * b, -PRIOR.capPerFeature, PRIOR.capPerFeature);
@@ -177,7 +184,7 @@ function walkReason(f: PeekFeatures, driver: FeatureName | null, view: BankerVie
       ? 'Trap. You did not take a single breath.'
       : `Trap. Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pct(f.rateChange)}%.`;
     case 'blinks': {
-      const secsW = Math.round((f.windowMs ?? 8000) / 1000);
+      const secsW = Math.round((f.windowMs ?? PEEK_MS) / 1000);
       if (f.blinkBurst < 0) return `Trap. You stopped blinking for ${secsW} seconds.`;
       return `Trap. You blinked ${f.blinkCount ?? 0} times in ${secsW} seconds. You usually blink ${Math.round(f.expectedBlinks ?? 0)}.`;
     }
@@ -220,7 +227,7 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
     const pTrap = clamp((urTraps + PRIOR.pseudo * pri.pTrap) / (ur.length + PRIOR.pseudo), 0.02, 0.98);
     const evT = pri.pBigGivenTreasure * pri.bigMean + (1 - pri.pBigGivenTreasure) * pri.smallMean;
     const offer = round10((1 - pTrap) * evT * (1 - m) * BANKER_RULES.unreadDiscount);
-    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: `I lost you. I can't read this one, so I'll only pay ${offer}.`, signal: 'none' };
+    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: `I lost you. I can't read this one, so I'll only pay ${offer}.`, signal: 'none', driver: null };
   }
 
   const ev = evidence(model, f);
@@ -237,8 +244,9 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
   // revealed treasures show a difference.
   const muBig = (k * 0.03 + bigs.reduce((s, e) => s + e.joy, 0)) / (k + bigs.length);
   const muSmall = (k * 0.03 + smalls.reduce((s, e) => s + e.joy, 0)) / (k + smalls.length);
-  const joy = f.exprDelta.happy ?? 0;
   const sdJ = 0.05;
+  // a put on grin counts no more than the biggest smile this player has shown at a real treasure
+  const joy = clamp(f.exprDelta.happy ?? 0, Math.min(muBig, muSmall) - sdJ, Math.max(muBig, muSmall));
   let lj = clamp((-((joy - muBig) ** 2) + (joy - muSmall) ** 2) / (2 * sdJ * sdJ), -3, 3);
   // A smile that looks like this player's trap smile is not evidence of a big one.
   if ((ev[4] as number) > 0) lj = Math.min(lj, 0);
@@ -257,12 +265,12 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
     if (best < 0.7) driver = null; // no single signal carried it: heat or the board did
     if (caught) driver = 'breath';
     const d = driver as FeatureName | null;
-    return { pTrap, pBig, decision: 'walk', reason: walkReason(f, d, view), signal: d ? GROUP[d] : 'none' };
+    return { pTrap, pBig, decision: 'walk', reason: walkReason(f, d, view), signal: d ? GROUP[d] : 'none', driver: d };
   }
   // the signal that most supported "treasure"
   let best = Infinity;
   let calmDriver: FeatureName | null = null;
   ev.forEach((x, i) => { if (x < best) { best = x; calmDriver = FEATURE_NAMES[i] ?? null; } });
   const cd = calmDriver as FeatureName | null;
-  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, offer, ev, walkAt, face), signal: cd && best < -0.5 ? GROUP[cd] : 'none' };
+  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, offer, ev, walkAt, face), signal: cd && best < -0.5 ? GROUP[cd] : 'none', driver: null };
 }

@@ -10,12 +10,12 @@ export interface Box {
   state: BoxState;
 }
 
-/** What "calm" looks like for this player, learned in the 30 s silent baseline. */
+/** What "calm" looks like for this player, learned in the 10 s silent baseline. */
 export interface Baseline {
   breathPeriodMs: number;   // typical breath cycle
   breathRatePerMin: number;
   breathAmp: number;        // typical peak to trough swing of the chest trace
-  windowAmp: number;        // typical p95 - p5 swing inside an 8 s window (same measure as a peek)
+  windowAmp: number;        // typical p95 - p5 swing inside a peek length window (same measure as a peek)
   flatTol: number;          // band (trace units) the smoothed chest trace must stay inside to count as flat
   driftPerMs: number;       // typical slow drift of the trace (p90 of |slope| of a 6 s average)
   pauseLowMs: number;       // longest normal flat at the bottom of a breath (p90): the normal pause
@@ -43,6 +43,11 @@ export interface PeekFeatures {
   windowMs?: number;
   blinkCount?: number;
   expectedBlinks?: number;
+  /** When the counted hold ran, ms from the start of the peek window (null when there was none). */
+  catchStartMs?: number | null;
+  catchEndMs?: number | null;
+  /** Blink onsets, ms from the start of the peek window. */
+  blinkAtMs?: number[];
 }
 
 export type BankerSignal = 'breath' | 'blinks' | 'face' | 'pulse' | 'none';
@@ -54,4 +59,6 @@ export interface BankerRead {
   offer?: number;
   reason: string;
   signal: BankerSignal;
+  /** The single measure that carried the call, when one did. */
+  driver?: 'breath' | 'shallow' | 'rate' | 'blinks' | 'joy' | 'alarm' | null;
 }

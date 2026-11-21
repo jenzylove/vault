@@ -8,10 +8,10 @@ import { extractFeatures } from './features';
 import { RULES, newGame, step, type GameState, type Scoreboard } from './game';
 import { SimBody, makeSimPlayer, type Strategy } from './sim';
 import { createRng } from './rng';
+import { BASELINE_MS, PEEK_MS, PEEK_LEAD_MS } from './timing';
 import type { LevelNo } from './levels';
 
-export const PEEK_MS = 8000;
-export const BASELINE_MS = 30000;
+export { PEEK_MS, BASELINE_MS } from './timing';
 
 /** rational: sells a treasure only above its value, never sells the trap that would bust it, leaves near full heat.
  *  greedy: same, but sells every trap and never leaves. */
@@ -45,12 +45,12 @@ export function wantsToLeave(s: GameState, policy: Policy): boolean {
   return s.heat + RULES.heatPerPeek + 0.4 * RULES.pulseHeatMax >= RULES.bustAt;
 }
 
-export function runSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo } = {}): SimGameResult {
+export function runSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean } = {}): SimGameResult {
   return playSimGame(strategy, seed, opts).result;
 }
 
 /** Same as runSimGame, but also hands back the final state (for tell sheets in the demo and tests). */
-export function playSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo } = {}): { result: SimGameResult; state: GameState } {
+export function playSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean } = {}): { result: SimGameResult; state: GameState } {
   const policy = opts.policy ?? 'rational';
   const player = makeSimPlayer(strategy, seed);
   const body = new SimBody(player, seed, opts.fps ?? 15);
@@ -60,8 +60,9 @@ export function playSimGame(strategy: Strategy, seed: number, opts: { fps?: numb
   const baseline = learnBaseline(body.run(BASELINE_MS));
   s = step(s, { type: 'baselineDone', baseline });
 
-  const practice = s.practice.map((p) => {
-    body.run(1500);
+  // Practice is optional: offered on a player's first game, skipped by default after that.
+  const practice = !opts.practice ? [] : s.practice.map((p) => {
+    body.run(PEEK_LEAD_MS);
     body.react(p.kind);
     return { kind: p.kind, features: extractFeatures(body.run(PEEK_MS), baseline) };
   });
@@ -74,7 +75,7 @@ export function playSimGame(strategy: Strategy, seed: number, opts: { fps?: numb
     const sealed = s.boxes.filter((b) => b.state === 'sealed');
     const box = r.pick(sealed);
     s = step(s, { type: 'choose', boxId: box.id });
-    body.run(1500);
+    body.run(PEEK_LEAD_MS);
     body.react(box.kind);
     s = step(s, { type: 'peekDone', features: extractFeatures(body.run(PEEK_MS), baseline) });
     peeks++;

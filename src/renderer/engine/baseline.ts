@@ -5,6 +5,7 @@ import {
   blinkOnsets, coveredMs, flatSpans, isGood, levelOf, linearDetrend, mean, median, percentile,
   smoothByTime, smoothedNoise, std, upCrossings,
 } from './dsp';
+import { PEEK_MS } from './timing';
 
 export const SMOOTH_MS = 300;
 /** Flat = the smoothed trace stays inside this share of the calm breath swing... */
@@ -14,6 +15,13 @@ export const FLAT_NOISE_K = 4;
 
 /** Flat fragments shorter than this are slope pieces, not pauses. */
 export const MIN_PAUSE_MS = 350;
+
+/** Below this many pauses in the calm, the normal pause allowance gets head room. */
+export const FEW_PAUSES = 6;
+export const FEW_PAUSES_X = 1.2;
+/** Blink rate prior (per minute) and how many seconds of calm it counts for: 10 s sees only two or three blinks. */
+export const BLINK_PRIOR_PER_MIN = 15;
+export const BLINK_PRIOR_MS = 20000;
 
 export function flatTolerance(breathAmp: number, noiseSm: number): number {
   return Math.max(FLAT_SHARE * breathAmp, FLAT_NOISE_K * noiseSm);
@@ -87,9 +95,10 @@ export function learnBaseline(frames: readonly SignalFrame[]): Baseline {
     const driftSlopes: number[] = [];
     const t0 = t[0] as number;
     const tEnd = t[t.length - 1] as number;
-    for (let w = t0; w + 8000 <= tEnd + 1; w += 2000) {
+    // windows as long as a peek, so a peek's swing is compared with like for like
+    for (let w = t0; w + PEEK_MS <= tEnd + 1; w += 1000) {
       const idx: number[] = [];
-      for (let k = 0; k < t.length; k++) if ((t[k] as number) >= w && (t[k] as number) < w + 8000) idx.push(k);
+      for (let k = 0; k < t.length; k++) if ((t[k] as number) >= w && (t[k] as number) < w + PEEK_MS) idx.push(k);
       if (idx.length > 10) {
         const wt = idx.map((k) => t[k] as number);
         const wv = idx.map((k) => sm[k] as number);
@@ -112,14 +121,20 @@ export function learnBaseline(frames: readonly SignalFrame[]): Baseline {
       if (lv.ambiguous) continue;
       (lv.level >= 0.5 ? highs : lows).push(f.end - f.start);
     }
-    pauseLowMs = lows.length ? percentile(lows, 90) : 0.35 * breathPeriodMs;
-    pauseHighMs = highs.length ? percentile(highs, 90) : 0.2 * breathPeriodMs;
+    // A 10 s calm holds only two or three pauses, so the longest of them understates how long a
+    // normal pause can run (they vary about 20% breath to breath). With few samples, allow 20% over the median.
+    const longest = (xs: number[]): number => (xs.length >= FEW_PAUSES ? percentile(xs, 90) : Math.max(percentile(xs, 90), FEW_PAUSES_X * median(xs)));
+    pauseLowMs = lows.length ? longest(lows) : 0.35 * breathPeriodMs;
+    pauseHighMs = highs.length ? longest(highs) : 0.2 * breathPeriodMs;
     turnLowMs = lows.length ? median(lows) : 0.3 * breathPeriodMs;
     turnHighMs = highs.length ? median(highs) : 0.15 * breathPeriodMs;
   }
 
   const minutes = Math.max(durationMs, 1) / 60000;
-  const blinkRatePerMin = durationMs > 0 ? blinkOnsets(good) / minutes : 15;
+  // shrink toward a typical rate: a short calm sees too few blinks to trust alone
+  const blinkRatePerMin = durationMs > 0
+    ? (blinkOnsets(good) + (BLINK_PRIOR_PER_MIN * BLINK_PRIOR_MS) / 60000) / (minutes + BLINK_PRIOR_MS / 60000)
+    : BLINK_PRIOR_PER_MIN;
 
   const expr: Record<string, number> = {};
   for (const k of EXPR_KEYS) {

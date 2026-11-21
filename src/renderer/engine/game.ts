@@ -6,7 +6,7 @@ import { MIN_QUALITY } from './features';
 import { createRng } from './rng';
 import { DEFAULT_LEVEL, levelConfig, type LevelNo } from './levels';
 
-/** Fixed value table: 5 small, 2 big, 3 traps. Shown on the board. */
+/** Fixed value table: 5 small, 2 big, 3 traps. Shown on the board. A run peeks 5 of these 10. */
 export const VALUE_TABLE = {
   small: [100, 150, 200, 250, 300],
   big: [900, 1500],
@@ -15,14 +15,16 @@ export const VALUE_TABLE = {
 
 /** Push your luck rules. Every number here is shown on screen and moves an outcome. */
 export const RULES = {
-  heatPerTrapBought: 0.34, // the banker audits a box it bought and finds a trap
+  boxesPerRun: 5,          // a run: you peek 5 of the 10 boxes, then everything is revealed
+  heatPerTrapBought: 0.5,  // the banker audits a box it bought and finds a trap: two found and you are out
   heatPerPeek: 0,          // peeking itself is free: heat comes from what the banker finds
-  heatUnread: 0.1,         // "I lost you" makes it suspicious
+  heatUnread: 0.2,         // "I lost you" makes it suspicious
   pulseHeatMax: 0.15,      // rising pulse (12 s average) adds slow heat
   pulseHeatPerBpm: 1 / 60,
   bustAt: 1,               // full heat: the banker throws you out...
   bustKeep: 0,             // ...and you leave with nothing
   heistBonus: 1,           // a trap you sold pays its price again when the audit finds it: you robbed the banker
+                           // (not on a blind offer: he paid blind, so there was nothing to rob)
 } as const;
 
 export type Phase = 'begin' | 'baseline' | 'practice' | 'board' | 'peek' | 'bankerRead' | 'audit' | 'reveal' | 'over';
@@ -117,6 +119,12 @@ export function newGame(seed: number, level: LevelNo = DEFAULT_LEVEL): GameState
   };
 }
 
+/** Boxes you may still peek this run. */
+export function runLeft(s: GameState): number {
+  const sealed = s.boxes.filter((b) => b.state === 'sealed').length;
+  return Math.max(0, Math.min(sealed, RULES.boxesPerRun - s.log.length));
+}
+
 function sumHeat(p: GameState['heatParts']): number {
   return Math.min(1, p.traps + p.peeks + p.pulse + p.unread);
 }
@@ -206,7 +214,7 @@ export function step(s: GameState, a: GameAction): GameState {
     }
 
     case 'choose': {
-      if (s.phase !== 'board') return s;
+      if (s.phase !== 'board' || runLeft(s) === 0) return s;
       const box = s.boxes.find((b) => b.id === a.boxId);
       if (!box || box.state !== 'sealed') return s;
       return { ...s, boxes: setBox(s.boxes, box.id, 'peeked'), activeBoxId: box.id, phase: 'peek', read: null, features: null };
@@ -243,12 +251,13 @@ export function step(s: GameState, a: GameAction): GameState {
       const sold = a.type === 'sell';
       const offer = s.read.offer ?? 0;
       const trapFound = sold && box.kind === 'trap';
+      const heist = trapFound && s.read.decision === 'offer';
       const heatParts = { ...s.heatParts, traps: s.heatParts.traps + (trapFound ? RULES.heatPerTrapBought : 0) };
       const heat = sumHeat(heatParts);
       const next: GameState = {
         ...s,
         boxes: setBox(s.boxes, box.id, sold ? 'sold' : 'opened'),
-        pile: s.pile + (sold ? offer : box.value) + (trapFound ? Math.round(offer * RULES.heistBonus) : 0),
+        pile: s.pile + (sold ? offer : box.value) + (heist ? Math.round(offer * RULES.heistBonus) : 0),
         heatParts, heat,
         trapsBought: s.trapsBought + (trapFound ? 1 : 0),
         model: learnExample(s.model, s.features, box.kind), // the audit: the banker sees what was inside
@@ -262,8 +271,7 @@ export function step(s: GameState, a: GameAction): GameState {
 
     case 'next': {
       if (s.phase !== 'audit') return s;
-      const anySealed = s.boxes.some((b) => b.state === 'sealed');
-      return { ...s, phase: anySealed ? 'board' : 'reveal', read: null, features: null };
+      return { ...s, phase: runLeft(s) > 0 ? 'board' : 'reveal', read: null, features: null };
     }
 
     case 'leave':

@@ -6,7 +6,7 @@ export {
   featureMask, PRIOR, BANKER_RULES, type BankerModel, type BankerView,
 } from './banker';
 export {
-  newGame, step, createBanker, bankerView, computeScore, VALUE_TABLE, RULES,
+  newGame, step, createBanker, bankerView, computeScore, runLeft, VALUE_TABLE, RULES,
   type Banker, type GameState, type GameAction, type Phase, type Scoreboard, type BoxOutcome,
 } from './game';
 export { SimBody, makeSimPlayer, STRATEGIES, SIMULATED_LABEL, type Strategy, type SimPlayerParams } from './sim';
@@ -18,3 +18,6 @@ export {
   type Tell, type TellKey, type TellSheet, type TellHistory, type TellHistoryEntry,
 } from './tells';
 export { dailySeed, shareLine } from './daily';
+export { liveRead, restingAlert, type LiveRead } from './live';
+export { findCatch, catchAllowance, MIN_GOOD_MS, type CatchSpan } from './features';
+export { PEEK_LEAD_MS } from './timing';

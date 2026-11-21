@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
   newGame, step, RULES, VALUE_TABLE, createBanker, learnBaseline, SimBody, makeSimPlayer, extractFeatures,
-  type GameState, type PeekFeatures, type Baseline,
+  type GameState, type PeekFeatures, type Baseline, BASELINE_MS, PEEK_MS,
 } from '../../src/renderer/engine';
 
 const calm: PeekFeatures = {
@@ -10,7 +10,7 @@ const calm: PeekFeatures = {
 const caught: PeekFeatures = { ...calm, breathCatchMs: 2000, shallowing: 0.3, rateChange: -0.4 };
 
 function baseline(): Baseline {
-  return learnBaseline(new SimBody(makeSimPlayer('honest', 1), 1, 15).run(30000));
+  return learnBaseline(new SimBody(makeSimPlayer('honest', 1), 1, 15).run(BASELINE_MS));
 }
 
 function toBoard(seed = 1): GameState {
@@ -129,9 +129,9 @@ describe('createBanker (stateful wrapper)', () => {
   test('extractFeatures + banker on a simulated honest trap names the breath', () => {
     const p = { ...makeSimPlayer('honest', 12), trapCatch: 1, catchMs: [1800, 1800] as [number, number], talkProb: 0, dropoutPerMin: 0 };
     const body = new SimBody(p, 12, 30);
-    const bl = learnBaseline(body.run(30000));
+    const bl = learnBaseline(body.run(BASELINE_MS));
     body.run(1000); body.react('trap');
-    const f = extractFeatures(body.run(8000), bl);
+    const f = extractFeatures(body.run(PEEK_MS), bl);
     const b = createBanker(bl);
     const g = toBoard();
     const r = b.read(f, g.boxes[0]!, g);
