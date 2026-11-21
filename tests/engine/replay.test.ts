@@ -66,14 +66,14 @@ describe('replay verdict', () => {
 
   test('a walk on a catch names the real hold, a missed trap says so', () => {
     const walk = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'trap', 3);
-    expect(walk.line).toBe('There. You stopped breathing for 1.4 seconds. I knew.');
+    expect(walk.line).toBe('There. You stopped breathing for 1.4 seconds. I knew it was a dud.');
     expect(walk.caught).toBe(true);
     expect(walk.marks[0]).toMatchObject({ kind: 'catch', start: 900, end: 2600, label: 'Held 1.4 seconds' });
     const miss = replayVerdict(calm, { pTrap: 0.2, pBig: 0.2, decision: 'offer', offer: 200, reason: '', signal: 'none', driver: null }, 'trap', 3);
     expect(miss.line).toBe('I saw nothing. You got me.');
     expect(miss.marks).toHaveLength(0);
     const burnt = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'big', 3);
-    expect(burnt.line).toBe('There. You stopped breathing for 1.4 seconds. I walked.');
+    expect(burnt.line).toBe('There. You stopped breathing for 1.4 seconds. So I passed.');
   });
 
   test('every replay line from simulated games is plain words', () => {
@@ -93,8 +93,8 @@ describe('replay verdict', () => {
 
 describe('he remembers you', () => {
   test('names the tell, opens the next run with it, and tracks whether you hid it', () => {
-    expect(tellLine('breath', 1.2)).toBe('You hold your breath when you see a trap.');
-    expect(tellLine('smile', -1.2)).toBe('You smile when you see treasure.');
+    expect(tellLine('breath', 1.2)).toBe('You hold your breath when you see a dud.');
+    expect(tellLine('smile', -1.2)).toBe('You smile when you see loot.');
     expect(shareTellLine('breath')).toBe('My tell: I hold my breath. Can you hide yours?');
     expect(shareTellLine(null)).toBe('He could not find my tell. Can he find yours?');
     let h = emptyHistory();
@@ -102,7 +102,7 @@ describe('he remembers you', () => {
     const first = tellSheet(playSimGame('honest', 3, { practice: true }).state);
     expect(hideTrend([], first).trend).toBe('first');
     h = updateHistory(h, first);
-    if (first.biggest?.key === 'breath') expect(memoryLine(h)).toBe('Last time you held your breath at traps. I am watching for that now.');
+    if (first.biggest?.key === 'breath') expect(memoryLine(h)).toBe('Last time you held your breath at duds. I am watching for that now.');
     else expect(memoryLine(h)).toMatch(/^Last time .* I am /);
     const second = tellSheet(playSimGame('steady', 3, { practice: true }).state);
     const tr = hideTrend(h.games, second);

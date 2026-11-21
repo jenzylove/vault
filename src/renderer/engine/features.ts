@@ -2,6 +2,7 @@ import type { SignalFrame } from '../signals/types';
 import type { Baseline, PeekFeatures } from './types';
 import { EXPR_KEYS } from './types';
 import { SMOOTH_MS, windowSwing } from './baseline';
+import { PEEK_MS } from './timing';
 import {
   blinkOnsets, clamp, coveredMs, flatSpans, isGood, levelOf, linearDetrend, mean, median,
   smoothByTime, upCrossings,
@@ -55,8 +56,15 @@ export function catchAllowance(allowance: number): number {
   return Math.max(allowance * CATCH_MARGIN_X, allowance + CATCH_MARGIN_MS);
 }
 
-/** Minimum good signal in a peek before the banker will read it at all. */
+/** Minimum good signal in a standard 5 s peek before the banker will read it at all. */
 export const MIN_GOOD_MS = 3000;
+/** The same bar as a share of the peek, for shorter or longer peeks. */
+export const MIN_GOOD_SHARE = 0.6;
+
+/** Good signal a peek of this length needs before it can be read. */
+export function minGoodMs(peekMs: number = PEEK_MS): number {
+  return Math.min(MIN_GOOD_MS, MIN_GOOD_SHARE * peekMs);
+}
 
 /**
  * Features of one peek window (about 5 s) against the player's baseline.
@@ -71,7 +79,7 @@ export function extractFeatures(frames: readonly SignalFrame[], baseline: Baseli
   const chest = good.filter((f) => typeof f.chest === 'number');
   const quality = frames.length ? chest.length / frames.length : 0;
   const goodMs = coveredMs(good);
-  if (quality < MIN_QUALITY || goodMs < MIN_GOOD_MS || chest.length < 20) return emptyFeatures(quality, windowMs);
+  if (quality < MIN_QUALITY || goodMs < minGoodMs(baseline.peekMs) || chest.length < 20) return emptyFeatures(quality, windowMs);
 
   const t = chest.map((f) => f.t);
   const v = chest.map((f) => f.chest as number);

@@ -27,6 +27,26 @@ export const RULES = {
                            // (not on a blind offer: he paid blind, so there was nothing to rob)
 } as const;
 
+/** Per job rules on top of the Fence's level. Defaults reproduce the standard 5 safe run of that level. */
+export interface RunRules {
+  /** safes you crack this run */
+  safes: number;
+  /** take at least this for a clean job */
+  target: number;
+  /** duds he may catch (pass on) and still call it a clean job */
+  maxTrapsCaught: number;
+  maxBurned: number;
+  /** a dud you dump on a real offer pays this many times the normal heist pay */
+  dudPayX: number;
+  /** heat added when he passes on a dud you looked at (he caught you); 0 in most jobs */
+  caughtDudHeat: number;
+}
+
+export function defaultRules(level: LevelNo = DEFAULT_LEVEL): RunRules {
+  const cfg = levelConfig(level);
+  return { safes: RULES.boxesPerRun, target: cfg.target, maxTrapsCaught: cfg.maxTrapsCaught, maxBurned: cfg.maxBurned, dudPayX: 1, caughtDudHeat: 0 };
+}
+
 export type Phase = 'begin' | 'baseline' | 'practice' | 'board' | 'peek' | 'bankerRead' | 'audit' | 'reveal' | 'over';
 
 export interface BoxOutcome {
@@ -75,6 +95,7 @@ export interface GameState {
   practice: { kind: BoxKind }[];
   practiceLog: { kind: BoxKind; features: PeekFeatures }[];
   level: LevelNo;
+  rules: RunRules;
   baseline: Baseline | null;
   model: BankerModel;
   activeBoxId: number | null;
@@ -103,7 +124,7 @@ export type GameAction =
   | { type: 'leave' }
   | { type: 'reveal' };
 
-export function newGame(seed: number, level: LevelNo = DEFAULT_LEVEL): GameState {
+export function newGame(seed: number, level: LevelNo = DEFAULT_LEVEL, rules: Partial<RunRules> = {}): GameState {
   const r = createRng(seed);
   const items: { kind: BoxKind; value: number }[] = [
     ...VALUE_TABLE.small.map((value) => ({ kind: 'small' as const, value })),
@@ -113,7 +134,7 @@ export function newGame(seed: number, level: LevelNo = DEFAULT_LEVEL): GameState
   const boxes: Box[] = r.shuffle(items).map((it, id) => ({ id, kind: it.kind, value: it.value, state: 'sealed' }));
   const practice: { kind: BoxKind }[] = r.chance(0.5) ? [{ kind: 'small' }, { kind: 'trap' }] : [{ kind: 'trap' }, { kind: 'small' }];
   return {
-    seed, phase: 'begin', boxes, practice, practiceLog: [], level, baseline: null, model: emptyModel(level), activeBoxId: null, read: null,
+    seed, phase: 'begin', boxes, practice, practiceLog: [], level, rules: { ...defaultRules(level), ...rules }, baseline: null, model: emptyModel(level), activeBoxId: null, read: null,
     features: null, pile: 0, heat: 0, heatParts: { traps: 0, peeks: 0, pulse: 0, unread: 0 }, trapsBought: 0,
     log: [], lastOutcome: null, busted: false, left: false, score: null,
   };
@@ -122,7 +143,7 @@ export function newGame(seed: number, level: LevelNo = DEFAULT_LEVEL): GameState
 /** Boxes you may still peek this run. */
 export function runLeft(s: GameState): number {
   const sealed = s.boxes.filter((b) => b.state === 'sealed').length;
-  return Math.max(0, Math.min(sealed, RULES.boxesPerRun - s.log.length));
+  return Math.max(0, Math.min(sealed, s.rules.safes - s.log.length));
 }
 
 function sumHeat(p: GameState['heatParts']): number {
@@ -165,6 +186,7 @@ function settle(s: GameState, outcome: BoxOutcome): GameState {
 
 export function computeScore(s: GameState): Scoreboard {
   const cfg = levelConfig(s.level);
+  const rules = s.rules;
   // Caught = he walked from the trap, or he lost you at it (hiding is a tell too).
   const trapsCaught = s.log.filter((o) => o.kind === 'trap' && (o.result === 'burned' || o.decision === 'unread')).length;
   const treasuresBurned = s.log.filter((o) => o.kind !== 'trap' && o.result === 'burned').length;
@@ -190,11 +212,16 @@ export function computeScore(s: GameState): Scoreboard {
     level: s.level,
     rank: cfg.rank,
     trapsCaught,
-    won: !s.busted && s.pile >= cfg.target && trapsCaught <= cfg.maxTrapsCaught && treasuresBurned <= cfg.maxBurned,
-    target: cfg.target,
-    maxTrapsCaught: cfg.maxTrapsCaught,
-    maxBurned: cfg.maxBurned,
+    won: !s.busted && s.pile >= rules.target && trapsCaught <= rules.maxTrapsCaught && treasuresBurned <= rules.maxBurned,
+    target: rules.target,
+    maxTrapsCaught: rules.maxTrapsCaught,
+    maxBurned: rules.maxBurned,
   };
+}
+
+/** Extra pay when the audit finds a dud he bought on a real offer (on top of the offer itself). */
+export function heistPay(offer: number, rules: RunRules): number {
+  return Math.round(offer * RULES.heistBonus * rules.dudPayX + offer * (rules.dudPayX - 1));
 }
 
 /** Pure reducer. Invalid actions for the current phase return the state unchanged. */
@@ -235,10 +262,12 @@ export function step(s: GameState, a: GameAction): GameState {
       const heated: GameState = { ...s, heatParts, heat: sumHeat(heatParts), features: f };
       const read = readBanker(s.model, f, box, bankerView(heated));
       if (read.decision === 'walk') {
-        const burned: GameState = { ...heated, read, boxes: setBox(heated.boxes, box.id, 'burned') };
+        // Double Cross: a dud he catches you at costs heat too
+        const caughtParts = box.kind === 'trap' && s.rules.caughtDudHeat > 0 ? { ...heatParts, traps: heatParts.traps + s.rules.caughtDudHeat } : heatParts;
+        const burned: GameState = { ...heated, heatParts: caughtParts, heat: sumHeat(caughtParts), read, boxes: setBox(heated.boxes, box.id, 'burned') };
         return settle(burned, {
           boxId: box.id, kind: box.kind, value: box.value, decision: 'walk', offer: null, pTrap: read.pTrap,
-          result: 'burned', heatAdded: heated.heat - s.heat, correct: null, features: f, // unknown until the reveal
+          result: 'burned', heatAdded: burned.heat - s.heat, correct: null, features: f, // unknown until the reveal
         });
       }
       return { ...heated, read, phase: 'bankerRead' };
@@ -257,7 +286,7 @@ export function step(s: GameState, a: GameAction): GameState {
       const next: GameState = {
         ...s,
         boxes: setBox(s.boxes, box.id, sold ? 'sold' : 'opened'),
-        pile: s.pile + (sold ? offer : box.value) + (heist ? Math.round(offer * RULES.heistBonus) : 0),
+        pile: s.pile + (sold ? offer : box.value) + (heist ? heistPay(offer, s.rules) : 0),
         heatParts, heat,
         trapsBought: s.trapsBought + (trapFound ? 1 : 0),
         model: learnExample(s.model, s.features, box.kind), // the audit: the banker sees what was inside

@@ -176,41 +176,41 @@ const secs = (ms: number): string => (ms / 1000).toFixed(1);
 const pct = (x: number): number => Math.round(Math.abs(x) * 100);
 
 function walkReason(f: PeekFeatures, driver: FeatureName | null, view: BankerView): string {
-  if (f.talking && (driver === null || GROUP[driver] === 'breath')) return 'Trap. You started talking the moment you looked.';
+  if (f.talking && (driver === null || GROUP[driver] === 'breath')) return 'Dud. You started talking the moment you looked.';
   switch (driver) {
-    case 'breath': return `Trap. Your breath stopped for ${secs(f.breathCatchMs)} seconds.`;
-    case 'shallow': return `Trap. Your breathing went ${pct(f.shallowing)}% shallower.`;
+    case 'breath': return `Dud. Your breath stopped for ${secs(f.breathCatchMs)} seconds.`;
+    case 'shallow': return `Dud. Your breathing went ${pct(f.shallowing)}percent shallower.`;
     case 'rate': return f.rateChange <= -0.99
-      ? 'Trap. You did not take a single breath.'
-      : `Trap. Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pct(f.rateChange)}%.`;
+      ? 'Dud. You did not take a single breath.'
+      : `Dud. Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pct(f.rateChange)} percent.`;
     case 'blinks': {
       const secsW = Math.round((f.windowMs ?? PEEK_MS) / 1000);
-      if (f.blinkBurst < 0) return `Trap. You stopped blinking for ${secsW} seconds.`;
-      return `Trap. You blinked ${f.blinkCount ?? 0} times in ${secsW} seconds. You usually blink ${Math.round(f.expectedBlinks ?? 0)}.`;
+      if (f.blinkBurst < 0) return `Dud. You stopped blinking for ${secsW} seconds.`;
+      return `Dud. You blinked ${f.blinkCount ?? 0} times in ${secsW} seconds. You usually blink ${Math.round(f.expectedBlinks ?? 0)}.`;
     }
     case 'joy': return (f.exprDelta.happy ?? 0) > 0
-      ? 'Trap. You smiled, and you smiled the same way at your last trap.'
-      : 'Trap. Your smile dropped the moment you looked.';
-    case 'alarm': return `Trap. Your face jumped: surprise up ${pct((f.exprDelta.surprise ?? 0) + (f.exprDelta.fear ?? 0))} points.`;
+      ? 'Dud. You smiled, and you smiled the same way at your last dud.'
+      : 'Dud. Your smile dropped the moment you looked.';
+    case 'alarm': return `Dud. Your face jumped: surprise up ${pct((f.exprDelta.surprise ?? 0) + (f.exprDelta.fear ?? 0))} points.`;
     default: return view.trapsBought > 0
-      ? `Not worth it. I have bought ${view.trapsBought} trap${view.trapsBought > 1 ? 's' : ''} from you already.`
-      : 'Trap. Something changed when you looked. I am walking.';
+      ? `Not worth it. You already sold me ${view.trapsBought} dud${view.trapsBought > 1 ? 's' : ''}.`
+      : 'Dud. Something changed when you looked. I pass.';
   }
 }
 
 function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number, ev: number[], walkAt: number, face: boolean): string {
   const smiled = face && (f.exprDelta.happy ?? 0) > 0.06;
   const calmBreath = f.breathCatchMs === 0 && Math.abs(f.rateChange) < 0.3 && f.shallowing < 0.2;
-  if (smiled && calmBreath && pBig < 0.5) return `Big one? You smiled, but your breathing didn't change. I'm not sure. I'll pay ${offer}.`;
-  if (pBig >= 0.5) return `Big one. ${smiled ? 'That smile was real.' : 'Your breathing picked up.'} I'll pay ${offer}.`;
+  if (smiled && calmBreath && pBig < 0.5) return `Gold? You smiled, but your breathing didn't change. I'm not sure. I'll pay ${offer}.`;
+  if (pBig >= 0.5) return `Gold bars. ${smiled ? 'That smile was real.' : 'Your breathing picked up.'} I'll pay ${offer}.`;
   if (pTrap > walkAt * 0.75) {
     const worst = ev.indexOf(Math.max(...ev));
     const name = FEATURE_NAMES[worst] ?? 'breath';
     const what = GROUP[name] === 'breath' ? 'your breathing' : GROUP[name] === 'blinks' ? 'your blinking' : 'your face';
     return `Close call. Something in ${what} moved. I'll risk ${offer}.`;
   }
-  if (f.breathCatchMs === 0) return `Treasure, I think. Your breath stayed even. I'll pay ${offer}.`;
-  return `Treasure, I think. I'll pay ${offer}.`;
+  if (f.breathCatchMs === 0) return `Real loot, I think. Your breath stayed even. I'll pay ${offer}.`;
+  return `Real loot, I think. I'll pay ${offer}.`;
 }
 
 /** Pure read. Decides walk, offer or unread, prices it, and says why in one plain sentence. */
@@ -227,7 +227,7 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
     const pTrap = clamp((urTraps + PRIOR.pseudo * pri.pTrap) / (ur.length + PRIOR.pseudo), 0.02, 0.98);
     const evT = pri.pBigGivenTreasure * pri.bigMean + (1 - pri.pBigGivenTreasure) * pri.smallMean;
     const offer = round10((1 - pTrap) * evT * (1 - m) * BANKER_RULES.unreadDiscount);
-    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: `I lost you. I can't read this one, so I'll only pay ${offer}.`, signal: 'none', driver: null };
+    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: `I could not read you on that one, so I'll only pay ${offer}.`, signal: 'none', driver: null };
   }
 
   const ev = evidence(model, f);

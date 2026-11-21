@@ -54,7 +54,8 @@ export class LineupGate {
   }
 }
 
-export const FACE_PAUSE_ENTER_MS = 800;   // a face problem must hold this long to pause
+/** A face problem must hold this long to pause: shorter gaps are ignored entirely. */
+export const FACE_PAUSE_ENTER_MS = 5000;
 export const FACE_PAUSE_EXIT_MS = 1000;   // and be gone this long to resume
 
 export type FaceProblem = 'none' | 'many' | null;
@@ -94,6 +95,39 @@ export class FaceWatch {
 }
 
 /** Feed a gate from a source: wall clock chest arrivals and every new validation packet. Returns an unsubscribe. */
+/** A signal gap (no frames, or a weak read) must last this long before the job pauses. */
+export const GAP_PAUSE_ENTER_MS = 5000;
+/** ...and be clear this long before it goes on. */
+export const GAP_PAUSE_EXIT_MS = 1000;
+
+/**
+ * Any signal trouble (stale frames, weak read). Gaps shorter than GAP_PAUSE_ENTER_MS are ignored
+ * entirely; past that the job pauses calmly until the signal has been clear for GAP_PAUSE_EXIT_MS.
+ */
+export class GapWatch {
+  private badSince: number | null = null;
+  private goodSince: number | null = null;
+  private paused = false;
+
+  reset(): void { this.badSince = null; this.goodSince = null; this.paused = false; }
+
+  /** Feed whether the signal is bad right now; returns true while the job should be paused. */
+  update(bad: boolean, now: number): boolean {
+    if (bad) {
+      this.goodSince = null;
+      this.badSince ??= now;
+      if (!this.paused && now - this.badSince >= GAP_PAUSE_ENTER_MS) this.paused = true;
+    } else {
+      this.badSince = null;
+      this.goodSince ??= now;
+      if (this.paused && now - this.goodSince >= GAP_PAUSE_EXIT_MS) this.paused = false;
+    }
+    return this.paused;
+  }
+
+  get isPaused(): boolean { return this.paused; }
+}
+
 export function wireGate(source: SignalSource, gate: LineupGate, now: () => number): () => void {
   gate.reset();
   let lastV = source.status().validation;

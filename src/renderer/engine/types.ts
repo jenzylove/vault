@@ -28,6 +28,8 @@ export interface Baseline {
   noise: number;            // raw minus smoothed chest, relative to breathAmp
   quality: number;          // share of good frames during the baseline
   durationMs: number;
+  /** Peek length the calm windows were measured at (ms). A peek must last this long to compare like for like. */
+  peekMs?: number;
 }
 
 export interface PeekFeatures {

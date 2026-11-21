@@ -45,7 +45,8 @@ export function windowSwing(t: readonly number[], sm: readonly number[]): number
   return percentile(d, 95) - percentile(d, 5);
 }
 
-export function learnBaseline(frames: readonly SignalFrame[]): Baseline {
+/** Learn the calm. `peekMs` is how long this job's peeks last: the calm's comparison windows use the same length. */
+export function learnBaseline(frames: readonly SignalFrame[], peekMs: number = PEEK_MS): Baseline {
   const good = frames.filter(isGood);
   const quality = frames.length ? good.length / frames.length : 0;
   const durationMs = coveredMs(good);
@@ -96,9 +97,9 @@ export function learnBaseline(frames: readonly SignalFrame[]): Baseline {
     const t0 = t[0] as number;
     const tEnd = t[t.length - 1] as number;
     // windows as long as a peek, so a peek's swing is compared with like for like
-    for (let w = t0; w + PEEK_MS <= tEnd + 1; w += 1000) {
+    for (let w = t0; w + peekMs <= tEnd + 1; w += 1000) {
       const idx: number[] = [];
-      for (let k = 0; k < t.length; k++) if ((t[k] as number) >= w && (t[k] as number) < w + PEEK_MS) idx.push(k);
+      for (let k = 0; k < t.length; k++) if ((t[k] as number) >= w && (t[k] as number) < w + peekMs) idx.push(k);
       if (idx.length > 10) {
         const wt = idx.map((k) => t[k] as number);
         const wv = idx.map((k) => sm[k] as number);
@@ -164,5 +165,6 @@ export function learnBaseline(frames: readonly SignalFrame[]): Baseline {
     noise,
     quality,
     durationMs,
+    peekMs,
   };
 }

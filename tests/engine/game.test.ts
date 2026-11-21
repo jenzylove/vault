@@ -66,7 +66,7 @@ describe('step', () => {
     s = step(s, { type: 'choose', boxId: trap.id });
     s = step(s, { type: 'peekDone', features: caught });
     expect(s.read?.decision).toBe('walk');
-    expect(s.read?.reason).toBe('Trap. Your breath stopped for 2.0 seconds.');
+    expect(s.read?.reason).toBe('Dud. Your breath stopped for 2.0 seconds.');
     expect(s.read?.signal).toBe('breath');
     expect(s.boxes.find((b) => b.id === trap.id)!.state).toBe('burned');
     expect(s.log[0]!.correct).toBeNull();
@@ -137,6 +137,6 @@ describe('createBanker (stateful wrapper)', () => {
     const r = b.read(f, g.boxes[0]!, g);
     expect(r.decision).toBe('walk');
     expect(r.signal).toBe('breath');
-    expect(r.reason).toMatch(/^Trap\. Your breath stopped for \d\.\d seconds\.$/);
+    expect(r.reason).toMatch(/^Dud\. Your breath stopped for \d\.\d seconds\.$/);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LiveSource } from '../../src/renderer/signals/live';
-import { FaceWatch, LineupGate, wireGate } from '../../src/renderer/signals/lineup';
+import { FaceWatch, GapWatch, LineupGate, wireGate } from '../../src/renderer/signals/lineup';
 import { noDashes, validationWords } from '../../src/renderer/signals/status';
 import { SimulatedSource } from '../../src/renderer/ui/simSource';
 import { chestMetrics, fakeDeps } from './fakeSdk';
@@ -126,34 +126,42 @@ describe('face pause from SDK validation codes', () => {
     return { w, at };
   }
 
-  it('pauses on no face found after a short hold, and resumes once the face is back for a second', async () => {
+  it('ignores a face gap under 5 s, pauses after it, and resumes once the face is back for a second', async () => {
     const { w, at } = await faceRig();
     at(0, 0);
-    at(1000, 1);
-    expect(w.check(1500)).toBeNull();     // a blink of a dropout does not pause
-    expect(w.check(1800)).toBe('none');
-    at(3000, 0);
-    expect(w.check(3500)).toBe('none');   // still paused
-    expect(w.check(4000)).toBeNull();
+    for (let t = 1000; t <= 6000; t += 200) at(t, 1);
+    expect(w.check(1800)).toBeNull();     // a short dropout never pauses
+    expect(w.check(5500)).toBeNull();     // still under 5 s
+    expect(w.check(6000)).toBe('none');
+    at(7000, 0);
+    expect(w.check(7500)).toBe('none');   // still paused
+    expect(w.check(8000)).toBeNull();
+  });
+
+  it('a 4 s gap that clears by itself never pauses', async () => {
+    const { w, at } = await faceRig();
+    for (let t = 0; t <= 4000; t += 100) { at(t, 1); expect(w.check(t)).toBeNull(); }
+    at(4100, 0);
+    for (let t = 4100; t <= 9000; t += 100) expect(w.check(t)).toBeNull();
   });
 
   it('resumes when the no face code stops repeating, with no OK packet ever sent', async () => {
     const { w, at } = await faceRig();
-    for (let t = 0; t <= 2000; t += 100) at(t, 1);
-    expect(w.check(2000)).toBe('none');
-    expect(w.check(2900)).toBe('none');   // code only 0.9 s quiet
-    expect(w.check(3100)).toBe('none');   // cleared at 3000, needs a second of calm
-    expect(w.check(4100)).toBeNull();
+    for (let t = 0; t <= 6000; t += 100) at(t, 1);
+    expect(w.check(6000)).toBe('none');
+    expect(w.check(6900)).toBe('none');   // code only 0.9 s quiet
+    expect(w.check(7100)).toBe('none');   // cleared at 7000, needs a second of calm
+    expect(w.check(8100)).toBeNull();
   });
 
   it('pauses on multiple faces, and switches the reason while paused', async () => {
     const { w, at } = await faceRig();
-    at(0, 2);
-    expect(w.check(900)).toBe('many');
-    at(1000, 1);
-    expect(w.check(1100)).toBe('none');
-    at(2000, 0);
-    expect(w.check(3100)).toBeNull();
+    for (let t = 0; t <= 5000; t += 200) at(t, 2);
+    expect(w.check(5000)).toBe('many');
+    at(5100, 1);
+    expect(w.check(5200)).toBe('none');
+    at(6000, 0);
+    expect(w.check(7100)).toBeNull();
   });
 
   it('other validation codes (dark, chest hidden) never pause the round', async () => {
@@ -162,6 +170,22 @@ describe('face pause from SDK validation codes', () => {
     at(1000, 7);
     at(2000, 16);
     expect(w.check(5000)).toBeNull();
+  });
+});
+
+describe('signal gap pause', () => {
+  it('ignores gaps under 5 s, pauses after, resumes after a clear second', () => {
+    const g = new GapWatch();
+    expect(g.update(true, 0)).toBe(false);
+    expect(g.update(true, 4900)).toBe(false);
+    expect(g.update(false, 4950)).toBe(false); // cleared: the clock starts over
+    expect(g.update(true, 5000)).toBe(false);
+    expect(g.update(true, 9999)).toBe(false);
+    expect(g.update(true, 10000)).toBe(true);
+    expect(g.update(false, 10500)).toBe(true);
+    expect(g.update(true, 10600)).toBe(true);  // a flicker while paused keeps it paused
+    expect(g.update(false, 10700)).toBe(true);
+    expect(g.update(false, 11700)).toBe(false);
   });
 });
 

@@ -5,7 +5,7 @@
 import type { BoxKind } from './types';
 import { learnBaseline } from './baseline';
 import { extractFeatures } from './features';
-import { RULES, newGame, step, type GameState, type Scoreboard } from './game';
+import { RULES, newGame, step, type GameState, type RunRules, type Scoreboard } from './game';
 import { SimBody, makeSimPlayer, type Strategy } from './sim';
 import { createRng } from './rng';
 import { BASELINE_MS, PEEK_MS, PEEK_LEAD_MS } from './timing';
@@ -45,26 +45,29 @@ export function wantsToLeave(s: GameState, policy: Policy): boolean {
   return s.heat + RULES.heatPerPeek + 0.4 * RULES.pulseHeatMax >= RULES.bustAt;
 }
 
-export function runSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean } = {}): SimGameResult {
+export interface SimOpts { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean; peekMs?: number; rules?: Partial<RunRules> }
+
+export function runSimGame(strategy: Strategy, seed: number, opts: SimOpts = {}): SimGameResult {
   return playSimGame(strategy, seed, opts).result;
 }
 
 /** Same as runSimGame, but also hands back the final state (for tell sheets in the demo and tests). */
-export function playSimGame(strategy: Strategy, seed: number, opts: { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean } = {}): { result: SimGameResult; state: GameState } {
+export function playSimGame(strategy: Strategy, seed: number, opts: SimOpts = {}): { result: SimGameResult; state: GameState } {
   const policy = opts.policy ?? 'rational';
   const player = makeSimPlayer(strategy, seed);
   const body = new SimBody(player, seed, opts.fps ?? 15);
   const r = createRng(seed * 31 + 7);
 
-  let s = step(newGame(seed, opts.level), { type: 'begin' });
-  const baseline = learnBaseline(body.run(BASELINE_MS));
+  const peekMs = opts.peekMs ?? PEEK_MS;
+  let s = step(newGame(seed, opts.level, opts.rules), { type: 'begin' });
+  const baseline = learnBaseline(body.run(BASELINE_MS), peekMs);
   s = step(s, { type: 'baselineDone', baseline });
 
   // Practice is optional: offered on a player's first game, skipped by default after that.
   const practice = !opts.practice ? [] : s.practice.map((p) => {
     body.run(PEEK_LEAD_MS);
     body.react(p.kind);
-    return { kind: p.kind, features: extractFeatures(body.run(PEEK_MS), baseline) };
+    return { kind: p.kind, features: extractFeatures(body.run(peekMs), baseline) };
   });
   s = step(s, { type: 'practiceDone', peeks: practice });
 
@@ -77,7 +80,7 @@ export function playSimGame(strategy: Strategy, seed: number, opts: { fps?: numb
     s = step(s, { type: 'choose', boxId: box.id });
     body.run(PEEK_LEAD_MS);
     body.react(box.kind);
-    s = step(s, { type: 'peekDone', features: extractFeatures(body.run(PEEK_MS), baseline) });
+    s = step(s, { type: 'peekDone', features: extractFeatures(body.run(peekMs), baseline) });
     peeks++;
     if (s.phase === 'bankerRead') {
       s = step(s, { type: wantsToSell(s, box.kind, box.value, policy) ? 'sell' : 'open' });

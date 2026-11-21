@@ -119,7 +119,7 @@ describe('extractFeatures (simulated traces)', () => {
     const box = s.boxes[0]!;
     const read = readBanker(emptyModel(), f, box, bankerView(s));
     expect(read.decision).toBe('unread');
-    expect(read.reason).toMatch(/lost you/);
+    expect(read.reason).toMatch(/could not read you/);
   });
 
   test('blink bursts and talking are picked up', () => {

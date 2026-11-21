@@ -13,7 +13,7 @@ export const TELL_KEYS: readonly TellKey[] = ['breath', 'shallow', 'rate', 'blin
 export interface Tell {
   key: TellKey;
   label: string;
-  trap: number;        // mean at traps (display units)
+  trap: number;        // mean at duds (display units)
   treasure: number;    // mean at treasure (display units)
   unit: string;
   effect: number;      // standardized difference, traps minus treasure (Cohen's d with a floor on the spread)
@@ -60,7 +60,7 @@ function face(label: string, get: (f: PeekFeatures) => number, verb: string, wha
   return {
     label, unit: 'points', floor: 3, get: (f) => 100 * get(f),
     say: (x) => towards(x, 'points', 'more', 'less', 'no change'),
-    line: (t, r) => `At traps ${verb} ${amt(t)} than at your calm. At treasure, ${amt(r)}.`,
+    line: (t, r) => `At duds ${verb} ${amt(t)} than at your calm. At loot, ${amt(r)}.`,
   };
 }
 
@@ -68,23 +68,23 @@ const SPECS: Record<TellKey, Spec> = {
   breath: {
     label: 'Breath catch', unit: 'seconds', floor: 0.25, get: (f) => f.breathCatchMs / 1000,
     say: (x) => `${one(x)} seconds`,
-    line: (t, r) => `At traps your breath stopped for ${one(t)} seconds on average. At treasure, ${one(r)} seconds.`,
+    line: (t, r) => `At duds your breath stopped for ${one(t)} seconds on average. At loot, ${one(r)} seconds.`,
   },
   shallow: {
     label: 'Shallow breathing', unit: 'percent', floor: 8, get: (f) => 100 * f.shallowing,
     say: (x) => towards(x, 'percent', 'shallower', 'deeper', 'as deep as your calm'),
-    line: (t, r) => `At traps your breath ${whole(t) === 0 ? 'stayed as deep as your calm' : `went ${towards(t, 'percent', 'shallower', 'deeper', '')} than your calm`}. `
-      + `At treasure it ${whole(r) === 0 ? 'stayed as deep as your calm' : `went ${towards(r, 'percent', 'shallower', 'deeper', '')}`}.`,
+    line: (t, r) => `At duds your breath ${whole(t) === 0 ? 'stayed as deep as your calm' : `went ${towards(t, 'percent', 'shallower', 'deeper', '')} than your calm`}. `
+      + `At loot it ${whole(r) === 0 ? 'stayed as deep as your calm' : `went ${towards(r, 'percent', 'shallower', 'deeper', '')}`}.`,
   },
   rate: {
     label: 'Breathing rate', unit: 'percent', floor: 10, get: (f) => 100 * Math.abs(f.rateChange),
     say: (x) => `${whole(x)} percent`,
-    line: (t, r) => `At traps your breathing rate moved ${whole(t)} percent away from your calm. At treasure it moved ${whole(r)} percent.`,
+    line: (t, r) => `At duds your breathing rate moved ${whole(t)} percent away from your calm. At loot it moved ${whole(r)} percent.`,
   },
   blinks: {
     label: 'Blinks', unit: 'blinks', floor: 0.8, get: (f) => f.blinkCount ?? 0,
     say: (x) => `${one(x)} blinks`,
-    line: (t, r) => `At traps you blinked ${one(t)} times a peek. At treasure, ${one(r)} times.`,
+    line: (t, r) => `At duds you blinked ${one(t)} times a peek. At loot, ${one(r)} times.`,
   },
   smile: face('Smile', (f) => f.exprDelta.happy ?? 0, 'you smiled', ''),
   surprise: face('Surprise', (f) => f.exprDelta.surprise ?? 0, 'your face showed', ' surprise'),
@@ -92,22 +92,22 @@ const SPECS: Record<TellKey, Spec> = {
   pulse: {
     label: 'Pulse', unit: 'beats a minute', floor: 2, get: (f) => f.pulseDelta,
     say: (x) => towards(x, 'beats a minute', 'faster', 'slower', 'level with your calm'),
-    line: (t, r) => `At traps your pulse ran ${whole(t) === 0 ? 'level with your calm' : `${towards(t, 'beats a minute', 'faster', 'slower', '')} than your calm`}. `
-      + `At treasure it ran ${whole(r) === 0 ? 'level with your calm' : towards(r, 'beats a minute', 'faster', 'slower', '')}.`,
+    line: (t, r) => `At duds your pulse ran ${whole(t) === 0 ? 'level with your calm' : `${towards(t, 'beats a minute', 'faster', 'slower', '')} than your calm`}. `
+      + `At loot it ran ${whole(r) === 0 ? 'level with your calm' : towards(r, 'beats a minute', 'faster', 'slower', '')}.`,
   },
 };
 
 /** One tell value in plain words, for any line outside the sheet (practice notes, trend lines). */
 export function sayTell(key: TellKey, value: number): string { return SPECS[key].say(value); }
 
-/** "Breath catch at traps, your last 3 games: 1.4, 0.9 and 0.6 seconds." No signs, no symbols. */
+/** "Breath catch at duds, your last 3 games: 1.4, 0.9 and 0.6 seconds." No signs, no symbols. */
 export function trendSentence(key: TellKey, values: number[]): string {
   const spec = SPECS[key];
   if (values.length < 2) return 'Play again to watch this tell shrink.';
   const plain = key === 'breath' || key === 'blinks' ? values.map(one) : key === 'rate' ? values.map((v) => String(whole(v))) : values.map((v) => spec.say(v));
   const list = `${plain.slice(0, -1).join(', ')} and ${plain[plain.length - 1]}`;
   const tail = key === 'breath' ? ' seconds' : key === 'blinks' ? ' blinks a peek' : key === 'rate' ? ' percent away from your calm' : key === 'smile' || key === 'surprise' || key === 'fear' ? ', against your calm' : '';
-  return `${spec.label} at traps, your last ${values.length} games: ${list}${tail}.`;
+  return `${spec.label} at duds, your last ${values.length} games: ${list}${tail}.`;
 }
 
 /** A tell counts as giving you away from this effect size on. */
@@ -150,7 +150,7 @@ export function tellSheet(s: GameState): TellSheet {
 
   const top = tells[0];
   const biggest = top && top.strength >= TELL_THRESHOLD ? top : null;
-  const readLine = `The banker read ${score.bankerCorrect} of ${score.bankerCalls} boxes right.`;
+  const readLine = `The Fence read ${score.bankerCorrect} of ${score.bankerCalls} safes right.`;
   const headline = biggest ? `${biggest.label} gave you away. ${biggest.sentence}` : 'Nothing gave you away this time.';
   return {
     level: s.level, rank: score.rank, pile: score.pile, won: score.won,
@@ -212,7 +212,7 @@ const PHRASE: Record<TellKey, { you: string; me: string; past: string }> = {
 
 /** "You hold your breath when you see a trap." The side the tell is bigger on decides trap or treasure. */
 export function tellLine(key: TellKey, effect: number): string {
-  return `${PHRASE[key].you} when you see ${effect >= 0 ? 'a trap' : 'treasure'}.`;
+  return `${PHRASE[key].you} when you see ${effect >= 0 ? 'a dud' : 'loot'}.`;
 }
 
 /** Share card: "My tell: I hold my breath. Can you hide yours?" */
@@ -226,7 +226,7 @@ export function memoryLine(history: TellHistory): string | null {
   if (!last) return null;
   if (!last.biggest) return 'Last time I could not find your tell. I am looking harder now.';
   const e = last.tells[last.biggest]?.effect ?? 1;
-  return `Last time ${PHRASE[last.biggest].past} at ${e >= 0 ? 'traps' : 'treasure'}. I am watching for that now.`;
+  return `Last time ${PHRASE[last.biggest].past} at ${e >= 0 ? 'duds' : 'loot'}. I am watching for that now.`;
 }
 
 export interface HideTrend { key: TellKey | null; trend: 'first' | 'better' | 'worse' | 'same' | 'unknown'; line: string; }
@@ -245,12 +245,12 @@ export function hideTrend(earlier: readonly TellHistoryEntry[], sheet: TellSheet
   const key = named ?? sheet.biggest?.key ?? null;
   if (!key) return { key, trend: 'unknown', line: 'He has not found a tell on you yet.' };
   const cur = sheet.tells.find((t) => t.key === key);
-  if (!cur || cur.nTrap === 0 || cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no trap from you this run, so he could not check.' };
+  if (!cur || cur.nTrap === 0 || cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no dud from you this run, so he could not check.' };
   const before = [...earlier].reverse().map((g) => g.tells[key]).find((t) => t && t.effect !== 0);
   if (!before) return { key, trend: 'unknown', line: 'No earlier run to compare it with yet.' };
   const was = Math.abs(before.effect);
   const now = cur.strength;
-  const nums = `${sayTell(key, before.trap)} at traps before, ${sayTell(key, cur.trap)} now.`;
+  const nums = `${sayTell(key, before.trap)} at duds before, ${sayTell(key, cur.trap)} now.`;
   if (now < 0.8 * was || (now < TELL_THRESHOLD && was >= TELL_THRESHOLD)) return { key, trend: 'better', line: `You hid it better: ${nums}` };
   if (now > 1.2 * was) return { key, trend: 'worse', line: `It showed more: ${nums}` };
   return { key, trend: 'same', line: `About the same: ${nums}` };

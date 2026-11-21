@@ -33,7 +33,7 @@ export function detailFor(f: PeekFeatures, driver: BankerRead['driver']): string
     case 'shallow': return `Your breathing went ${pct(f.shallowing)} percent shallower.`;
     case 'rate': return f.rateChange <= -0.99 ? 'You did not take a single breath.' : `Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pct(f.rateChange)} percent.`;
     case 'blinks': return f.blinkBurst < 0 ? 'You stopped blinking.' : `You blinked ${f.blinkCount ?? 0} times in ${Math.round((f.windowMs ?? PEEK_MS) / 1000)} seconds.`;
-    case 'joy': return (f.exprDelta.happy ?? 0) > 0 ? 'You smiled the way you smile at traps.' : 'Your smile dropped.';
+    case 'joy': return (f.exprDelta.happy ?? 0) > 0 ? 'You smiled the way you smile at duds.' : 'Your smile dropped.';
     case 'alarm': return 'Your face jumped.';
     default: return f.talking ? 'You started talking the moment you looked.' : 'Something changed when you looked.';
   }
@@ -69,9 +69,9 @@ export function replayMarks(f: PeekFeatures, level: LevelNo): ReplayMark[] {
 export function replayVerdict(f: PeekFeatures, read: BankerRead, kind: BoxKind, level: LevelNo): ReplayVerdict {
   const marks = replayMarks(f, level);
   if (read.decision === 'walk') {
-    return { line: `There. ${detailFor(f, read.driver ?? null)} ${kind === 'trap' ? 'I knew.' : 'I walked.'}`, caught: true, marks };
+    return { line: `There. ${detailFor(f, read.driver ?? null)} ${kind === 'trap' ? 'I knew it was a dud.' : 'So I passed.'}`, caught: true, marks };
   }
-  if (read.decision === 'unread') return { line: 'I lost you there. I could not read a thing.', caught: false, marks };
+  if (read.decision === 'unread') return { line: 'I could not read you there, so I paid blind.', caught: false, marks };
   if (kind === 'trap') {
     const saw = marks.some((m) => m.kind !== 'talk') && read.pTrap > 0.35;
     return { line: saw ? 'I saw something, but not enough. You got me.' : 'I saw nothing. You got me.', caught: false, marks };
