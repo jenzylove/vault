@@ -41,4 +41,8 @@ export interface VaultSceneProps {
   alert?: number;
   /** performance.now() timestamp of the latest detected breath catch: lamp flare, needle jump, camera push. */
   catchPulse?: number;
+  /** Cash lands: performance.now() stamp and the amount. A coin burst flies toward the bottom right, bigger for more cash. */
+  payout?: { at: number; amount: number };
+  /** performance.now() stamp of a bust or a caught dud: red alarm sweep and a short shake. */
+  busted?: number;
 }
