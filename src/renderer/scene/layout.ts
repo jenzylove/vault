@@ -14,7 +14,7 @@ export const CELL = 0.8;
 export const GRID = { cols: 5, rows: 2, x0: -1.1, rowY: [2.2, 1.38] as const };
 
 /** The hero pose: middle of the screen, in front of the wall, scaled up. */
-export const HERO = { pos: new THREE.Vector3(0.0, 1.36, 2.3), scale: 1.32 };
+export const HERO = { pos: new THREE.Vector3(0.0, 1.62, 2.3), scale: 1.2 };
 
 /** The Fence's booth window, cut into the wall on the right. */
 export const BOOTH = { x: 2.42, w: 1.6, bottom: 0.98, top: 2.82, back: -1.35 };

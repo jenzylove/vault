@@ -806,8 +806,9 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
               {!sim && <span className="chip-soft">Esc turns the camera off</span>}
               <button className="chip-soft" onClick={toggleMute} style={{ border: 0, cursor: 'pointer', font: 'inherit' }}>M sound {muted ? 'off' : 'on'}</button>
             </div>
+            {job.hints && ruleStep >= 0 && !(lost && reading) && <div className="rs-top"><RuleStrip step={ruleStep} /></div>}
             <div className="stage">
-              {job.hints && ruleStep >= 0 && !(lost && reading) && <RuleStrip step={ruleStep} />}
+              {/* rule strip lives at the top now, so it never covers the safe */}
               {lost && reading ? (
                 <div className="finding">
                   <div className="calm-line">Finding you…</div>

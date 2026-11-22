@@ -216,13 +216,13 @@
 .calm-line { font-size: var(--fs-m); color: var(--cream); background: rgba(42,5,12,0.75); padding: 10px 18px; border-radius: 14px; }
 .stage-card { background: var(--cream); color: var(--velvet-deep); border-radius: var(--r); padding: 14px 20px; width: 100%; box-shadow: 0 7px 0 var(--cream-dim), 0 18px 40px rgba(20,0,4,0.5); animation: rise 0.4s var(--ease) both; }
 .stage-card .breathline polyline { stroke-width: 4; }
-.stage-card .breathline.big { width: 100%; height: clamp(80px, 11vh, 150px); }
+.stage-card .breathline.big { width: 100%; height: clamp(44px, 7vh, 96px); }
 .stage-card.caught { box-shadow: 0 7px 0 var(--cream-dim), 0 0 0 4px var(--crimson), 0 18px 40px rgba(20,0,4,0.5); }
 .peekrow { display: flex; align-items: center; gap: 16px; width: 100%; }
 .peekrow .grow { flex: 1; text-align: left; }
 .sawit { display: inline-block; align-self: center; background: var(--crimson); color: var(--cream); font-weight: 700; font-size: var(--fs-s); padding: 6px 14px; border-radius: 99px; animation: popin 0.35s var(--pop) both; }
 .sawit.hidden { visibility: hidden; }
-.contents { font-family: var(--bold); font-weight: 700; font-size: var(--fs-xl); line-height: 1; animation: popin 0.5s var(--pop) both; text-shadow: 0 4px 0 var(--velvet-deep), 0 10px 30px rgba(20,0,4,0.6); }
+.contents { font-family: var(--bold); font-weight: 700; font-size: var(--fs-l); line-height: 1; animation: popin 0.5s var(--pop) both; text-shadow: 0 4px 0 var(--velvet-deep), 0 10px 30px rgba(20,0,4,0.6); }
 .contents.trap { color: var(--alarm); }
 .contents.big { color: #ffd27a; }
 .contents.small { color: #9df0c8; }
@@ -311,3 +311,4 @@
   .card .blurb { min-height: 0; }
   .selfview { aspect-ratio: 16 / 10; }
 }
+.rs-top { position: absolute; top: var(--gut); left: 50%; transform: translateX(-50%); z-index: 3; display: flex; gap: 8px; white-space: nowrap; }
