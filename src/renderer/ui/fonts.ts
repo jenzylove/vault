@@ -1,6 +1,6 @@
 /** Self hosted faces (SIL OFL, licences beside the files in public/fonts). Relative URLs so file:// works. */
 const FACES: [family: string, file: string, weight: string, style: string][] = [
-  ['Heist Display', 'alfa-slab-one-latin-400-normal.woff2', '400', 'normal'],
+  ['Heist Display', 'limelight-latin-400-normal.woff2', '400', 'normal'],
   ['Heist Sans', 'rubik-latin-400-normal.woff2', '400', 'normal'],
   ['Heist Sans', 'rubik-latin-500-normal.woff2', '500', 'normal'],
   ['Heist Sans', 'rubik-latin-700-normal.woff2', '700', 'normal'],
