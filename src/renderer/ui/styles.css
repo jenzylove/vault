@@ -411,7 +411,7 @@
 /* his call on the last safe */
 .call { display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .call .thinking { font-family: var(--display); font-size: var(--fs-xl); color: var(--cream); text-shadow: 0 4px 0 var(--velvet-deep); animation: breathe 0.8s ease-in-out infinite; }
-.call .word { font-family: var(--display); font-size: clamp(70px, 9vw, 170px); line-height: 0.9; letter-spacing: 0.04em; text-shadow: 0 6px 0 var(--velvet-deep), 0 18px 44px rgba(20,0,4,0.6); animation: slam 0.45s var(--pop) both; }
+.call .word { font-family: var(--bold); font-weight: 700; text-transform: uppercase; font-size: clamp(70px, 9vw, 170px); line-height: 0.9; letter-spacing: 0.04em; text-shadow: 0 6px 0 var(--velvet-deep), 0 18px 44px rgba(20,0,4,0.6); animation: slam 0.45s var(--pop) both; }
 .call .word.dud { color: var(--alarm); }
 .call .word.loot { color: #ffd27a; }
 .call .truth { font-size: var(--fs-m); color: var(--cream); text-shadow: 0 2px 12px rgba(30,2,8,0.9); animation: rise 0.4s var(--ease) both; }
