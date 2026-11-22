@@ -374,7 +374,7 @@
 .takecard .falls { font-size: var(--fs-xs); font-weight: 700; color: rgba(58,7,16,0.65); }
 .takecard .key { font-size: var(--fs-s); align-self: center; background: var(--loot); color: #fff; padding: 0.3em 0.7em; }
 .takecard.late .key { background: var(--alarm); }
-.tooslow { font-family: var(--display); font-size: var(--fs-xl); color: var(--alarm); text-shadow: 0 4px 0 var(--velvet-deep); animation: slam 0.4s var(--pop) both; }
+.tooslow { font-family: var(--bold); font-weight: 700; text-transform: uppercase; font-size: var(--fs-xl); color: var(--alarm); text-shadow: 0 4px 0 var(--velvet-deep); animation: slam 0.4s var(--pop) both; }
 .risk { display: inline-flex; align-items: center; gap: 10px; background: rgba(42,5,12,0.82); color: var(--cream); font-weight: 700; font-size: var(--fs-s); padding: 7px 16px 7px 8px; border-radius: 99px; max-width: 100%; }
 .risk .lamp { width: 20px; height: 20px; }
 
@@ -410,7 +410,7 @@
 
 /* his call on the last safe */
 .call { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.call .thinking { font-family: var(--display); font-size: var(--fs-xl); color: var(--cream); text-shadow: 0 4px 0 var(--velvet-deep); animation: breathe 0.8s ease-in-out infinite; }
+.call .thinking { font-family: var(--bold); font-weight: 700; font-size: var(--fs-xl); color: var(--cream); text-shadow: 0 4px 0 var(--velvet-deep); animation: breathe 0.8s ease-in-out infinite; }
 .call .word { font-family: var(--bold); font-weight: 700; text-transform: uppercase; font-size: clamp(70px, 9vw, 170px); line-height: 0.9; letter-spacing: 0.04em; text-shadow: 0 6px 0 var(--velvet-deep), 0 18px 44px rgba(20,0,4,0.6); animation: slam 0.45s var(--pop) both; }
 .call .word.dud { color: var(--alarm); }
 .call .word.loot { color: #ffd27a; }
