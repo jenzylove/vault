@@ -27,6 +27,7 @@ import {
 import { renderShareCard } from './shareCard';
 import { loadFonts } from './fonts';
 import { alarm, coins, dialClicks, doorClunk, doorCreak, drumRoll, dudSting, hit, lootChime, offerTick } from './sfx';
+import { useMusic } from './music';
 import {
   BodyPanel, BreathLine, Btn, Hud, LiveScene, Purse, Reads, ReplayTrace, Ring, RuleStrip, Subtitle, ValuesBoard, caughtCount, money, usePoll,
 } from './parts';
@@ -875,6 +876,13 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     : game.phase === 'bankerRead' ? (tooSlow ? 'tooslow' : 'offer')
       : game.phase === 'finalCall' ? `call${finalStage}`
         : replay ? 'replay' : game.phase;
+  // music: the heist score follows the screen and stings the moments (ui/music.ts)
+  const lastLog = game.log[game.log.length - 1];
+  useMusic({
+    screen, phase: game.phase, stage: sub, practice: practice.stage, paused, pace: P, gameNo: gameNo.current,
+    logLen: game.log.length, last: lastLog ? { result: lastLog.result, strike: lastLog.strike, expired: lastLog.expired, final: lastLog.final } : null,
+    strikes: game.strikes, busted: game.busted, finalStage, finalRight: fc ? fc.right : null,
+  });
   const shownPile = fc ? (finalStage >= 2 ? fc.after : fc.before) : undefined;
   const findingHint = (() => {
     if (!lost) return null;

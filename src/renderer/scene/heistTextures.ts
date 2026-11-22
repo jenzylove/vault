@@ -153,8 +153,8 @@ export function dyeTexture(): THREE.Texture {
     ctx.fillStyle = '#e6dcc8'; ctx.fillRect(0, 0, w, h);
     ctx.fillStyle = PAL.alarm; ctx.fillRect(0, h - 26, w, 26);
     ctx.fillStyle = '#3a0710'; ctx.font = '800 44px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('DUD', w / 2, h / 2 - 10);
-    ctx.fillStyle = PAL.cream; ctx.font = '700 15px Arial, sans-serif'; ctx.fillText('DYE PACK  DO NOT OPEN', w / 2, h - 13);
+    ctx.fillText('EMPTY', w / 2, h / 2 - 10);
+    ctx.fillStyle = PAL.cream; ctx.font = '700 15px Arial, sans-serif'; ctx.fillText('NOTHING INSIDE', w / 2, h - 13);
   });
 }
 
