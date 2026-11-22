@@ -832,10 +832,9 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                   )}
                   {game.phase === 'board' && (
                     <>
-                      {game.log.length === 0 && memLine
-                        ? <Subtitle text={memLine} />
-                        : <div className="prompt big">Pick a safe to crack</div>}
-                      <div className="line">{runLeft(game)} safe{runLeft(game) === 1 ? '' : 's'} to go. Click a safe, or press 1 to 0 from left to right.</div>
+                      <div className="prompt big">Click any safe to crack it</div>
+                      <div className="line">{runLeft(game)} safe{runLeft(game) === 1 ? '' : 's'} to go this job.</div>
+                      {game.log.length === 0 && memLine && <div className="line" style={{ opacity: 0.85, fontStyle: 'italic' }}>The Fence: &ldquo;{memLine}&rdquo;</div>}
                       {game.log.length > 0 && <div className="actions"><Btn ghost k="L" onClick={leave}>Walk out with {money(game.pile)}</Btn></div>}
                     </>
                   )}

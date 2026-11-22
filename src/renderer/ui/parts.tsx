@@ -207,7 +207,7 @@ export function ValuesBoard({ game }: { game: GameState }): JSX.Element {
   };
   return (
     <div className="values panel" aria-label="What is still in the vault">
-      <div className="lab">In the vault</div>
+      <div className="lab">Inside the 10 safes</div><div className="small" style={{ marginBottom: 4, color: "var(--velvet)" }}>7 hold loot, 3 are duds</div>
       {VALUE_TABLE.small.map((v) => <div key={`s${v}`} className={`v num${gone('small', v) ? ' gone' : ''}`}>{money(v)}</div>)}
       {VALUE_TABLE.big.map((v) => <div key={`b${v}`} className={`v big num${gone('big', v) ? ' gone' : ''}`}>{money(v)}</div>)}
       {VALUE_TABLE.trap.map((v, i) => <div key={`t${i}`} className={`v trap${gone('trap', v) ? ' gone' : ''}`}>Dud</div>)}

@@ -90,7 +90,7 @@ function Marquee({ text, x, y, w, h }: { text: string; x: number; y: number; w: 
   return (
     <group position={[x, y, WALL_Z + 0.02]}>
       <mesh position={[0, 0, -0.01]} material={signMat}><boxGeometry args={[w + 0.12, h + 0.12, 0.05]} /></mesh>
-      {pts.map(([px, py], i) => <mesh key={i} geometry={bulbGeo} material={i % 2 ? bulbA : bulbB} position={[px * (1 + 0.06 / w * 2), py + Math.sign(py) * 0.0, 0.03]} />)}
+      {/* no bulbs: a quiet plaque reads as a vault, chasing lights read as a disco */}
     </group>
   );
 }

@@ -40,7 +40,7 @@ export function velvetTexture(): THREE.Texture {
     for (let iy = -1; iy <= 5; iy++) for (let ix = -1; ix <= 2; ix++) {
       const cx = ix * cell + (iy % 2 ? cell / 2 : 0), cy = iy * cell / 2;
       const g = ctx.createRadialGradient(cx, cy - 6, 2, cx, cy, cell * 0.5);
-      g.addColorStop(0, '#9a1e2c'); g.addColorStop(0.6, '#74121f'); g.addColorStop(1, '#480a14');
+      g.addColorStop(0, '#841a28'); g.addColorStop(0.6, '#6e1220'); g.addColorStop(1, '#560c18');
       ctx.fillStyle = g; ctx.strokeStyle = 'rgba(40,4,10,0.6)'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(cx, cy - cell / 2); ctx.lineTo(cx + cell / 2, cy); ctx.lineTo(cx, cy + cell / 2); ctx.lineTo(cx - cell / 2, cy); ctx.closePath(); ctx.fill(); ctx.stroke();
     }
@@ -48,8 +48,8 @@ export function velvetTexture(): THREE.Texture {
     for (let iy = 0; iy <= 4; iy++) for (let ix = -1; ix <= 2; ix++) {
       const bx = ix * cell + (iy % 2 ? 0 : cell / 2), by = iy * cell / 2;
       const g = ctx.createRadialGradient(bx - 2, by - 2, 0, bx, by, 9);
-      g.addColorStop(0, '#e0a77a'); g.addColorStop(0.5, '#8a4a2c'); g.addColorStop(1, 'rgba(40,4,10,0)');
-      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, 9, 0, Math.PI * 2); ctx.fill();
+      g.addColorStop(0, '#4a0a14'); g.addColorStop(0.6, '#3e0810'); g.addColorStop(1, 'rgba(40,4,10,0)');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
     }
     // nap speckle
     for (let i = 0; i < 2500; i++) { ctx.fillStyle = `rgba(${r() < 0.5 ? '255,180,180' : '20,0,4'},${0.04 + r() * 0.05})`; ctx.fillRect(r() * w, r() * h, 1, 1); }
