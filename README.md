@@ -66,6 +66,7 @@ The SDK is the game's only input. Every decision The Fence makes comes from what
 | Talking | Talking over the look counts as a tell | [banker.ts](src/renderer/engine/banker.ts) |
 | Validation status (face, light, chest in view, frame rate) | The Line up screen and the quiet pause when your face is lost | [Lineup.tsx](src/renderer/ui/Lineup.tsx), [status.ts](src/renderer/signals/status.ts) |
 
+* **See the raw feed.** Press **F** while you play to open the SDK's own numbers next to the game: the upper breathing trace, frames a second, pulse, confidence, blinks, talking, the top expression and the validation code.
 * **Where the SDK runs.** The Node SDK runs natively in the Electron main process ([src/main/index.ts](src/main/index.ts)). The game opens the camera itself, keeps the camera's own exposure, and hands every frame to the SDK through custom input (`useCustomInput` and `sendFrame`), so the picture stays bright under a desk lamp. Only metrics travel to the game screen.
 * **The Fence is a model of you.** A per player naive Bayes over six features, seeded with priors and updated by every safe you open or sell ([banker.ts](src/renderer/engine/banker.ts)). A signal only earns weight when your full and empty safes really separate on it.
 * **Fair by design.** An incentive probe plays 400 simulated players per bank: controlled breathing beats honest leaking, and faking tells never wins in normal play ([docs/probe.md](docs/probe.md)). On the last safe his call uses your body only, never the odds of the board.
