@@ -281,10 +281,10 @@ export const Safe = memo(function Safe({ id, label, home, homeScale = 1, look, m
     const lit = a.open * (contents ? 1 : 0.35);
     const dud = contents === 'trap';
     const blink = dud ? (Math.sin(now * 9) > 0.2 ? 1 : 0.35) : 1;
-    spillMat.opacity = lit * (dud ? 0.32 * blink : 0.42) * (0.6 + 0.4 * fly);
+    spillMat.opacity = lit * (dud ? 0.22 * blink : 0.2) * (0.6 + 0.4 * fly);
     spillMat.color.set(dud ? PAL.alarm : '#ffc070');
     if (spill.current) spill.current.visible = spillMat.opacity > 0.01;
-    backGlowMat.opacity = lit * (dud ? 0.55 * blink : 0.6);
+    backGlowMat.opacity = 0; // no glare inside: the contents should read, not a light
     backGlowMat.color.set(dud ? PAL.alarm : '#ffb050');
     if (contentsRef.current) contentsRef.current.visible = a.open > 0.02 && !!contents;
 
@@ -295,7 +295,7 @@ export const Safe = memo(function Safe({ id, label, home, homeScale = 1, look, m
       if (a.heroT > 0.5) {
         sceneFx.heroAccLight = Math.max(sceneFx.heroAccLight, lit * fly);
         sceneFx.heroLightColor.set(dud ? PAL.alarm : '#ffb54a');
-        sceneFx.heroLightPos.set(g.position.x, g.position.y + 0.05, g.position.z + 0.75 * sc);
+        sceneFx.heroLightPos.set(g.position.x, g.position.y - 0.1, g.position.z + 1.5 * sc);
       }
     }
   });

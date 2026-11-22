@@ -312,3 +312,5 @@
   .selfview { aspect-ratio: 16 / 10; }
 }
 .rs-top { position: absolute; top: var(--gut); left: 50%; transform: translateX(-50%); z-index: 3; display: flex; gap: 8px; white-space: nowrap; }
+.peek-timer { width: 64px; height: 64px; background: var(--cream); border-radius: 50%; box-shadow: 0 4px 0 var(--cream-dim), 0 10px 24px rgba(20,0,4,0.45); display: grid; place-items: center; }
+.peek-timer svg { width: 56px; height: 56px; }

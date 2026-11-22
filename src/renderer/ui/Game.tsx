@@ -1096,13 +1096,8 @@ function PeekStage({ kind, value, recRef, bus, caught, peekMs }: {
       <div className="eyebrow shadowed">Only you can see this</div>
       <div className={`contents ${kind}`}>{kindName(kind, value)}</div>
       <span className={`sawit${caught ? '' : ' hidden'}`} aria-live="polite">He saw that.</span>
-      <div className={`stage-card${caught ? ' caught' : ''}`}>
-        <div className="peekrow">
-          <Ring progress={p} label={String(Math.max(0, Math.ceil((peekMs / 1000) * (1 - p))))} />
-          <div className="grow"><BreathLine bus={bus} big /></div>
-        </div>
-      </div>
-      <div className="line">Keep breathing. He is reading that line.</div>
+      <div className="peek-timer"><Ring progress={p} label={String(Math.max(0, Math.ceil((peekMs / 1000) * (1 - p))))} /></div>
+      <div className="line">He is watching your face. Act natural.</div>
     </>
   );
 }

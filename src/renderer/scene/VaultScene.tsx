@@ -50,7 +50,7 @@ function Driver({ alert, catchPulse, busted, beat, heat, lite }: {
     if (heroLight.current) {
       heroLight.current.position.copy(sceneFx.heroLightPos);
       heroLight.current.color.copy(sceneFx.heroLightColor);
-      heroLight.current.intensity = sceneFx.heroLight * 7;
+      heroLight.current.intensity = sceneFx.heroLight * 3;
     }
     // a bust floods the room red; suspicion warms it a little
     const al = sceneFx.alarm, pulse = al * (0.6 + 0.4 * Math.sin(now / 1000 * 18));
