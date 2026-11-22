@@ -7,4 +7,5 @@ out/
 *.mp4
 *.mkv
 recordings/
-
+web-dist/
+.vercel/

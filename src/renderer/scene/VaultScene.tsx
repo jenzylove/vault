@@ -184,13 +184,29 @@ function LiteTicker({ fps }: { fps: number }): null {
   return null;
 }
 
+/** Browser build only (npm run web): a machine that cannot hold a playable frame rate drops to lite for good. */
+const WEB_BUILD = !!import.meta.env.VITE_VAULT_WEB;
+function SlowGuard({ onSlow }: { onSlow: () => void }): null {
+  const w = useRef({ from: performance.now() + 4000, last: 0, n: 0 });
+  useFrame(() => {
+    const now = performance.now(); const s = w.current;
+    const gap = now - s.last; s.last = now;
+    if (now < s.from) return;
+    if (gap > 500) { s.from = now; s.n = 0; return; } // a hidden tab or a shader compile, not a slow machine
+    s.n++;
+    if (now - s.from >= 4000) { if (s.n / ((now - s.from) / 1000) < 24) onSlow(); s.from = now; s.n = 0; }
+  });
+  return null;
+}
+
 export function VaultScene(props: VaultSceneProps): JSX.Element {
   const high = props.quality === 'high';
   // adaptive resolution: drop render scale when the GPU is busy, recover when it frees up
   const base = high ? 0.9 : 0.7;
   const [dpr, setDpr] = useState(base);
   useEffect(() => setDpr(base), [base]);
-  const lite = !!props.lite;
+  const [slow, setSlow] = useState(false);
+  const lite = !!props.lite || slow;
   return (
     <Canvas
       frameloop={lite ? 'demand' : 'always'}
@@ -202,9 +218,10 @@ export function VaultScene(props: VaultSceneProps): JSX.Element {
     >
       <color attach="background" args={['#2a070d']} />
       {lite && <LiteTicker fps={20} />}
+      {WEB_BUILD && !lite && <SlowGuard onSlow={() => setSlow(true)} />}
       {!lite && <PerformanceMonitor bounds={() => [50, 59]} flipflops={6} onDecline={() => setDpr((d) => Math.max(high ? 0.65 : 0.5, +(d - 0.1).toFixed(2)))} onIncline={() => setDpr((d) => Math.min(base, +(d + 0.1).toFixed(2)))} />}
       <Suspense fallback={null}>
-        <SceneContents {...props} />
+        <SceneContents {...props} lite={lite} />
       </Suspense>
     </Canvas>
   );

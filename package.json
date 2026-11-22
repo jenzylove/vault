@@ -11,6 +11,8 @@
     "pack": "electron-vite build && electron-builder --dir",
     "dist": "electron-vite build && electron-builder --win --x64",
     "preview": "electron-vite preview",
+    "web": "vite build -c vite.web.config.mts",
+    "web:deploy": "npm run web && node scripts/web-deploy.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "voice": "python scripts/voice/gen.py"
