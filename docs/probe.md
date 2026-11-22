@@ -25,13 +25,13 @@ Same 400 seeds at Bank 3, but every player bets the last safe instead of walking
 | Strategy | Bets made | He called it wrong (you doubled) | Mean pile when betting | vs walking out |
 |---|---:|---:|---:|---:|
 | Honest (natural tells) | 100% | 9% | 362 | -1535 |
-| Always steady (skilled breath control) | 100% | 28% | 1378 | -946 |
-| Fake gasp at treasure | 32% | 79% | 425 | +143 |
+| Always steady (skilled breath control) | 100% | 30% | 1445 | -879 |
+| Fake gasp at treasure | 32% | 78% | 421 | +139 |
 | Freeze blank every peek | 11% | 64% | 123 | +25 |
 | Hold breath every peek | 11% | 65% | 115 | +25 |
 | Fake smile at traps only | 100% | 9% | 362 | -1539 |
-| Duck out of camera at traps | 100% | 29% | 1176 | -658 |
-| Always steady, ignores strikes (sells every dud) | 68% | 37% | 1248 | -452 |
+| Duck out of camera at traps | 100% | 29% | 605 | -1229 |
+| Always steady, ignores strikes (sells every dud) | 68% | 37% | 1261 | -439 |
 
 ## The banker ladder
 
@@ -41,13 +41,13 @@ Reads: breath. Learning weight 0.5, walks at P(trap) 0.62, base margin 0.15. Bea
 
 | Strategy | Mean pile | vs honest | Beat the banker | Busted |
 |---|---:|---:|---:|---:|
-| Honest (natural tells) | 1967 |  | 37% | 0% |
+| Honest (natural tells) | 1967 |  | 39% | 0% |
 | Always steady (skilled breath control) | 2439 | +24% | 64% | 0% |
 | Fake gasp at treasure | 298 | -85% | 0% | 0% |
 | Freeze blank every peek | 103 | -95% | 0% | 0% |
 | Hold breath every peek | 94 | -95% | 0% | 0% |
-| Fake smile at traps only | 1967 | +0% | 37% | 0% |
-| Duck out of camera at traps | 1896 | -4% | 33% | 0% |
+| Fake smile at traps only | 1967 | +0% | 39% | 0% |
+| Duck out of camera at traps | 1896 | -4% | 34% | 0% |
 | Always steady, ignores strikes (sells every dud) | 1776 | -10% | 53% | 33% |
 
 ### Bank 2: Cutpurse
@@ -56,13 +56,13 @@ Reads: breath, blinks. Learning weight 0.75, walks at P(trap) 0.6, base margin 0
 
 | Strategy | Mean pile | vs honest | Beat the banker | Busted |
 |---|---:|---:|---:|---:|
-| Honest (natural tells) | 1929 |  | 24% | 0% |
+| Honest (natural tells) | 1929 |  | 25% | 0% |
 | Always steady (skilled breath control) | 2383 | +24% | 49% | 0% |
 | Fake gasp at treasure | 287 | -85% | 0% | 0% |
 | Freeze blank every peek | 100 | -95% | 0% | 0% |
 | Hold breath every peek | 91 | -95% | 0% | 0% |
-| Fake smile at traps only | 1929 | +0% | 24% | 0% |
-| Duck out of camera at traps | 1861 | -4% | 24% | 0% |
+| Fake smile at traps only | 1929 | +0% | 25% | 0% |
+| Duck out of camera at traps | 1861 | -4% | 25% | 0% |
 | Always steady, ignores strikes (sells every dud) | 1738 | -10% | 42% | 33% |
 
 ### Bank 3: Cracksman
@@ -71,13 +71,13 @@ Reads: breath, blinks, face. Learning weight 1, walks at P(trap) 0.6, base margi
 
 | Strategy | Mean pile | vs honest | Beat the banker | Busted |
 |---|---:|---:|---:|---:|
-| Honest (natural tells) | 1896 |  | 23% | 0% |
+| Honest (natural tells) | 1896 |  | 24% | 0% |
 | Always steady (skilled breath control) | 2324 | +23% | 46% | 0% |
 | Fake gasp at treasure | 281 | -85% | 0% | 0% |
 | Freeze blank every peek | 98 | -95% | 0% | 0% |
 | Hold breath every peek | 89 | -95% | 0% | 0% |
-| Fake smile at traps only | 1901 | +0% | 23% | 0% |
-| Duck out of camera at traps | 1834 | -3% | 22% | 0% |
+| Fake smile at traps only | 1901 | +0% | 25% | 0% |
+| Duck out of camera at traps | 1834 | -3% | 23% | 0% |
 | Always steady, ignores strikes (sells every dud) | 1700 | -10% | 38% | 33% |
 
 ### Bank 4: Safecracker
@@ -86,13 +86,13 @@ Reads: breath, blinks, face, pulseHeat. Learning weight 1.5, walks at P(trap) 0.
 
 | Strategy | Mean pile | vs honest | Beat the banker | Busted |
 |---|---:|---:|---:|---:|
-| Honest (natural tells) | 1873 |  | 11% | 0% |
+| Honest (natural tells) | 1873 |  | 18% | 0% |
 | Always steady (skilled breath control) | 2290 | +22% | 30% | 0% |
 | Fake gasp at treasure | 275 | -85% | 0% | 0% |
 | Freeze blank every peek | 96 | -95% | 0% | 0% |
 | Hold breath every peek | 88 | -95% | 0% | 0% |
-| Fake smile at traps only | 1874 | +0% | 11% | 0% |
-| Duck out of camera at traps | 1814 | -3% | 7% | 0% |
+| Fake smile at traps only | 1874 | +0% | 18% | 0% |
+| Duck out of camera at traps | 1814 | -3% | 16% | 0% |
 | Always steady, ignores strikes (sells every dud) | 1683 | -10% | 27% | 32% |
 
 ### Bank 5: Ghost

@@ -35,7 +35,7 @@ export function detailFor(f: PeekFeatures, driver: BankerRead['driver']): string
     case 'shallow': return `Your breathing went ${pct(f.shallowing)} percent shallower.`;
     case 'rate': return f.rateChange <= -0.99 ? 'You did not take a single breath.' : `Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pct(f.rateChange)} percent.`;
     case 'blinks': return f.blinkBurst < 0 ? 'You stopped blinking.' : `You blinked ${f.blinkCount ?? 0} times in ${Math.round((f.windowMs ?? PEEK_MS) / 1000)} seconds.`;
-    case 'joy': return (f.exprDelta.happy ?? 0) > 0 ? 'You smiled the way you smile at duds.' : 'Your smile dropped.';
+    case 'joy': return (f.exprDelta.happy ?? 0) > 0 ? 'You smiled the way you smile at empty safes.' : 'Your smile dropped.';
     case 'alarm': return 'Your face jumped.';
     default: return f.talking ? 'You started talking the moment you looked.' : 'Something changed when you looked.';
   }

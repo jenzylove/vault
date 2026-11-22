@@ -169,7 +169,7 @@ export function Hud({ game, job, daily }: { game: GameState; job: Job; daily: bo
         {Array.from({ length: r.safes }, (_, i) => {
           const o = game.log[i];
           // the last safe, double or nothing: green if he called it wrong, red if he read you
-          const cls = o ? (o.final ? ((o.decision === 'walk') === (o.kind === 'trap') ? 'caught' : 'kept')
+          const cls = o ? (o.final ? (o.decision === 'unread' ? 'kept' : (o.decision === 'walk') === (o.kind === 'trap') ? 'caught' : 'kept')
             : o.kind === 'trap' ? (o.result === 'sold' ? 'dumped' : 'caught') : o.result === 'burned' ? 'lost' : 'kept') : i === played && active ? 'now' : '';
           return <span key={i} className={`pip ${cls}`} />;
         })}
@@ -218,10 +218,10 @@ export function ValuesBoard({ game }: { game: GameState }): JSX.Element {
   };
   return (
     <div className="values panel" aria-label="What is still in the vault">
-      <div className="lab">Inside the 10 safes</div><div className="small" style={{ marginBottom: 4, color: "var(--velvet)" }}>7 hold loot, 3 are duds</div>
+      <div className="lab">Inside the 10 safes</div><div className="small" style={{ marginBottom: 4, color: "var(--velvet)" }}>7 are full, 3 are empty</div>
       {VALUE_TABLE.small.map((v) => <div key={`s${v}`} className={`v num${gone('small', v) ? ' gone' : ''}`}>{money(v)}</div>)}
       {VALUE_TABLE.big.map((v) => <div key={`b${v}`} className={`v big num${gone('big', v) ? ' gone' : ''}`}>{money(v)}</div>)}
-      {VALUE_TABLE.trap.map((v, i) => <div key={`t${i}`} className={`v trap${gone('trap', v) ? ' gone' : ''}`}>Dud</div>)}
+      {VALUE_TABLE.trap.map((v, i) => <div key={`t${i}`} className={`v trap${gone('trap', v) ? ' gone' : ''}`}>Empty</div>)}
     </div>
   );
 }

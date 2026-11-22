@@ -197,7 +197,7 @@ function walkReason(f: PeekFeatures, driver: FeatureName | null, view: BankerVie
       : pickLine(WALK.smileDrop, pick, 'walk.smileDrop');
     case 'alarm': return pickLine(WALK.alarm(pct((f.exprDelta.surprise ?? 0) + (f.exprDelta.fear ?? 0))), pick, 'walk.alarm');
     default: return view.trapsBought > 0
-      ? pickLine(WALK.sold(view.trapsBought === 1 ? 'a dud' : `${view.trapsBought} duds`), pick, 'walk.sold')
+      ? pickLine(WALK.sold(view.trapsBought === 1 ? 'an empty safe' : `${view.trapsBought} empty safes`), pick, 'walk.sold')
       : pickLine(WALK.vague, pick, 'walk.vague');
   }
 }
@@ -215,6 +215,52 @@ function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number
   }
   if (f.breathCatchMs === 0) return pickLine(OFFER.calm(offer), pick, 'offer.calm');
   return pickLine(OFFER.plain(offer), pick, 'offer.plain');
+}
+
+export interface FinalRead {
+  /** none = he could not see you, so there is no bet */
+  call: 'loot' | 'dud' | 'none';
+  /** what he saw, in one plain sentence with the measured number (shown on screen, not spoken) */
+  why: string;
+}
+
+const one = (ms: number): string => (ms / 1000).toFixed(1);
+const pc = (x: number): number => Math.round(Math.abs(x) * 100);
+
+/**
+ * The last safe, double or nothing: his call from your body alone. The board's odds (most safes are
+ * full) play no part, so a player he cannot read is a coin toss for him, never a sure win.
+ */
+export function finalRead(model: BankerModel, f: PeekFeatures): FinalRead {
+  if (f.quality < MIN_QUALITY) return { call: 'none', why: 'The camera lost you during the look, so he had nothing to read.' };
+  const mask = featureMask(model.level);
+  if (mask[0] && !f.talking && f.breathCatchMs > 0) {
+    return { call: 'dud', why: `Your breath stopped for ${one(f.breathCatchMs)} seconds when the door opened.` };
+  }
+  const ev = evidence(model, f);
+  const z = PRIOR.shrink * ev.reduce((a, x) => a + x, 0) + (f.talking ? PRIOR.talkingLogOdds : 0);
+  const call: FinalRead['call'] = z > 0 ? 'dud' : 'loot';
+  if (Math.abs(z) < 0.25) {
+    return { call, why: 'Your body gave him almost nothing on this one. He went with a hunch.' };
+  }
+  if (call === 'dud') {
+    if (f.talking) return { call, why: 'You talked while you looked inside.' };
+    const i = ev.indexOf(Math.max(...ev));
+    const name = FEATURE_NAMES[i] ?? 'breath';
+    const why = name === 'shallow' ? `Your breathing went ${pc(f.shallowing)} percent shallower than your calm.`
+      : name === 'rate' ? `Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pc(f.rateChange)} percent.`
+      : name === 'blinks' ? (f.blinkBurst < 0 ? 'You stopped blinking while you looked.' : `You blinked ${f.blinkCount ?? 'more'} times, more than your calm.`)
+      : name === 'joy' ? 'You smiled the way you smile at empty safes.'
+      : name === 'alarm' ? 'Your face jumped when the door opened.'
+      : 'Your breathing changed when the door opened.';
+    return { call, why };
+  }
+  const i = ev.indexOf(Math.min(...ev));
+  const g = GROUP[FEATURE_NAMES[i] ?? 'breath'];
+  const why = g === 'blinks' ? 'Your blinking stayed like your calm, the way it does at full safes.'
+    : g === 'face' ? 'Your face looked the way it does at full safes.'
+    : 'Your breathing stayed even, the way it does at full safes.';
+  return { call, why };
 }
 
 /** Pure read. Decides walk, offer or unread, prices it, and says why in one plain sentence. */

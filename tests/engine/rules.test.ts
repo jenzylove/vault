@@ -195,11 +195,23 @@ describe('the last safe: double or nothing', () => {
     expect(step(b, { type: 'next' }).pile).toBe(2 * bet.pile);
   });
 
-  test('he could not read you: he calls loot', () => {
+  test('he could not read you: no call, the bet is off and the take stays', () => {
     const bet = step(toLastSafe(), { type: 'finalBet' });
-    const s = look(bet, 'trap', unread);
-    expect(s.finalCall).toMatchObject({ call: 'loot', right: false });
-    expect(FINAL.lootUnread).toContain(s.read!.reason);
+    for (const kind of ['trap', 'treasure'] as const) {
+      const s = look(bet, kind, unread);
+      expect(s.finalCall).toMatchObject({ call: 'none', right: false, before: bet.pile, after: bet.pile });
+      expect(FINAL.none).toContain(s.read!.reason);
+      expect(step(s, { type: 'next' }).pile).toBe(bet.pile);
+    }
+  });
+
+  test('his last call is your body alone: the board odds never decide it', () => {
+    // a body that gives nothing (exactly at the line between his two reads) must not be called full just
+    // because most safes are full; whatever he calls comes with a reason on screen
+    const bet = step(toLastSafe(), { type: 'finalBet' });
+    const s = look(bet, 'treasure', calm);
+    expect(s.finalCall!.why).toBeTruthy();
+    expect(s.finalCall!.why).not.toMatch(/odds|most safes/i);
   });
 
   test('nothing in the take: no choice, the last safe plays as usual', () => {
@@ -271,8 +283,8 @@ describe('his lines', () => {
       [...WALK.vague], UNREAD(120), OFFER.smileCalm(240), OFFER.bigSmile(1100), OFFER.big(1100), OFFER.close('your breathing', 200),
       OFFER.calm(210), OFFER.plain(210), VERDICT.walkDud('You stopped breathing for 1.4 seconds.'), VERDICT.walkLoot('Your face jumped.'),
       [...VERDICT.unread], [...VERDICT.missedSaw], [...VERDICT.missed], [...VERDICT.dudKept], [...VERDICT.believedCalm], [...VERDICT.believed],
-      [...STRIKE.sold], [...STRIKE.caught], [...STRIKE.busted], [...FINAL.dudBreath], [...FINAL.dud], [...FINAL.loot], [...FINAL.lootUnread],
-      [...FINAL.right], [...FINAL.wrong], MEMORY.named('you held your breath', 'duds'), [...MEMORY.none],
+      [...STRIKE.sold], [...STRIKE.caught], [...STRIKE.busted], [...FINAL.dudBreath], [...FINAL.dud], [...FINAL.loot], [...FINAL.none],
+      [...FINAL.right], [...FINAL.wrong], MEMORY.named('you held your breath', 'empty safes'), [...MEMORY.none],
     ];
     for (const bank of banks) {
       expect(bank.length).toBeGreaterThanOrEqual(6);

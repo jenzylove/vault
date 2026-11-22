@@ -146,7 +146,7 @@ export type SafeLook = {
   hero: boolean;
 };
 
-const KIND_TAG: Record<SceneBoxKind, string> = { small: 'LOOT', big: 'BIG', trap: 'DUD' };
+const KIND_TAG: Record<SceneBoxKind, string> = { small: 'CASH', big: 'GOLD', trap: 'EMPTY' };
 
 export const Safe = memo(function Safe({ id, label, home, homeScale = 1, look, mats, onClick, practiceTag }: {
   id: number;

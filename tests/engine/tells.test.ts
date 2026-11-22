@@ -22,7 +22,7 @@ describe('tell sheet', () => {
       expect(sheet.tells).toHaveLength(TELL_KEYS.length);
       expect(sheet.readLine).toMatch(/^The Fence read \d+ of \d+ safes right\.$/);
       const breath = sheet.tells.find((t) => t.key === 'breath')!;
-      expect(breath.sentence).toMatch(/^At duds your breath (never stopped|stopped for \d+\.\d seconds on average)\. At loot it (never stopped|stopped for \d+\.\d seconds)\.$/);
+      expect(breath.sentence).toMatch(/^At empty safes your breath (never stopped|stopped for \d+\.\d seconds on average)\. At full safes it (never stopped|stopped for \d+\.\d seconds)\.$/);
       if (breath.trap > breath.treasure) breathHigher++; // a sim player catches at 70 to 95% of traps, so not every run
       if (sheet.biggest && ['breath', 'shallow', 'rate'].includes(sheet.biggest.key)) breathTop++;
       for (const t of sheet.tells) expect(t.sentence).not.toMatch(banned);
@@ -46,7 +46,7 @@ describe('tell sheet', () => {
     const sheet = tellSheet(playSimGame('fakeSmile', 7).state);
     const smile = sheet.tells.find((t) => t.key === 'smile')!;
     expect(smile.trap).toBeGreaterThan(smile.treasure);
-    expect(smile.sentence).toMatch(/^At duds you smiled \d+ points more than at your calm\./);
+    expect(smile.sentence).toMatch(/^At empty safes you smiled \d+ points more than at your calm\./);
   });
 
   test('every line is plain words: no signs, symbols, hyphens or dashes', () => {
@@ -67,7 +67,7 @@ describe('tell sheet', () => {
     expect(sayTell('shallow', 10)).toBe('10 percent shallower');
     expect(sayTell('pulse', -3)).toBe('3 beats a minute slower');
     expect(sayTell('smile', 1.2)).toBe('1 point more');
-    expect(trendSentence('breath', [1.4, 0.92, 0.6])).toBe('Breath catch at duds, your last 3 games: 1.4, 0.9 and 0.6 seconds.');
+    expect(trendSentence('breath', [1.4, 0.92, 0.6])).toBe('Breath catch at empty safes, your last 3 games: 1.4, 0.9 and 0.6 seconds.');
     expect(trendSentence('breath', [1.4])).toBe('Play again to watch this tell shrink.');
   });
 

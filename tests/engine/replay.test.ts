@@ -97,8 +97,8 @@ describe('replay verdict', () => {
 
 describe('he remembers you', () => {
   test('names the tell, opens the next run with it, and tracks whether you hid it', () => {
-    expect(tellLine('breath', 1.2)).toBe('You hold your breath when you see a dud.');
-    expect(tellLine('smile', -1.2)).toBe('You smile when you see loot.');
+    expect(tellLine('breath', 1.2)).toBe('You hold your breath when you see an empty safe.');
+    expect(tellLine('smile', -1.2)).toBe('You smile when you see a full one.');
     expect(shareTellLine('breath')).toBe('My tell: I hold my breath. Can you hide yours?');
     expect(shareTellLine(null)).toBe('He could not find my tell. Can he find yours?');
     let h = emptyHistory();
@@ -106,7 +106,7 @@ describe('he remembers you', () => {
     const first = tellSheet(playSimGame('honest', 3, { practice: true }).state);
     expect(hideTrend([], first).trend).toBe('first');
     h = updateHistory(h, first);
-    if (first.biggest?.key === 'breath') expect(MEMORY.named('you held your breath', 'duds')).toContain(memoryLine(h));
+    if (first.biggest?.key === 'breath') expect(MEMORY.named('you held your breath', 'empty safes')).toContain(memoryLine(h));
     else expect(memoryLine(h)).toMatch(/Last (time|job) /);
     const second = tellSheet(playSimGame('steady', 3, { practice: true }).state);
     const tr = hideTrend(h.games, second);

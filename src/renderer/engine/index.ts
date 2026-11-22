@@ -2,13 +2,13 @@ export * from './types';
 export { learnBaseline } from './baseline';
 export { extractFeatures, MIN_QUALITY, CATCH_MARGIN_MS } from './features';
 export {
-  readBanker, featureVector, evidence, signalWeights, walkThreshold, margin, bankerConfidence,
+  readBanker, finalRead, featureVector, evidence, signalWeights, walkThreshold, margin, bankerConfidence,
   featureMask, PRIOR, BANKER_RULES, type BankerModel, type BankerView,
 } from './banker';
 export {
   newGame, step, createBanker, bankerView, computeScore, runLeft, defaultRules, heistPay, VALUE_TABLE, RULES, type RunRules,
   type Banker, type GameState, type GameAction, type Phase, type Scoreboard, type BoxOutcome,
-  OFFER_WINDOW_MS, OFFER_FLOOR, MAX_STRIKES, offerAt, linePick, finalCallFor, finalCallLine, finalResultLine, type FinalCall,
+  OFFER_WINDOW_MS, OFFER_FLOOR, MAX_STRIKES, offerAt, linePick, finalCallLine, finalResultLine, type FinalCall,
 } from './game';
 export { pickLine, pickIndex, strikeLine, type LinePick } from './lines';
 export { SimBody, makeSimPlayer, STRATEGIES, SIMULATED_LABEL, type Strategy, type SimPlayerParams } from './sim';

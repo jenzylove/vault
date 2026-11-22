@@ -140,6 +140,6 @@ describe('createBanker (stateful wrapper)', () => {
     const r = b.read(f, g.boxes[0]!, g);
     expect(r.decision).toBe('walk');
     expect(r.signal).toBe('breath');
-    expect(r.reason).toMatch(/^Dud\. .*\d\.\d seconds/);
+    expect(r.reason).toMatch(/^Empty. .*\d\.\d seconds/);
   });
 });

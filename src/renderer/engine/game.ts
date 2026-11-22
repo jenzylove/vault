@@ -1,6 +1,6 @@
 import type { Baseline, BankerRead, Box, BoxKind, PeekFeatures } from './types';
 import {
-  emptyModel, learnExample, readBanker, type BankerModel, type BankerView,
+  emptyModel, finalRead, learnExample, readBanker, type BankerModel, type BankerView, type FinalRead,
 } from './banker';
 import { MIN_QUALITY } from './features';
 import { createRng } from './rng';
@@ -75,7 +75,8 @@ export type Phase =
 
 /** The last safe, double or nothing: his call, whether it was right, and the take before and after. */
 export interface FinalCall {
-  call: 'loot' | 'dud';
+  /** none: the camera lost you, so the bet is off and your take stays */
+  call: 'loot' | 'dud' | 'none';
   /** his call matches what was inside (then you lose the take) */
   right: boolean;
   before: number;
@@ -83,6 +84,8 @@ export interface FinalCall {
   after: number;
   /** what he says when he calls it (also in state.read.reason) */
   line?: string;
+  /** what he saw in your body, with the number (on screen) */
+  why?: string;
 }
 
 export interface BoxOutcome {
@@ -256,17 +259,13 @@ function settle(s: GameState, outcome: BoxOutcome): GameState {
   return next;
 }
 
-/** His call on the last safe: dud if he would pass, loot if he would buy or could not read you. */
-export function finalCallFor(read: BankerRead): FinalCall['call'] {
-  return read.decision === 'walk' ? 'dud' : 'loot';
-}
-
 /** What he says when he calls the last safe. */
-export function finalCallLine(read: BankerRead, pick: LinePick | null | undefined): string {
-  if (read.decision === 'walk') {
-    return read.driver === 'breath' ? pickLine(FINAL.dudBreath, pick, 'final.dudBreath') : pickLine(FINAL.dud, pick, 'final.dud');
+export function finalCallLine(fr: FinalRead, f: PeekFeatures, pick: LinePick | null | undefined): string {
+  if (fr.call === 'none') return pickLine(FINAL.none, pick, 'final.none');
+  if (fr.call === 'dud') {
+    return f.breathCatchMs > 0 ? pickLine(FINAL.dudBreath, pick, 'final.dudBreath') : pickLine(FINAL.dud, pick, 'final.dud');
   }
-  return read.decision === 'unread' ? pickLine(FINAL.lootUnread, pick, 'final.lootUnread') : pickLine(FINAL.loot, pick, 'final.loot');
+  return pickLine(FINAL.loot, pick, 'final.loot');
 }
 
 /** What he says when the last safe is opened: right (your take is gone) or wrong (it doubles). */
@@ -361,18 +360,22 @@ export function step(s: GameState, a: GameAction): GameState {
       if (s.finalBet) {
         // Double or nothing: no offer. He calls it, and the next 'next' settles the take.
         const pick = linePick(s);
-        const call = finalCallFor(read);
-        const right = (call === 'dud') === (box.kind === 'trap');
-        const line = finalCallLine(read, pick);
-        const finalCall: FinalCall = { call, right, before: s.pile, after: right ? 0 : s.pile * 2, line };
+        // his call is your body alone (finalRead), never the board's odds; no read means no bet
+        const fr = finalRead(s.model, f);
+        const call = fr.call;
+        const right = call !== 'none' && (call === 'dud') === (box.kind === 'trap');
+        const line = finalCallLine(fr, f, pick);
+        const after = call === 'none' ? s.pile : right ? 0 : s.pile * 2;
+        const finalCall: FinalCall = { call, right, before: s.pile, after, line, why: fr.why };
+        const decision: BankerRead['decision'] = call === 'dud' ? 'walk' : call === 'loot' ? 'offer' : 'unread';
         const outcome: BoxOutcome = {
-          boxId: box.id, kind: box.kind, value: box.value, decision: read.decision, offer: null, paid: null, pTrap: read.pTrap,
-          result: 'opened', heatAdded: heated.heat - s.heat, correct: callCorrect(read.decision, box.kind), features: f,
+          boxId: box.id, kind: box.kind, value: box.value, decision, offer: null, paid: null, pTrap: read.pTrap,
+          result: 'opened', heatAdded: heated.heat - s.heat, correct: decision === 'unread' ? null : callCorrect(decision, box.kind), features: f,
           strike: false, strikes: s.strikes, expired: false, final: true,
         };
         return {
           ...heated,
-          read: { ...read, offer: undefined, reason: line },
+          read: { ...read, decision, offer: undefined, reason: line },
           boxes: setBox(heated.boxes, box.id, 'opened'),
           model: learnExample(s.model, f, box.kind),
           log: [...s.log, outcome],
