@@ -38,8 +38,12 @@ export const Payout = memo(function Payout({ payout }: { payout?: { at: number; 
     const m = mesh.current; if (!m) return;
     const b = burst.current;
     const t = (performance.now() - b.at) / 1000;
-    if (t < 0 || t > DUR + 1.2 || b.n === 0) { if (m.count !== 0) { m.count = 0; m.instanceMatrix.needsUpdate = true; } m.visible = false; return; }
-    m.visible = true; m.count = b.n;
+    // idle: one coin scaled to nothing, so the shader is compiled at load and the first payout never stalls
+    if (t < 0 || t > DUR + 1.2 || b.n === 0) {
+      if (m.count !== 1) { m.count = 1; m.setMatrixAt(0, tmp.m.makeScale(0, 0, 0)); m.instanceMatrix.needsUpdate = true; }
+      return;
+    }
+    m.count = b.n;
     // target: just above the bottom right corner, a little in front of the camera
     camera.getWorldDirection(tmp.f);
     tmp.r.crossVectors(tmp.f, camera.up).normalize();
@@ -71,5 +75,5 @@ export const Payout = memo(function Payout({ payout }: { payout?: { at: number; 
     mat.emissiveIntensity = 0.45 + Math.sin(t * 20) * 0.1;
   });
 
-  return <instancedMesh ref={mesh} args={[coinGeo, mat, MAX]} frustumCulled={false} visible={false} />;
+  return <instancedMesh ref={mesh} args={[coinGeo, mat, MAX]} frustumCulled={false} count={1} />;
 });
