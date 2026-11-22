@@ -134,65 +134,71 @@ export const WALK = {
   ],
 } as const;
 
-export const UNREAD = (o: number): string[] => [
-  `I could not read you on that one, so I'll only pay ${o}.`,
-  `I lost you there. Blind offer: ${o}.`,
-  `Out of my sight, out of my price. ${o}.`,
-  `Could not see you. I'll pay ${o} and no more.`,
-  `You slipped my eye. ${o}, take it or leave it.`,
-  `I could not watch you, so I pay blind. ${o}.`,
-];
+// His offers never say the price out loud: it is printed big on the offer card, and every spoken line
+// has a recorded clip (npm run voice), which a free number would break.
+
+export const UNREAD = [
+  'I could not read you on that one, so I pay low.',
+  'I lost you there. This is a blind offer.',
+  'Out of my sight, out of my price. Take it or leave it.',
+  'Could not see you. That is my price and no more.',
+  'You slipped my eye. Take it or leave it.',
+  'I could not watch you, so I pay blind.',
+] as const;
 
 export const OFFER = {
-  smileCalm: (o: number): string[] => [
-    `Gold? You smiled, but your breathing did not change. I'm not sure. I'll pay ${o}.`,
-    `A smile, but calm breath. Maybe gold, maybe not. ${o}.`,
-    `You smiled. Your breath did not. I'll pay ${o}.`,
-    `That smile says gold. Your breath says maybe. ${o}.`,
-    `Nice smile. Calm chest. I'll meet you halfway: ${o}.`,
-    `I saw a smile, nothing else. ${o} for it.`,
+  smileCalm: [
+    "Gold? You smiled, but your breathing did not change. I'm not sure. That is my price.",
+    'A smile, but calm breath. Maybe gold, maybe not.',
+    'You smiled. Your breath did not. That is my offer.',
+    'That smile says gold. Your breath says maybe.',
+    "Nice smile. Calm chest. I'll meet you halfway.",
+    'I saw a smile, nothing else. That is all I pay.',
   ],
-  bigSmile: (o: number): string[] => [
-    `Gold bars. That smile was real. I'll pay ${o}.`,
-    `That grin says gold. ${o}.`,
-    `You lit up. Gold, I bet. ${o}.`,
-    `Real smile, real gold. I'll pay ${o}.`,
-    `That smile was worth something. ${o}.`,
-    `Gold. Your face gave it away. ${o}.`,
+  bigSmile: [
+    "Gold bars. That smile was real. I'll pay well.",
+    'That grin says gold.',
+    'You lit up. Gold, I bet.',
+    'Real smile, real gold. I am buying.',
+    'That smile was worth something. So is my offer.',
+    'Gold. Your face gave it away.',
   ],
-  big: (o: number): string[] => [
-    `Gold bars. Your breathing picked up. I'll pay ${o}.`,
-    `Gold, I think. ${o} for it.`,
-    `Something good in there. I'll pay ${o}.`,
-    `Big one, I can tell. ${o}.`,
-    `That looks like gold to me. ${o}.`,
-    `I smell gold. ${o} on the table.`,
+  big: [
+    'Gold bars. Your breathing picked up. Here is my price.',
+    'Gold, I think. That is my offer.',
+    "Something good in there. I'll pay.",
+    'Big one, I can tell.',
+    'That looks like gold to me.',
+    'I smell gold. My money is on the table.',
   ],
-  close: (what: string, o: number): string[] => [
-    `Close call. Something in ${what} moved. I'll risk ${o}.`,
-    `I almost passed. ${cap(what)} moved. ${o}.`,
-    `Something in ${what} bugs me. I'll still pay ${o}.`,
-    `On the edge. ${cap(what)} twitched. ${o}, final.`,
-    `I do not love ${what}. ${o}, and that is generous.`,
-    `Risky. ${cap(what)} moved a little. ${o}.`,
+  close: (what: string): string[] => [
+    `Close call. Something in ${what} moved. I'll risk it.`,
+    `I almost passed. ${cap(what)} moved.`,
+    `Something in ${what} bugs me. I'll still pay.`,
+    `On the edge. ${cap(what)} twitched. Final offer.`,
+    `I do not love ${what}. This is generous.`,
+    `Risky. ${cap(what)} moved a little.`,
   ],
-  calm: (o: number): string[] => [
-    `Full, I think. Your breath stayed even. I'll pay ${o}.`,
-    `Your breath never broke. Full. ${o}.`,
-    `Steady breathing. I believe it. ${o}.`,
-    `Even breath, calm eyes. I'll pay ${o}.`,
-    `Not a ripple in your breath. ${o} for it.`,
-    `Smooth breathing. Full, I say. ${o}.`,
+  calm: [
+    'Full, I think. Your breath stayed even.',
+    'Your breath never broke. Full.',
+    'Steady breathing. I believe it.',
+    "Even breath, calm eyes. I'll pay.",
+    "Not a ripple in your breath. I'm buying.",
+    'Smooth breathing. Full, I say.',
   ],
-  plain: (o: number): string[] => [
-    `Full, I think. I'll pay ${o}.`,
-    `Looks full to me. ${o}.`,
-    `I'll take a chance. ${o}.`,
-    `Full, probably. ${o} on the table.`,
-    `I buy it. ${o}.`,
-    `Fair enough. ${o} for the safe.`,
+  plain: [
+    'Full, I think. Here is my price.',
+    'Looks full to me.',
+    "I'll take a chance.",
+    'Full, probably. My money is on the table.',
+    'I buy it.',
+    'Fair enough. That is my price for the safe.',
   ],
 } as const;
+
+/** On The Ghost he keeps his reasons: only this, while the price shows on the card. */
+export const GHOST_OFFER = 'That is my price. Take it or leave it.';
 
 // ---------- the replay, once the safe is settled ----------
 

@@ -280,8 +280,8 @@ describe('his lines', () => {
     const banks: string[][] = [
       [...WALK.talking], WALK.breath('1.8'), WALK.shallow(24), [...WALK.noBreath], WALK.rate('sped up', 40), WALK.rate('slowed', 40),
       WALK.blinkStop(5), WALK.blinkBurst(9, 5, 2), [...WALK.smile], [...WALK.smileDrop], WALK.alarm(12), WALK.sold('a dud'), WALK.sold('2 duds'),
-      [...WALK.vague], UNREAD(120), OFFER.smileCalm(240), OFFER.bigSmile(1100), OFFER.big(1100), OFFER.close('your breathing', 200),
-      OFFER.calm(210), OFFER.plain(210), VERDICT.walkDud('You stopped breathing for 1.4 seconds.'), VERDICT.walkLoot('Your face jumped.'),
+      [...WALK.vague], [...UNREAD], [...OFFER.smileCalm], [...OFFER.bigSmile], [...OFFER.big], OFFER.close('your breathing'),
+      [...OFFER.calm], [...OFFER.plain], VERDICT.walkDud('You stopped breathing for 1 second.'), VERDICT.walkLoot('Your face jumped.'),
       [...VERDICT.unread], [...VERDICT.missedSaw], [...VERDICT.missed], [...VERDICT.dudKept], [...VERDICT.believedCalm], [...VERDICT.believed],
       [...STRIKE.sold], [...STRIKE.caught], [...STRIKE.busted], [...FINAL.dudBreath], [...FINAL.dud], [...FINAL.loot], [...FINAL.none],
       [...FINAL.right], [...FINAL.wrong], MEMORY.named('you held your breath', 'empty safes'), [...MEMORY.none],

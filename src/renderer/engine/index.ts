@@ -10,7 +10,7 @@ export {
   type Banker, type GameState, type GameAction, type Phase, type Scoreboard, type BoxOutcome,
   OFFER_WINDOW_MS, OFFER_FLOOR, MAX_STRIKES, offerAt, linePick, finalCallLine, finalResultLine, type FinalCall,
 } from './game';
-export { pickLine, pickIndex, strikeLine, type LinePick } from './lines';
+export { pickLine, pickIndex, strikeLine, GHOST_OFFER, type LinePick } from './lines';
 export { SimBody, makeSimPlayer, STRATEGIES, SIMULATED_LABEL, type Strategy, type SimPlayerParams } from './sim';
 export { runSimGame, playSimGame, PEEK_MS, BASELINE_MS, type Policy, type FinalPolicy, type SimGameResult, type SimOpts } from './autoplay';
 export { createRng, type Rng } from './rng';

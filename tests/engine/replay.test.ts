@@ -70,14 +70,14 @@ describe('replay verdict', () => {
 
   test('a walk on a catch names the real hold, a missed trap says so', () => {
     const walk = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'trap', 3);
-    expect(VERDICT.walkDud('You stopped breathing for 1.4 seconds.')).toContain(walk.line);
+    expect(VERDICT.walkDud('You stopped breathing for 1 second.')).toContain(walk.line);
     expect(walk.caught).toBe(true);
     expect(walk.marks[0]).toMatchObject({ kind: 'catch', start: 900, end: 2600, label: 'Held 1.4 seconds' });
     const miss = replayVerdict(calm, { pTrap: 0.2, pBig: 0.2, decision: 'offer', offer: 200, reason: '', signal: 'none', driver: null }, 'trap', 3);
     expect(VERDICT.missed).toContain(miss.line);
     expect(miss.marks).toHaveLength(0);
     const burnt = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'big', 3);
-    expect(VERDICT.walkLoot('You stopped breathing for 1.4 seconds.')).toContain(burnt.line);
+    expect(VERDICT.walkLoot('You stopped breathing for 1 second.')).toContain(burnt.line);
   });
 
   test('every replay line from simulated games is plain words', () => {

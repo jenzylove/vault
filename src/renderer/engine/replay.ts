@@ -28,13 +28,25 @@ export interface ReplayVerdict {
 const secs = (ms: number): string => (ms / 1000).toFixed(1);
 const pct = (x: number): number => Math.round(Math.abs(x) * 100);
 
+// He says these out loud, and every spoken line is a recorded clip (npm run voice), so the numbers come
+// from a small set: whole seconds 1 to 8, tens of percent, blink counts up to 20 in a 3 to 5 second look.
+// The marks on the trace below keep the exact measures.
+/** "3 seconds" / "1 second": the hold to the nearest whole second, 1 to 8. */
+export const saySeconds = (ms: number): string => { const n = Math.min(8, Math.max(1, Math.round(ms / 1000))); return n === 1 ? '1 second' : `${n} seconds`; };
+/** A share in tens of percent, 10 up to `max`. */
+export const sayPercent = (x: number, max: number): number => Math.min(max, Math.max(10, Math.round(Math.abs(x) * 10) * 10));
+/** "once" / "7 times", 1 to 20. */
+export const sayTimes = (n: number): string => { const k = Math.min(20, Math.max(1, Math.round(n))); return k === 1 ? 'once' : `${k} times`; };
+/** The look's length in whole seconds, 3 to 5 (the jobs' looks). */
+export const sayWindow = (ms: number): number => Math.min(5, Math.max(3, Math.round(ms / 1000)));
+
 /** What changed, in plain words, for the measure that carried the call. */
 export function detailFor(f: PeekFeatures, driver: BankerRead['driver']): string {
   switch (driver) {
-    case 'breath': return `You stopped breathing for ${secs(f.breathCatchMs)} seconds.`;
-    case 'shallow': return `Your breathing went ${pct(f.shallowing)} percent shallower.`;
-    case 'rate': return f.rateChange <= -0.99 ? 'You did not take a single breath.' : `Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pct(f.rateChange)} percent.`;
-    case 'blinks': return f.blinkBurst < 0 ? 'You stopped blinking.' : `You blinked ${f.blinkCount ?? 0} times in ${Math.round((f.windowMs ?? PEEK_MS) / 1000)} seconds.`;
+    case 'breath': return `You stopped breathing for ${saySeconds(f.breathCatchMs)}.`;
+    case 'shallow': return `Your breathing went ${sayPercent(f.shallowing, 90)} percent shallower.`;
+    case 'rate': return f.rateChange <= -0.99 ? 'You did not take a single breath.' : `Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${sayPercent(f.rateChange, f.rateChange > 0 ? 150 : 90)} percent.`;
+    case 'blinks': return f.blinkBurst < 0 || !f.blinkCount ? 'You stopped blinking.' : `You blinked ${sayTimes(f.blinkCount ?? 0)} in ${sayWindow(f.windowMs ?? PEEK_MS)} seconds.`;
     case 'joy': return (f.exprDelta.happy ?? 0) > 0 ? 'You smiled the way you smile at empty safes.' : 'Your smile dropped.';
     case 'alarm': return 'Your face jumped.';
     default: return f.talking ? 'You started talking the moment you looked.' : 'Something changed when you looked.';

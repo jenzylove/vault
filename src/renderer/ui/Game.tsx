@@ -5,7 +5,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  JOBS, MIN_QUALITY, BASELINE_MS, PEEK_LEAD_MS, OFFER_WINDOW_MS, MAX_STRIKES, offerAt,
+  JOBS, MIN_QUALITY, BASELINE_MS, PEEK_LEAD_MS, OFFER_WINDOW_MS, MAX_STRIKES, GHOST_OFFER, offerAt,
   bankRun, bankerView, linePick, dailySeed, extractFeatures, heistPay, hideTrend, isUnlocked, jobById, learnBaseline, liveRead, memoryLine, newGame,
   newlyUnlocked, nextLocked, readsList, replayVerdict, restingAlert, runLeft, sayTell, shareTellLine, step, tellLine, tellSheet, unlockProgress, updateHistory,
   type Baseline, type BoxKind, type GameAction, type GameState, type HideTrend, type Job, type JobId, type PeekFeatures, type ReplayVerdict, type Stash,
@@ -502,7 +502,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   }, [screen, halted, bus, source, game.phase, activeBox?.id, game.baseline, dispatch, job.peekMs, leadDone]);
 
   // the Fence speaks his read (on The Ghost he keeps his reasons)
-  const spoken = game.read ? (job.hints ? game.read.reason : `I'll give you ${game.read.offer ?? 0}.`) : '';
+  const spoken = game.read ? (job.hints ? game.read.reason : GHOST_OFFER) : '';
   // he says it out loud while the offer is already on screen and ticking: the player can choose at once
   useEffect(() => {
     if (game.phase !== 'bankerRead' || !game.read || paused) return;

@@ -202,19 +202,19 @@ function walkReason(f: PeekFeatures, driver: FeatureName | null, view: BankerVie
   }
 }
 
-function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number, ev: number[], walkAt: number, face: boolean, pick: LinePick | undefined): string {
+function offerReason(f: PeekFeatures, pTrap: number, pBig: number, ev: number[], walkAt: number, face: boolean, pick: LinePick | undefined): string {
   const smiled = face && (f.exprDelta.happy ?? 0) > 0.06;
   const calmBreath = f.breathCatchMs === 0 && Math.abs(f.rateChange) < 0.3 && f.shallowing < 0.2;
-  if (smiled && calmBreath && pBig < 0.5) return pickLine(OFFER.smileCalm(offer), pick, 'offer.smileCalm');
-  if (pBig >= 0.5) return smiled ? pickLine(OFFER.bigSmile(offer), pick, 'offer.bigSmile') : pickLine(OFFER.big(offer), pick, 'offer.big');
+  if (smiled && calmBreath && pBig < 0.5) return pickLine(OFFER.smileCalm, pick, 'offer.smileCalm');
+  if (pBig >= 0.5) return smiled ? pickLine(OFFER.bigSmile, pick, 'offer.bigSmile') : pickLine(OFFER.big, pick, 'offer.big');
   if (pTrap > walkAt * 0.75) {
     const worst = ev.indexOf(Math.max(...ev));
     const name = FEATURE_NAMES[worst] ?? 'breath';
     const what = GROUP[name] === 'breath' ? 'your breathing' : GROUP[name] === 'blinks' ? 'your blinking' : 'your face';
-    return pickLine(OFFER.close(what, offer), pick, 'offer.close');
+    return pickLine(OFFER.close(what), pick, 'offer.close');
   }
-  if (f.breathCatchMs === 0) return pickLine(OFFER.calm(offer), pick, 'offer.calm');
-  return pickLine(OFFER.plain(offer), pick, 'offer.plain');
+  if (f.breathCatchMs === 0) return pickLine(OFFER.calm, pick, 'offer.calm');
+  return pickLine(OFFER.plain, pick, 'offer.plain');
 }
 
 export interface FinalRead {
@@ -277,7 +277,7 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
     const pTrap = clamp((urTraps + PRIOR.pseudo * pri.pTrap) / (ur.length + PRIOR.pseudo), 0.02, 0.98);
     const evT = pri.pBigGivenTreasure * pri.bigMean + (1 - pri.pBigGivenTreasure) * pri.smallMean;
     const offer = round10((1 - pTrap) * evT * (1 - m) * BANKER_RULES.unreadDiscount);
-    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: pickLine(UNREAD(offer), view.lines, 'unread'), signal: 'none', driver: null, lines: view.lines };
+    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: pickLine(UNREAD, view.lines, 'unread'), signal: 'none', driver: null, lines: view.lines };
   }
 
   const ev = evidence(model, f);
@@ -322,5 +322,5 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
   let calmDriver: FeatureName | null = null;
   ev.forEach((x, i) => { if (x < best) { best = x; calmDriver = FEATURE_NAMES[i] ?? null; } });
   const cd = calmDriver as FeatureName | null;
-  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, offer, ev, walkAt, face, view.lines), signal: cd && best < -0.5 ? GROUP[cd] : 'none', driver: null, lines: view.lines };
+  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, ev, walkAt, face, view.lines), signal: cd && best < -0.5 ? GROUP[cd] : 'none', driver: null, lines: view.lines };
 }
