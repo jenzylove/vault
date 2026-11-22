@@ -1,4 +1,4 @@
-// Scene contract (docs/SPEC.md). The scene renders props only; it never knows game rules.
+// Scene contract. The scene renders props only; it never knows game rules.
 /**
  * 'burned': the banker walked; the box stays in its slot, scorched and strapped shut, for the rest of the game.
  * 'burned-revealed': the end of game reveal of a burned box: still scorched, straps off, lid open on what was inside (needs kind).

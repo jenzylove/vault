@@ -46,6 +46,8 @@ interface PracticeState { idx: number; stage: 'intro' | 'peek' | 'noted'; peeks:
 interface EndInfo {
   sheet: TellSheet; trend: HideTrend; tell: string;
   stashBefore: Stash; stashAfter: Stash; banked: number; opened: Job[];
+  /** a sample run: its results never reach your stash or his memory */
+  sim: boolean;
 }
 /** The last look's own frames, kept in memory only until its replay is shown. */
 interface PeekTape { frames: SignalFrame[]; baseline: Baseline; logIndex: number }
@@ -621,27 +623,30 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     endedFor.current = gameNo.current;
     const sheet = tellSheet(game);
     const prev = history;
-    const next = updateHistory(prev, sheet, new Date().toISOString());
-    saveHistory(next);
+    // a sample run plays a simulated body: its tells and take never reach your stash or his memory
+    const simRun = source?.kind === 'simulated';
     saveHowSeen();
-    setHistory(next);
+    if (!simRun) {
+      const next = updateHistory(prev, sheet, new Date().toISOString());
+      saveHistory(next);
+      setHistory(next);
+    }
     const sc = game.score;
     const stashBefore = loadStash();
-    const stashAfter = sc ? bankRun(stashBefore, jobId, sc) : stashBefore;
-    saveStash(stashAfter);
-    setStash(stashAfter);
+    const stashAfter = sc && !simRun ? bankRun(stashBefore, jobId, sc) : stashBefore;
+    if (!simRun) { saveStash(stashAfter); setStash(stashAfter); }
     const trend = hideTrend(prev.games, sheet);
     const tell = sheet.biggest ? tellLine(sheet.biggest.key, sheet.biggest.effect) : 'I could not find your tell this time.';
-    setEnd({ sheet, trend, tell, stashBefore, stashAfter, banked: stashAfter.total - stashBefore.total, opened: newlyUnlocked(stashBefore, stashAfter) });
+    setEnd({ sheet, trend, tell, stashBefore, stashAfter, banked: stashAfter.total - stashBefore.total, opened: newlyUnlocked(stashBefore, stashAfter), sim: simRun });
     bus?.clear(); // the session's signal numbers are not kept past the job
     tape.current = null;
     if (sc) {
       void renderShareCard({
         pile: sc.pile, job: job.name, clean: sc.won, busted: sc.busted, bankerCorrect: sc.bankerCorrect, bankerCalls: sc.bankerCalls,
-        daily: daily ? today() : null, line: shareTellLine(sheet.biggest?.key ?? null),
+        daily: daily ? today() : null, line: shareTellLine(sheet.biggest?.key ?? null, sheet.biggest?.effect ?? 1),
       }).then((blob) => setCardUrl(URL.createObjectURL(blob))).catch(() => setCardUrl(null));
     }
-  }, [game, history, daily, bus, jobId, job.name]);
+  }, [game, history, daily, bus, jobId, job.name, source]);
 
   // he names your tell out loud at the end of the job
   useEffect(() => {
@@ -1117,7 +1122,7 @@ function JobsScreen({ sel, setSel, stash, sim, onPlay, onWipe, canWipe }: {
 function ConsentScreen({ onAgree, onBack }: { onAgree: () => void; onBack: () => void }): JSX.Element {
   const items: [string, JSX.Element][] = [
     ['1', <><b>Your camera reads your breath, blinks, face and pulse</b> while you play. It turns on only after you agree.</>],
-    ['2', <><b>Nothing is stored but results.</b> Frames are processed on this computer and never saved. Only your results and tells stay here, and you can wipe them.</>],
+    ['2', <><b>Frames stay on this computer.</b> They are never saved or uploaded. Presage only checks your key, and its telemetry is off. Only your results and tells stay here, and you can wipe them.</>],
     ['3', <><b>These are tells, not health readings.</b> A tell is how your body reacts to what you see. This is a game.</>],
     ['4', <><b>Esc turns the camera off</b> at any moment and pauses the job.</>],
   ];
@@ -1481,7 +1486,8 @@ function StashNews({ end }: { end: EndInfo }): JSX.Element {
 
 function FirstJobReveal({ game, end, onHeist, onReport, onJobs }: { game: GameState; end: EndInfo; onHeist: () => void; onReport: () => void; onJobs: () => void }): JSX.Element {
   const v = verdictFor(game);
-  const tell = end.sheet.biggest ? `Your tell: ${end.tell.charAt(0).toLowerCase()}${end.tell.slice(1)}` : 'He could not find your tell. Yet.';
+  const whose = end.sim ? "The sample body's tell" : 'Your tell';
+  const tell = end.sheet.biggest ? `${whose}: ${end.tell.charAt(0).toLowerCase()}${end.tell.slice(1)}` : end.sim ? "He could not find the sample body's tell." : 'He could not find your tell. Yet.';
   return (
     <div className="reveal-tell">
       <div className="eyebrow enter">First Job · {v.text} · take {money(game.pile)}</div>
@@ -1512,14 +1518,14 @@ function EndScreen({ game, job, end, cardUrl, onAgain, onJobs, onSave }: {
         <div className="body enter" style={{ ['--d' as string]: 1 }}>{v.why}</div>
         <div className="take-big num">{money(sc.pile)}</div>
         <div className="stash-add enter" style={{ ['--d' as string]: 2 }}>
-          <span>{end.banked > 0 ? <>Added <b>{money(end.banked)}</b> to your stash.</> : 'Nothing added to your stash.'}</span>
+          <span>{end.sim ? 'Sample runs do not add to your stash.' : end.banked > 0 ? <>Added <b>{money(end.banked)}</b> to your stash.</> : 'Nothing added to your stash.'}</span>
           <span>Stash <b>{money(end.stashAfter.total)}</b></span>
         </div>
         <div className="small enter" style={{ ['--d' as string]: 3 }}>
           {sheet.readLine} {sc.trapsSold > 0 && `You sold him ${sc.trapsSold} empty safe${sc.trapsSold > 1 ? 's' : ''}.`} {caught > 0 && `He caught you at ${caught}.`}
         </div>
         <div className="tell-card enter" style={{ ['--d' as string]: 4 }}>
-          <div className="lab">Your tell</div>
+          <div className="lab">{end.sim ? "The sample body's tell" : 'Your tell'}</div>
           <div className="tell">{end.tell}</div>
           {sheet.biggest && <div className="why">{sheet.biggest.sentence}</div>}
           <div className="trend">{trend.line}</div>

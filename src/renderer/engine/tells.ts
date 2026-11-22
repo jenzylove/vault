@@ -200,25 +200,30 @@ export function unlockedLevel(history: TellHistory): LevelNo {
 
 // ---------- he remembers you ----------
 
+// Tells are comparisons: what your body does more of at one kind of safe than at the other. Said
+// that way the sentence always agrees with the numbers beside it, whichever way they lean.
 const PHRASE: Record<TellKey, { you: string; me: string; past: string }> = {
-  breath: { you: 'You hold your breath', me: 'I hold my breath', past: 'you held your breath' },
-  shallow: { you: 'Your breathing goes shallow', me: 'My breathing goes shallow', past: 'your breathing went shallow' },
-  rate: { you: 'Your breathing changes pace', me: 'My breathing changes pace', past: 'your breathing changed pace' },
+  breath: { you: 'You hold your breath longer', me: 'I hold my breath longer', past: 'you held your breath longer' },
+  shallow: { you: 'Your breathing goes shallower', me: 'My breathing goes shallower', past: 'your breathing went shallower' },
+  rate: { you: 'Your breathing changes pace more', me: 'My breathing changes pace more', past: 'your breathing changed pace more' },
   blinks: { you: 'You blink more', me: 'I blink more', past: 'you blinked more' },
-  smile: { you: 'You smile', me: 'I smile', past: 'you smiled' },
-  surprise: { you: 'Your face shows surprise', me: 'My face shows surprise', past: 'your face showed surprise' },
-  fear: { you: 'Your face tightens', me: 'My face tightens', past: 'your face tightened' },
-  pulse: { you: 'Your pulse climbs', me: 'My pulse climbs', past: 'your pulse climbed' },
+  smile: { you: 'You smile more', me: 'I smile more', past: 'you smiled more' },
+  surprise: { you: 'Your face shows more surprise', me: 'My face shows more surprise', past: 'your face showed more surprise' },
+  fear: { you: 'Your face tightens more', me: 'My face tightens more', past: 'your face tightened more' },
+  pulse: { you: 'Your pulse runs higher', me: 'My pulse runs higher', past: 'your pulse ran higher' },
 };
 
-/** "You hold your breath when you see a trap." The side the tell is bigger on decides trap or treasure. */
+const side = (effect: number): [string, string] => (effect >= 0 ? ['empty', 'full'] : ['full', 'empty']);
+
+/** "You hold your breath longer at empty safes than at full ones." The side the tell is bigger on decides. */
 export function tellLine(key: TellKey, effect: number): string {
-  return `${PHRASE[key].you} when you see ${effect >= 0 ? 'an empty safe' : 'a full one'}.`;
+  const [a, b] = side(effect);
+  return `${PHRASE[key].you} at ${a} safes than at ${b} ones.`;
 }
 
-/** Share card: "My tell: I hold my breath. Can you hide yours?" */
-export function shareTellLine(key: TellKey | null): string {
-  return key ? `My tell: ${PHRASE[key].me}. Can you hide yours?` : 'He could not find my tell. Can he find yours?';
+/** Share card: "My tell: I hold my breath longer at empty safes. Can you hide yours?" */
+export function shareTellLine(key: TellKey | null, effect = 1): string {
+  return key ? `My tell: ${PHRASE[key].me} at ${side(effect)[0]} safes. Can you hide yours?` : 'He could not find my tell. Can he find yours?';
 }
 
 /**
@@ -255,8 +260,7 @@ export function hideTrend(earlier: readonly TellHistoryEntry[], sheet: TellSheet
   if (!before) return { key, trend: 'unknown', line: 'No earlier run to compare it with yet.' };
   const was = Math.abs(before.effect);
   const now = cur.strength;
-  const nums = `${sayTell(key, before.trap)} at empty safes before, ${sayTell(key, cur.trap)} now.`;
-  if (now < 0.8 * was || (now < TELL_THRESHOLD && was >= TELL_THRESHOLD)) return { key, trend: 'better', line: `You hid it better: ${nums}` };
-  if (now > 1.2 * was) return { key, trend: 'worse', line: `It showed more: ${nums}` };
-  return { key, trend: 'same', line: `About the same: ${nums}` };
+  if (now < 0.8 * was || (now < TELL_THRESHOLD && was >= TELL_THRESHOLD)) return { key, trend: 'better', line: 'You hid it better: the gap between your empty and full safes shrank.' };
+  if (now > 1.2 * was) return { key, trend: 'worse', line: 'It showed more: the gap between your empty and full safes grew.' };
+  return { key, trend: 'same', line: 'About the same gap between your empty and full safes as last time.' };
 }

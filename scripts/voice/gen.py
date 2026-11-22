@@ -3,7 +3,7 @@ Render every line the Fence can say to a small voice clip (npm run voice).
 
 Build time only: edge-tts (Microsoft neural voices) needs the network here, once. The game itself never calls
 a speech service: it plays these files from disk (src/renderer/ui/speech.ts), because his lines describe the
-player's body and nothing may leave the device.
+player's body and no line he speaks may leave the device.
 
   1. scripts/voice/units.ts (via tsx) lists what to record: every whole line, and the sentences of the
      lines built from parts (src/renderer/voice/catalog.ts).

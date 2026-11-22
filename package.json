@@ -2,7 +2,7 @@
   "name": "the-vault",
   "version": "0.1.0",
   "private": true,
-  "description": "A banker reads your breath while you peek inside the box. Built on the Presage SmartSpectra SDK.",
+  "description": "A heist game where the buyer reads your breathing: crack safes, hide what you found, and sell them to The Fence. Built on the Presage SmartSpectra SDK.",
   "author": "JDollar",
   "main": "out/main/index.js",
   "scripts": {

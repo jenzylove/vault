@@ -254,7 +254,7 @@ export const VERDICT = {
   believedCalm: [
     'Your breath stayed even. I believed you.',
     'Calm breath, full safe. I believed it.',
-    'You stayed steady. I bought it.',
+    'You stayed steady. I believed it.',
     'Even breathing. I trusted it.',
     'Nothing moved. I took your word.',
     'Steady as a vault door. I believed you.',

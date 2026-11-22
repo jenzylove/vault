@@ -53,7 +53,7 @@ export function KeyEntry({ draft, setDraft, err, keyOnFile, onLive, onSim, onFor
         <div className="body">
           {fixed ? 'A key is set up on this computer. Press Enter to use your camera.'
             : saved ? <>It is {kept} and only goes to the Presage SDK. Press Enter to use your camera, or paste a new key.</>
-              : <>Live play reads your breath, blinks and pulse from your webcam with Presage SmartSpectra.
+              : <>Live play reads your breath, blinks, face and pulse from your webcam with Presage SmartSpectra.
                 {' '}Get a free key at <a className="link" href={GET_KEY} target="_blank" rel="noreferrer">physiology.presagetech.com</a>, then paste it here.</>}
         </div>
         {!fixed && (
