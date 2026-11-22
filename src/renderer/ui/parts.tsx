@@ -170,7 +170,9 @@ export function Hud({ game, job, daily }: { game: GameState; job: Job; daily: bo
       <div className="pips" aria-label={`Safe ${Math.min(r.safes, played + active)} of ${r.safes}`}>
         {Array.from({ length: r.safes }, (_, i) => {
           const o = game.log[i];
-          const cls = o ? (o.kind === 'trap' ? (o.result === 'sold' ? 'dumped' : 'caught') : o.result === 'burned' ? 'lost' : 'kept') : i === played && active ? 'now' : '';
+          // the last safe, double or nothing: green if he called it wrong, red if he read you
+          const cls = o ? (o.final ? ((o.decision === 'walk') === (o.kind === 'trap') ? 'caught' : 'kept')
+            : o.kind === 'trap' ? (o.result === 'sold' ? 'dumped' : 'caught') : o.result === 'burned' ? 'lost' : 'kept') : i === played && active ? 'now' : '';
           return <span key={i} className={`pip ${cls}`} />;
         })}
         <span className={`caught${caught > r.maxTrapsCaught ? ' over' : ''}`}>Caught {caught} of {r.maxTrapsCaught}</span>

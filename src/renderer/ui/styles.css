@@ -419,3 +419,4 @@
 .call .result.won { background: var(--loot); color: #fff; box-shadow: 0 6px 0 #146b49, 0 14px 34px rgba(20,0,4,0.5); }
 .call .result.lost { background: var(--alarm); color: #fff; box-shadow: 0 6px 0 #8a1410, 0 14px 34px rgba(20,0,4,0.5); }
 .final .tip { font-size: var(--fs-m); font-weight: 700; color: var(--velvet-deep); background: var(--cream); padding: 8px 18px; border-radius: 99px; box-shadow: 0 4px 0 var(--cream-dim); }
+.strike-line .lamp.on { background: #fff3ef; box-shadow: 0 0 0 3px rgba(255,255,255,0.35), 0 0 14px 3px rgba(255,230,220,0.9); }
