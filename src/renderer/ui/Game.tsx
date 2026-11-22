@@ -463,7 +463,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
       tape.current = { frames, baseline, logIndex: nxt.log.length - (nxt.phase === 'bankerRead' ? 0 : 1) };
       setGame(nxt);
       // a pass goes straight to the replay (its line is the reason); an offer is spoken first
-      setReadStage(nxt.phase === 'bankerRead' ? 'speak' : 'none');
+      setReadStage(nxt.phase === 'bankerRead' ? 'after' : 'none');
     });
     return () => { on = false; rec.cancel(); recRef.current = null; unsub(); clearInterval(tick); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -471,14 +471,13 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
   // the Fence speaks his read (on The Ghost he keeps his reasons)
   const spoken = game.read ? (job.hints ? game.read.reason : `I'll give you ${game.read.offer ?? 0}.`) : '';
+  // he says it out loud while the offer is already on screen: the player can choose at once
   useEffect(() => {
-    if (readStage !== 'speak' || !game.read || paused) return;
+    if (readStage !== 'after' || game.phase !== 'bankerRead' || !game.read || paused) return;
     const s = speak(spoken, P > 1 ? 2 : 1);
     speechRef.current = s;
-    let on = true;
-    void s.done.then(() => { if (on) setReadStage('after'); });
-    return () => { on = false; s.cancel(); speechRef.current = null; };
-  }, [readStage, game.read, paused, P, spoken]);
+    return () => { s.cancel(); speechRef.current = null; };
+  }, [readStage, game.phase, game.read, paused, P, spoken]);
 
   // payouts and busts: sounds and the scene's coin burst and alarm
   const seen = useRef({ no: -1, pile: 0, log: 0, busted: false });
@@ -839,7 +838,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                       {game.log.length > 0 && <div className="actions"><Btn ghost k="L" onClick={leave}>Walk out with {money(game.pile)}</Btn></div>}
                     </>
                   )}
-                  {game.phase === 'peek' && activeBox && <PeekStage kind={activeBox.kind} value={activeBox.value} recRef={recRef} bus={bus} caught={liveCaught && job.hints} peekMs={job.peekMs} />}
+                  {game.phase === 'peek' && activeBox && <PeekStage kind={activeBox.kind} value={activeBox.value} recRef={recRef} bus={bus} caught={liveCaught && job.hints} peekMs={job.peekMs} alert={job.hints ? liveAlert : null} />}
                   {readStage === 'speak' && game.read && <Subtitle text={spoken} />}
                   {game.phase === 'bankerRead' && readStage === 'after' && game.read && activeBox && (
                     <OfferStage offer={game.read.offer ?? 0} blind={game.read.decision === 'unread'} reason={job.hints ? game.read.reason : null}
@@ -1087,18 +1086,38 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   );
 }
 
-function PeekStage({ kind, value, recRef, bus, caught, peekMs }: {
+function PeekStage({ kind, value, recRef, caught, peekMs, alert }: {
   kind: BoxKind; value: number; recRef: React.MutableRefObject<{ progress: () => number } | null>; bus: SignalBus | null; caught: boolean; peekMs: number;
+  /** his live suspicion 0..1, or null when the job gives no hints */
+  alert: number | null;
 }): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
+  const secs = Math.max(0, Math.ceil((peekMs / 1000) * (1 - p)));
+  const dud = kind === 'trap';
+  const a = alert === null ? null : Math.max(0, Math.min(1, caught ? Math.max(alert, 0.85) : alert));
+  const word = a === null ? '' : a > 0.66 ? 'He is onto you' : a > 0.33 ? 'He is getting suspicious' : 'He suspects nothing';
   return (
-    <>
-      <div className="eyebrow shadowed">Only you can see this</div>
-      <div className={`contents ${kind}`}>{kindName(kind, value)}</div>
-      <span className={`sawit${caught ? '' : ' hidden'}`} aria-live="polite">He saw that.</span>
-      <div className="peek-timer"><Ring progress={p} label={String(Math.max(0, Math.ceil((peekMs / 1000) * (1 - p))))} /></div>
-      <div className="line">He is watching your face. Act natural.</div>
-    </>
+    <div className="peek-card">
+      <div className="peek-head">
+        <div>
+          <div className="eyebrow">You found</div>
+          <div className={`contents ${kind}`}>{kindName(kind, value)}</div>
+        </div>
+        <div className="peek-timer" title="His offer comes when this runs out"><Ring progress={p} label={String(secs)} /></div>
+      </div>
+      <div className="peek-goal">
+        {dud
+          ? <>Hide it. Breathe like it is loot, so he pays you for this dud.</>
+          : <>Hide it. Stay calm, so he cannot tell what you found.</>}
+      </div>
+      {a !== null && (
+        <div className={`susp${a > 0.66 ? ' hot' : ''}`}>
+          <div className="susp-lab"><span>His suspicion</span><b>{caught ? 'He saw that.' : word}</b></div>
+          <div className="susp-bar"><i style={{ width: `${Math.round(8 + a * 92)}%` }} /></div>
+        </div>
+      )}
+      <div className="peek-next">In {secs}s he makes his offer. Then you choose: <b>Dump it</b> for his cash, or <b>Keep it</b>.</div>
+    </div>
   );
 }
 
