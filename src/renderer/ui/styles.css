@@ -409,7 +409,7 @@
 .btn.bet .key { background: rgba(255,255,255,0.22); }
 
 /* his call on the last safe */
-.call { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.call { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 26px 56px 22px; border-radius: 32px; background: radial-gradient(closest-side, rgba(42,5,12,0.9) 0%, rgba(42,5,12,0.8) 60%, rgba(42,5,12,0) 100%); }
 .call .thinking { font-family: var(--bold); font-weight: 700; font-size: var(--fs-xl); color: var(--cream); text-shadow: 0 4px 0 var(--velvet-deep); animation: breathe 0.8s ease-in-out infinite; }
 .call .word { font-family: var(--bold); font-weight: 700; text-transform: uppercase; font-size: clamp(70px, 9vw, 170px); line-height: 0.9; letter-spacing: 0.04em; text-shadow: 0 6px 0 var(--velvet-deep), 0 18px 44px rgba(20,0,4,0.6); animation: slam 0.45s var(--pop) both; }
 .call .word.dud { color: var(--alarm); }
