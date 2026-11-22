@@ -128,10 +128,11 @@ ipcMain.handle('vault:native:start', async (e, metrics: number[], opts?: { fed?:
   if (!bindIpc || !key) throw new Error('Live mode is off: no SDK or no Presage key.');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('@smartspectra/node-sdk') as {
-    SmartSpectraSDK: { new (o: { apiKey: string; requestedMetrics: number[] }): NativeSdk; availableCameras(): { id: string }[] };
+    SmartSpectraSDK: { new (o: { apiKey: string; requestedMetrics: number[]; enableTelemetry?: boolean }): NativeSdk; availableCameras(): { id: string }[] };
     CameraSelection: { byId(id: string): unknown; default: unknown };
   };
-  const sdk = new mod.SmartSpectraSDK({ apiKey: key, requestedMetrics: metrics });
+  // SDK telemetry (session summaries, readiness reports) is opted out: the game sends Presage nothing beyond the SDK's own sign in
+  const sdk = new mod.SmartSpectraSDK({ apiKey: key, requestedMetrics: metrics, enableTelemetry: false });
   natives.set(wc.id, sdk);
   const send = (type: string, ...args: unknown[]) => { if (natives.get(wc.id) === sdk && !wc.isDestroyed()) wc.send('vault:native:evt', type, ...args); };
   sdk.on('processingStatus', ((s: number) => send('processingStatus', s)) as never);
