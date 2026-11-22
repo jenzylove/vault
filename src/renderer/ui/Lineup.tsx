@@ -22,6 +22,8 @@ export interface LineupProps {
   onTimeout: () => void;
   onRetry: () => void;
   onSim: () => void;
+  /** back to the key screen (shown when Presage refused the key or it ran out of credits) */
+  onKey?: () => void;
 }
 
 const TIP = 'Raise the laptop to eye level, sit back about an arm’s length, and keep the light in front of you.';
@@ -44,7 +46,7 @@ export function useLineupGate(source: SignalSource | null, now: () => number = (
   return { read, status };
 }
 
-export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim }: LineupProps): JSX.Element {
+export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim, onKey }: LineupProps): JSX.Element {
   const { read, status } = useLineupGate(off ? null : source);
   const video = useRef<HTMLVideoElement | null>(null);
   const stream = off ? null : status?.stream ?? null;
@@ -69,7 +71,9 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
     const k = e.key.toLowerCase();
     if (k === 'escape') { e.preventDefault(); onBack(); return; }
     if (off) {
-      if (k === 'enter') onRetry();
+      const keyTrouble = !!onKey && /key|credits/i.test(off);
+      if (k === 'enter' && !keyTrouble) onRetry();
+      else if (k === 'c' && keyTrouble) onKey!();
       else if (k === 's') onSim();
       return;
     }
@@ -88,7 +92,9 @@ export function Lineup({ source, off, onReady, onBack, onTimeout, onRetry, onSim
         <div className="display enter" style={{ fontSize: 'var(--fs-xl)', margin: '12px 0 10px', ['--d' as string]: 1 }}>{off}</div>
         <div className="body measure enter" style={{ ['--d' as string]: 2 }}>{TIP}</div>
         <div className="actions enter" style={{ ['--d' as string]: 3 }}>
-          <Btn primary k="Enter" onClick={onRetry}>Try again</Btn>
+          {onKey && /key|credits/i.test(off)
+            ? <Btn primary k="C" onClick={onKey}>Change your Presage key</Btn>
+            : <Btn primary k="Enter" onClick={onRetry}>Try again</Btn>}
           <Btn k="S" onClick={onSim}>Try a sample run (no camera)</Btn>
           <Btn k="Esc" onClick={onBack}>Back to the jobs</Btn>
         </div>

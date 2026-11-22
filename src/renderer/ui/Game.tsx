@@ -929,7 +929,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
         {screen === 'lineup' && source && (
           <Lineup source={source} off={lineupOff} onReady={lineupReady} onBack={lineupBack}
-            onTimeout={lineupTimeout} onRetry={lineupRetry} onSim={lineupSim} />
+            onTimeout={lineupTimeout} onRetry={lineupRetry} onSim={lineupSim}
+            onKey={() => { stopCamera(); setLineupOff(null); setScreen('key'); }} />
         )}
 
         {screen === 'play' && game.phase !== 'over' && (
@@ -1199,15 +1200,15 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   if (stage === 'intro') {
     return (
       <>
-        <div className="eyebrow">Practice {idx + 1} of {total}</div>
-        <div className="prompt big">He knows this safe holds {what}.</div>
+        <div className="eyebrow">Practice safe {idx + 1} of {total} · nothing counts</div>
+        <div className="prompt big">Practice: this safe holds {what}, and he knows it.</div>
         <div className="line">
           {idx === 0 && reusedCalm ? 'He remembers your calm from last time. ' : ''}
-          Look inside and he watches how your breath reacts to a safe he already knows.
+          Look inside so he learns how your breath reacts. No money and no strikes here. The real job starts after.
         </div>
         <div className="actions">
-          <Btn primary k="Space" onClick={onNext}>Crack it</Btn>
-          <Btn ghost k="K" onClick={onSkip}>Skip to the real safes</Btn>
+          <Btn primary k="Space" onClick={onNext}>Crack the practice safe</Btn>
+          <Btn ghost k="K" onClick={onSkip}>Skip practice, start the real job</Btn>
         </div>
       </>
     );
@@ -1216,6 +1217,7 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   if (stage === 'peek') {
     return (
       <>
+        <div className="eyebrow">Practice safe {idx + 1} of {total} · nothing counts</div>
         <div className={`contents ${kind}`}>{kindName(kind)}</div>
         <div className="stage-card">
           <div className="peekrow">
@@ -1223,7 +1225,7 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
             <div className="grow"><BreathLine bus={bus} big /></div>
           </div>
         </div>
-        <div className="line">Only you can see inside. Keep breathing. He is watching.</div>
+        <div className="line">Keep breathing. He is learning how you look at {what}.</div>
       </>
     );
   }
@@ -1236,10 +1238,10 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   }
   return (
     <>
-      <div className="eyebrow">Noted</div>
+      <div className="eyebrow">Practice safe {idx + 1} of {total} · noted</div>
       <div className="prompt big">{note}</div>
-      <div className="line">{idx + 1 < total ? 'He wrote that down. One more.' : 'He has seen you at an empty safe and a full one. Now the real safes.'}</div>
-      <div className="actions"><Btn primary k="Space" onClick={onNext}>{idx + 1 < total ? 'Next practice safe' : 'To the safes'}</Btn></div>
+      <div className="line">{idx + 1 < total ? 'He wrote that down. One more practice safe.' : 'Practice done. He has seen you at an empty safe and a full one. Now the real job, for real money.'}</div>
+      <div className="actions"><Btn primary k="Space" onClick={onNext}>{idx + 1 < total ? 'Next practice safe' : 'Start the real job'}</Btn></div>
     </>
   );
 }

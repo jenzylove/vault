@@ -26,7 +26,8 @@ export function nativeBridge(): NativeBridge | null {
  * is too low, the next session falls back to the SDK's own camera.
  */
 let preferSdkCamera = false;
-const FRAME_RATE_TOO_LOW = 11;
+// SDK errors that mean the page could not feed frames steadily: kTimestampGap (11), kSustainedLowFrameRate (14)
+const FED_TROUBLE = new Set([11, 14]);
 
 async function openCamera(): Promise<MediaStream | null> {
   try {
@@ -93,7 +94,7 @@ export function nativeSdk(bridge: NativeBridge, opts: { requestedMetrics: number
       off = bridge.on((type, ...args) => {
         if (dead) return;
         if (type === 'preview') { showPreview(args[0] as Uint8ClampedArray, args[1] as number, args[2] as number); return; }
-        if (type === 'error' && args[0] === FRAME_RATE_TOO_LOW && cam) preferSdkCamera = true;
+        if (type === 'error' && FED_TROUBLE.has(args[0] as number) && cam) preferSdkCamera = true;
         handlers.get(type)?.(...args);
       });
       const track = !preferSdkCamera && bridge.frame && 'MediaStreamTrackProcessor' in globalThis ? (cam = await openCamera())?.getVideoTracks()[0] : undefined;

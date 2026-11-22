@@ -176,7 +176,8 @@ function createWindow(): void {
   const hidden = process.env.VAULT_HIDDEN === '1';
   const win = new BrowserWindow({
     width: 1440, height: 900, backgroundColor: '#050505', show: false, autoHideMenuBar: true,
-    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, offscreen: hidden },
+    // backgroundThrottling off: the page feeds camera frames to the SDK and must not slow down when unfocused
+    webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, offscreen: hidden, backgroundThrottling: false },
   });
   if (!hidden) win.once('ready-to-show', () => win.show());
   // The only outside link is where to get a free Presage key: open it in the browser, never in the game window.
