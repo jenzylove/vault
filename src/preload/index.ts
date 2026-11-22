@@ -15,7 +15,9 @@ contextBridge.exposeInMainWorld('vault', {
   },
   // Native camera session in the main process (see src/main/index.ts): only metrics cross over.
   native: {
-    start: (metrics: number[]): Promise<void> => ipcRenderer.invoke('vault:native:start', metrics),
+    start: (metrics: number[], opts?: { fed?: boolean }): Promise<void> => ipcRenderer.invoke('vault:native:start', metrics, opts),
+    // one camera frame from the page (page fed sessions): NV12 or RGBA bytes, fire and forget
+    frame: (buf: Uint8Array, w: number, h: number, fmt: number): void => ipcRenderer.send('vault:native:frame', buf, w, h, fmt),
     stop: (): Promise<void> => ipcRenderer.invoke('vault:native:stop'),
     on: (cb: (type: string, ...args: unknown[]) => void): (() => void) => {
       const h = (_e: unknown, type: string, ...args: unknown[]) => cb(type, ...args);

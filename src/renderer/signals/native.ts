@@ -5,8 +5,10 @@
 import type { SdkLike } from './live';
 
 export interface NativeBridge {
-  start(metrics: number[]): Promise<void>;
+  start(metrics: number[], opts?: { fed?: boolean }): Promise<void>;
   stop(): Promise<void>;
+  /** one camera frame from the page (page fed sessions); fmt 2 = RGBA */
+  frame?(buf: Uint8Array, w: number, h: number, fmt: number): void;
   on(cb: (type: string, ...args: unknown[]) => void): () => void;
 }
 
@@ -16,39 +18,47 @@ export function nativeBridge(): NativeBridge | null {
 }
 
 /**
- * The SDK locks the camera's exposure, white balance and focus once its graph runs. On many laptop
- * cameras that lock lands on a dark fixed exposure, so the picture (and the read) goes dark a moment
- * after it starts. Open the same camera here as a second, tiny shared client and turn auto exposure and
- * auto white balance back on, a few times in the first seconds. Best effort: a camera that refuses a
- * second client or has no such control is left as the SDK set it. Returns a stop function.
+ * Who opens the camera. The SDK's own camera path locks exposure, white balance and focus once it runs,
+ * and on some laptop cameras that lock collapses the picture to near black (SDK log: "lock collapsed
+ * image brightness"), which means no read. So by default the page opens the camera itself, where the
+ * camera keeps its own auto exposure, and feeds every frame to the SDK in the main process
+ * (useCustomInput + sendFrame). If the page cannot open the camera, or the SDK says the fed frame rate
+ * is too low, the next session falls back to the SDK's own camera.
  */
-function keepAutoExposure(): () => void {
-  let stream: MediaStream | null = null;
-  let stopped = false;
-  const timers: ReturnType<typeof setTimeout>[] = [];
-  const apply = async (): Promise<void> => {
-    try {
-      if (stopped) return;
-      if (!stream) {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 320 }, height: { ideal: 180 }, frameRate: { ideal: 5 } } });
-        if (stopped) { for (const t of stream.getTracks()) t.stop(); stream = null; return; }
-      }
-      const track = stream.getVideoTracks()[0];
-      if (!track) return;
-      const caps = (track.getCapabilities?.() ?? {}) as { exposureMode?: string[]; whiteBalanceMode?: string[] };
-      const want: Record<string, string> = {};
-      if (caps.exposureMode?.includes('continuous')) want.exposureMode = 'continuous';
-      if (caps.whiteBalanceMode?.includes('continuous')) want.whiteBalanceMode = 'continuous';
-      if (Object.keys(want).length) await track.applyConstraints({ advanced: [want as MediaTrackConstraintSet] });
-    } catch { /* no second client or no control: leave the camera as it is */ }
-  };
-  // the lock lands when the SDK graph reports running, a second or two after start
-  for (const ms of [1200, 2500, 4500, 8000, 15000]) timers.push(setTimeout(() => { void apply(); }, ms));
-  return () => {
-    stopped = true;
-    for (const t of timers) clearTimeout(t);
-    if (stream) { for (const t of stream.getTracks()) { try { t.stop(); } catch { /* gone */ } } stream = null; }
-  };
+let preferSdkCamera = false;
+const FRAME_RATE_TOO_LOW = 11;
+
+async function openCamera(): Promise<MediaStream | null> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: false, video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30 } } });
+  } catch { return null; }
+}
+
+type Frame = { visibleRect: { width: number; height: number } | null; displayWidth: number; displayHeight: number; copyTo(b: Uint8Array, o: object): Promise<unknown>; close(): void };
+type Proc = new (o: { track: MediaStreamTrack }) => { readable: ReadableStream<Frame> };
+
+/** Read camera frames and hand each one (RGBA) to the bridge until stopped. One frame in flight at a time. */
+function pumpFrames(track: MediaStreamTrack, send: (b: Uint8Array, w: number, h: number) => void): () => void {
+  const P = (globalThis as { MediaStreamTrackProcessor?: Proc }).MediaStreamTrackProcessor;
+  if (!P) return () => undefined;
+  let on = true;
+  const reader = new P({ track }).readable.getReader();
+  void (async () => {
+    while (on) {
+      let f: Frame | undefined;
+      try {
+        const r = await reader.read();
+        if (r.done) break;
+        f = r.value;
+        const w = f.visibleRect?.width ?? f.displayWidth;
+        const h = f.visibleRect?.height ?? f.displayHeight;
+        const buf = new Uint8Array(w * h * 4);
+        await f.copyTo(buf, { format: 'RGBA' });
+        if (on) send(buf, w, h);
+      } catch { /* a dropped frame */ } finally { try { f?.close(); } catch { /* closed */ } }
+    }
+  })();
+  return () => { on = false; void reader.cancel().catch(() => undefined); };
 }
 
 export function nativeSdk(bridge: NativeBridge, opts: { requestedMetrics: number[] }): SdkLike {
@@ -57,11 +67,17 @@ export function nativeSdk(bridge: NativeBridge, opts: { requestedMetrics: number
   let preview: MediaStream | null = null;
   let dead = false;
   let canvas: HTMLCanvasElement | null = null;
-  let stopAe: (() => void) | null = null;
+  let cam: MediaStream | null = null;
+  let stopPump: (() => void) | null = null;
   const dropPreview = () => { if (preview) { for (const t of preview.getTracks()) { try { t.stop(); } catch { /* gone */ } } preview = null; } canvas = null; };
-  // The SDK holds the camera in the main process; it sends small RGBA copies of its frames, drawn here
-  // onto a canvas whose captureStream() becomes the self view the lineup shows.
+  const dropCamera = () => {
+    stopPump?.(); stopPump = null;
+    if (cam) { for (const t of cam.getTracks()) { try { t.stop(); } catch { /* gone */ } } cam = null; }
+  };
+  // SDK camera sessions: the main process sends small RGBA copies of the SDK's frames, drawn here onto a
+  // canvas whose captureStream() becomes the self view the lineup shows.
   const showPreview = (data: Uint8ClampedArray, w: number, h: number) => {
+    if (cam) return; // page fed: the self view is the page's own camera
     if (!canvas) {
       canvas = document.createElement('canvas');
       canvas.width = w; canvas.height = h;
@@ -77,13 +93,18 @@ export function nativeSdk(bridge: NativeBridge, opts: { requestedMetrics: number
       off = bridge.on((type, ...args) => {
         if (dead) return;
         if (type === 'preview') { showPreview(args[0] as Uint8ClampedArray, args[1] as number, args[2] as number); return; }
+        if (type === 'error' && args[0] === FRAME_RATE_TOO_LOW && cam) preferSdkCamera = true;
         handlers.get(type)?.(...args);
       });
-      await bridge.start(opts.requestedMetrics);
-      stopAe?.();
-      stopAe = keepAutoExposure();
+      const track = !preferSdkCamera && bridge.frame && 'MediaStreamTrackProcessor' in globalThis ? (cam = await openCamera())?.getVideoTracks()[0] : undefined;
+      if (!track) { dropCamera(); await bridge.start(opts.requestedMetrics); return; }
+      handlers.get('streamAvailable')?.(cam);
+      try { await bridge.start(opts.requestedMetrics, { fed: true }); } catch (err) { dropCamera(); throw err; }
+      if (dead || !cam) { dropCamera(); return; }
+      const frame = bridge.frame!.bind(bridge);
+      stopPump = pumpFrames(track, (b, w, h) => frame(b, w, h, 2));
     },
-    async stop() { stopAe?.(); stopAe = null; dropPreview(); await bridge.stop(); },
-    destroy() { dead = true; stopAe?.(); stopAe = null; dropPreview(); off?.(); off = null; },
+    async stop() { dropCamera(); dropPreview(); await bridge.stop(); },
+    destroy() { dead = true; dropCamera(); dropPreview(); off?.(); off = null; },
   };
 }

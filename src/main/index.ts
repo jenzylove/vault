@@ -74,11 +74,28 @@ ipcMain.handle('vault:key:forget', (e) => {
 type NativeSdk = {
   on(ev: string, cb: (...a: never[]) => void): unknown;
   useCamera(sel: unknown): unknown;
+  useCustomInput(): unknown;
+  sendFrame(buf: Buffer, w: number, h: number, stride: number, fmt: number, tsUs: number): boolean;
   start(): unknown;
   stopAsync(): Promise<void>;
   destroy(): unknown;
 };
 const natives = new Map<number, NativeSdk>();
+// Page fed sessions: the page owns the camera (so the camera keeps its own auto exposure) and sends
+// each frame here. The SDK's own camera path locks exposure once it runs, and on some laptop cameras
+// that lock collapses the picture to near black (SDK log: "lock collapsed image brightness").
+const fed = new Map<number, { lastTs: number; ready: boolean }>();
+ipcMain.on('vault:native:frame', (e, buf: Uint8Array, w: number, h: number, fmt: number) => {
+  const sdk = natives.get(e.sender.id);
+  const f = fed.get(e.sender.id);
+  if (!sdk || !f || !f.ready || !(buf instanceof Uint8Array)) return;
+  // capture time in monotonic microseconds, strictly increasing
+  let ts = Number(process.hrtime.bigint() / 1000n);
+  if (ts <= f.lastTs) ts = f.lastTs + 1;
+  f.lastTs = ts;
+  const stride = fmt === 4 || fmt === 5 ? w : w * 4; // NV12/NV21: luma row stride; RGBA: 4 bytes a pixel
+  try { sdk.sendFrame(Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength), w, h, stride, fmt, ts); } catch { /* session going away */ }
+});
 
 /** Nearest neighbour downscale of an SDK frame (RGB, BGR, RGBA, BGRA) to RGBA at `outW` wide. Other formats: null. */
 function smallRgba(buf: Buffer, w: number, h: number, stride: number, fmt: number, outW: number): { data: Uint8ClampedArray; w: number; h: number } | null {
@@ -99,11 +116,12 @@ function smallRgba(buf: Buffer, w: number, h: number, stride: number, fmt: numbe
 async function stopNative(id: number): Promise<void> {
   const s = natives.get(id);
   natives.delete(id);
+  fed.delete(id);
   if (!s) return;
   try { await Promise.race([s.stopAsync(), new Promise((r) => setTimeout(r, 4000))]); } catch { /* already stopped */ }
   try { await s.destroy(); } catch { /* already gone */ }
 }
-ipcMain.handle('vault:native:start', async (e, metrics: number[]) => {
+ipcMain.handle('vault:native:start', async (e, metrics: number[], opts?: { fed?: boolean }) => {
   const wc = e.sender;
   await stopNative(wc.id);
   const key = (await findKey())?.key;
@@ -124,7 +142,8 @@ ipcMain.handle('vault:native:start', async (e, metrics: number[]) => {
   // SDK's own frames (320 wide, about 10 a second) as RGBA for a canvas preview.
   let lastPreview = 0;
   let lastPreviewLogged = false;
-  sdk.on('videoOutput', ((buf: Buffer, w: number, h: number, stride: number, fmt: number) => {
+  // (page fed sessions show the page's own camera, so no copies are needed)
+  if (!opts?.fed) sdk.on('videoOutput', ((buf: Buffer, w: number, h: number, stride: number, fmt: number) => {
     const now = Date.now();
     if (now - lastPreview < 100) return;
     lastPreview = now;
@@ -133,9 +152,16 @@ ipcMain.handle('vault:native:start', async (e, metrics: number[]) => {
     else if (!lastPreviewLogged) { lastPreviewLogged = true; console.log(`[vault] preview format not supported: fmt ${fmt}`); }
   }) as never);
   wc.once('destroyed', () => { void stopNative(wc.id); });
-  const cams = mod.SmartSpectraSDK.availableCameras();
-  sdk.useCamera(cams.length ? mod.CameraSelection.byId(cams[0]!.id) : mod.CameraSelection.default);
+  if (opts?.fed) {
+    sdk.useCustomInput();
+    fed.set(wc.id, { lastTs: 0, ready: false });
+  } else {
+    const cams = mod.SmartSpectraSDK.availableCameras();
+    sdk.useCamera(cams.length ? mod.CameraSelection.byId(cams[0]!.id) : mod.CameraSelection.default);
+  }
   try { await Promise.resolve(sdk.start()); } catch (err) { await stopNative(wc.id); throw err; }
+  const f = fed.get(wc.id);
+  if (f && natives.get(wc.id) === sdk) f.ready = true;
 });
 ipcMain.handle('vault:native:stop', (e) => stopNative(e.sender.id));
 app.on('before-quit', () => { for (const id of [...natives.keys()]) void stopNative(id); });
