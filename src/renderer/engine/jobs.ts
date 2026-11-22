@@ -35,7 +35,7 @@ export const JOBS: readonly Job[] = [
   job({ id: 'daily', name: 'Daily Heist', blurb: 'The same safes for everyone today.', level: 3, peekMs: PEEK_MS, price: 0, daily: true, hints: true }),
   job({ id: 'speed', name: 'Speed Run', blurb: 'A three second look instead of five.', level: 3, peekMs: 3000, price: 0, daily: false, hints: true }),
   job({ id: 'night', name: 'Night Shift', blurb: 'He reads your pulse too.', level: 4, peekMs: PEEK_MS, price: 5000, daily: false, hints: true }),
-  job({ id: 'double', name: 'Double Cross', blurb: 'Dumped duds pay double. Get caught at a dud and it is a strike.', level: 3, peekMs: PEEK_MS, price: 10000, daily: false, hints: true,
+  job({ id: 'double', name: 'Double Cross', blurb: 'Sell him a dud and he pays double. Get caught at one and it is a strike.', level: 3, peekMs: PEEK_MS, price: 10000, daily: false, hints: true,
     rules: { target: 3000, dudPayX: 2, caughtDudHeat: 0.5, caughtDudStrike: true } }),
   job({ id: 'ghost', name: 'The Ghost', blurb: 'He reads everything. No hints.', level: 5, peekMs: PEEK_MS, price: 20000, daily: false, hints: false }),
 ];

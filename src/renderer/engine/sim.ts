@@ -127,6 +127,7 @@ export const SAMPLE_BODY = {
   quietBlinkBurst: 0.15,        // when it does not slip: chance of a blink burst alone
   lootHold: 0.2,                // share of loot looks with a small hold
   lootHoldMs: [500, 1100],
+  lootSmile: 0.35,              // share of looks (loot, or a dud it bluffs) with a small smile
 } as const;
 
 type SegKind = 'in' | 'top' | 'out' | 'bottom' | 'sharpIn' | 'hold';
@@ -355,12 +356,14 @@ export class SimBody {
         addExpr('surprise', 0.06 * p.faceLeak, at, 2500);
         this.pulseExtra += 3;
       } else {
-        this.shallowMod = { from: t, until: t + 5000, k: 0.03 };
+        // a clean bluff: it looks like any loot look, now and then with the same small smile
         if (rr.chance(B.quietBlinkBurst)) this.blinkMod = { from: t + 300, until: t + 3300, k: rr.range(1.8, 2.6) };
+        if (rr.chance(B.lootSmile)) addExpr('happy', 0.05 * p.faceLeak, t + 500, 4000);
       }
     } else {
       const big = kind === 'big';
-      addExpr('happy', (big ? 0.15 : 0.05) * p.faceLeak, t + 500, 4000);
+      // a smile at loot only some of the time, so a smile alone never gives every dud away
+      if (rr.chance(B.lootSmile)) addExpr('happy', (big ? 0.15 : 0.05) * p.faceLeak, t + 500, 4000);
       if (rr.chance(B.lootHold)) this.pending.push({ at: t + rr.range(300, 1200), type: 'catch', holdMs: rr.range(B.lootHoldMs[0], B.lootHoldMs[1]) });
     }
     this.pending.sort((a, b) => a.at - b.at);
