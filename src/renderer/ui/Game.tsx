@@ -5,11 +5,11 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  JOBS, MIN_QUALITY, BASELINE_MS,
-  bankRun, bankerView, dailySeed, extractFeatures, heistPay, hideTrend, isUnlocked, jobById, learnBaseline, liveRead, memoryLine, newGame,
+  JOBS, MIN_QUALITY, BASELINE_MS, PEEK_LEAD_MS, OFFER_WINDOW_MS, MAX_STRIKES, offerAt,
+  bankRun, bankerView, linePick, dailySeed, extractFeatures, heistPay, hideTrend, isUnlocked, jobById, learnBaseline, liveRead, memoryLine, newGame,
   newlyUnlocked, nextLocked, readsList, replayVerdict, restingAlert, runLeft, sayTell, shareTellLine, step, tellLine, tellSheet, unlockProgress, updateHistory,
   type Baseline, type BoxKind, type GameAction, type GameState, type HideTrend, type Job, type JobId, type PeekFeatures, type ReplayVerdict, type Stash,
-  type TellHistory, type TellSheet,
+  type TellHistory, type TellSheet, type FinalCall, type BoxOutcome,
 } from '../engine';
 import type { SignalFrame, SignalSource, SourceStatus } from '../signals/types';
 import { useHeartbeat } from './heartbeat';
@@ -26,7 +26,7 @@ import {
 } from './storage';
 import { renderShareCard } from './shareCard';
 import { loadFonts } from './fonts';
-import { alarm, coins, dialClicks, doorClunk } from './sfx';
+import { alarm, coins, dialClicks, doorClunk, doorCreak, drumRoll, dudSting, hit, lootChime, offerTick } from './sfx';
 import {
   BodyPanel, BreathLine, Btn, Hud, LiveScene, Purse, Reads, ReplayTrace, Ring, RuleStrip, Subtitle, ValuesBoard, caughtCount, money, usePoll,
 } from './parts';
@@ -40,7 +40,6 @@ export interface GameProps {
 }
 
 type Screen = 'title' | 'jobs' | 'consent' | 'key' | 'lineup' | 'play';
-type ReadStage = 'none' | 'speak' | 'after';
 interface PracticeState { idx: number; stage: 'intro' | 'peek' | 'noted'; peeks: { kind: BoxKind; features: PeekFeatures }[] }
 interface EndInfo {
   sheet: TellSheet; trend: HideTrend; tell: string;
@@ -88,7 +87,6 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const [calmTry, setCalmTry] = useState(0);
   const [reusedCalm, setReusedCalm] = useState(false);
   const [practice, setPractice] = useState<PracticeState>({ idx: 0, stage: 'intro', peeks: [] });
-  const [readStage, setReadStage] = useState<ReadStage>('none');
   const [revealN, setRevealN] = useState(0);
   const [end, setEnd] = useState<EndInfo | null>(null);
   const [cardUrl, setCardUrl] = useState<string | null>(null);
@@ -108,6 +106,17 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const [memLine, setMemLine] = useState<string | null>(null);
   const [openSaid, setOpenSaid] = useState(false);
   const [firstReport, setFirstReport] = useState(false);
+  /** The crack: which look's door is open and its contents landed (nothing shows before). */
+  const [openKey, setOpenKey] = useState<string | null>(null);
+  /** The ticking offer: ms gone of OFFER_WINDOW_MS (game time), and whether it ran out. */
+  const [offerMs, setOfferMs] = useState(0);
+  const offerMsRef = useRef(0);
+  const [tooSlow, setTooSlow] = useState(false);
+  /** The latest strike: which one and when, so its lamp flashes. */
+  const [strikeAt, setStrikeAt] = useState<{ n: number; at: number } | null>(null);
+  /** The last safe's call: 0 he thinks, 1 he calls it, 2 the truth and your take. */
+  const [finalStage, setFinalStage] = useState(0);
+  const finalPaid = useRef(false);
   const tape = useRef<PeekTape | null>(null);
   const gameRef = useRef(game);
   gameRef.current = game;
@@ -169,7 +178,9 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     // a calm learned at another look length is not comparable
     if (lastBaseline.current && (lastBaseline.current.peekMs ?? 0) !== j.peekMs) lastBaseline.current = null;
     setPractice({ idx: 0, stage: 'intro', peeks: [] });
-    setReadStage('none');
+    setStrikeAt(null);
+    setFinalStage(0);
+    finalPaid.current = false;
     setRevealN(0);
     setEnd(null);
     setFirstReport(false);
@@ -341,7 +352,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   statusRef.current = srcStatus;
   const live = source?.kind === 'live';
   // a replay is owed for every settled safe until it has been shown
-  const replayOwed = screen === 'play' && game.log.length > replayedN && (game.phase === 'audit' || game.phase === 'reveal') && readStage !== 'speak';
+  const replayOwed = screen === 'play' && game.log.length > replayedN && (game.phase === 'audit' || game.phase === 'reveal');
   const reading = screen === 'play' && !paused && (
     (game.phase === 'baseline' && !calmFailed)
     || (game.phase === 'practice' && practice.stage === 'peek')
@@ -382,13 +393,13 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   useEffect(() => {
     if (!live || screen !== 'play' || paused || game.phase === 'reveal' || game.phase === 'over') return;
     const id = setInterval(() => {
-      if (reading || readStage === 'speak' || replayOwed) { lastInput.current = performance.now(); return; }
+      if (reading || replayOwed || game.phase === 'bankerRead' || game.phase === 'finalCall') { lastInput.current = performance.now(); return; }
       if (performance.now() - lastInput.current > IDLE_MS) pause('You were away, so he turned the camera off.');
     }, 2000);
     const hide = () => { if (document.hidden) pause('The window was hidden, so he turned the camera off.'); };
     document.addEventListener('visibilitychange', hide);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', hide); };
-  }, [live, screen, paused, game.phase, reading, readStage, replayOwed, pause]);
+  }, [live, screen, paused, game.phase, reading, replayOwed, pause]);
 
   // ---------- timed windows (signal time) ----------
   // learn your calm
@@ -415,8 +426,28 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
   // practice looks
   const practiceKind: BoxKind | null = game.practice[practice.idx]?.kind ?? null;
+  const activeBox = game.activeBoxId === null ? null : game.boxes.find((b) => b.id === game.activeBoxId) ?? null;
+  // the crack: dial clicks, lever, the door creaks open (scene/Safe.tsx keeps the same clock), then the contents land
+  const leadKey = screen !== 'play' ? null
+    : game.phase === 'peek' && activeBox ? `b${gameNo.current}:${activeBox.id}`
+      : game.phase === 'practice' && practice.stage === 'peek' && practiceKind ? `p${gameNo.current}:${practice.idx}` : null;
+  const leadDone = leadKey !== null && openKey === leadKey;
+  const leadKind: BoxKind | null = game.phase === 'peek' ? activeBox?.kind ?? null : practiceKind;
   useEffect(() => {
-    if (screen !== 'play' || halted || !bus || !source || game.phase !== 'practice' || practice.stage !== 'peek' || !practiceKind || !game.baseline) return;
+    if (!leadKey || openKey === leadKey || !leadKind) return;
+    dialClicks(8, 820, 500);
+    doorClunk(1380);
+    doorCreak(1460, 560);
+    const kind = leadKind;
+    const id = setTimeout(() => {
+      setOpenKey(leadKey);
+      if (kind === 'trap') dudSting(); else lootChime(kind === 'big');
+    }, PEEK_LEAD_MS);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadKey]);
+  useEffect(() => {
+    if (screen !== 'play' || halted || !bus || !source || game.phase !== 'practice' || practice.stage !== 'peek' || !practiceKind || !game.baseline || !leadDone) return;
     if (isPeekAware(source)) source.onPeek(practiceKind);
     const rec = bus.record(job.peekMs);
     recRef.current = rec;
@@ -428,13 +459,12 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
       setPractice((p) => ({ ...p, stage: 'noted', peeks: [...p.peeks, { kind: practiceKind, features }] }));
     });
     return () => { on = false; rec.cancel(); recRef.current = null; };
-  }, [screen, halted, bus, source, game.phase, game.baseline, practice.stage, practice.idx, practiceKind, job.peekMs]);
+  }, [screen, halted, bus, source, game.phase, game.baseline, practice.stage, practice.idx, practiceKind, job.peekMs, leadDone]);
 
-  // cracking a safe: the look
-  const activeBox = game.activeBoxId === null ? null : game.boxes.find((b) => b.id === game.activeBoxId) ?? null;
+  // the look: starts the moment the contents land
   useEffect(() => {
-    if (screen !== 'play' || halted || !bus || !source || game.phase !== 'peek' || !activeBox || !game.baseline) return;
-    if (isPeekAware(source)) source.onPeek(activeBox.kind);
+    if (screen !== 'play' || halted || !bus || !source || game.phase !== 'peek' || !activeBox || !game.baseline || !leadDone) return;
+    if (isPeekAware(source)) source.onPeek(activeBox.kind, linePick(gameRef.current));
     const rec = bus.record(job.peekMs);
     recRef.current = rec;
     let on = true;
@@ -461,47 +491,107 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
       if (!on || !frames.length) return;
       const nxt = step(gameRef.current, { type: 'peekDone', features: extractFeatures(frames, baseline) });
       tape.current = { frames, baseline, logIndex: nxt.log.length - (nxt.phase === 'bankerRead' ? 0 : 1) };
+      // a pass goes straight to the replay (its line is the reason); an offer shows at once, ticking
       setGame(nxt);
-      // a pass goes straight to the replay (its line is the reason); an offer is spoken first
-      setReadStage(nxt.phase === 'bankerRead' ? 'after' : 'none');
     });
     return () => { on = false; rec.cancel(); recRef.current = null; unsub(); clearInterval(tick); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, halted, bus, source, game.phase, activeBox?.id, game.baseline, dispatch, job.peekMs]);
+  }, [screen, halted, bus, source, game.phase, activeBox?.id, game.baseline, dispatch, job.peekMs, leadDone]);
 
   // the Fence speaks his read (on The Ghost he keeps his reasons)
   const spoken = game.read ? (job.hints ? game.read.reason : `I'll give you ${game.read.offer ?? 0}.`) : '';
-  // he says it out loud while the offer is already on screen: the player can choose at once
+  // he says it out loud while the offer is already on screen and ticking: the player can choose at once
   useEffect(() => {
-    if (readStage !== 'after' || game.phase !== 'bankerRead' || !game.read || paused) return;
+    if (game.phase !== 'bankerRead' || !game.read || paused) return;
     const s = speak(spoken, P > 1 ? 2 : 1);
     speechRef.current = s;
     return () => { s.cancel(); speechRef.current = null; };
-  }, [readStage, game.phase, game.read, paused, P, spoken]);
+  }, [game.phase, game.read, paused, P, spoken]);
+
+  // the ticking offer: his price falls every second; let it run out and you keep what is inside
+  const offerKey = game.phase === 'bankerRead' ? `${gameNo.current}:${game.log.length}` : null;
+  useEffect(() => { offerMsRef.current = 0; setOfferMs(0); setTooSlow(false); }, [offerKey]);
+  useEffect(() => {
+    if (!offerKey || paused || tooSlow) return;
+    let last = performance.now();
+    const id = setInterval(() => {
+      const now = performance.now();
+      const was = offerMsRef.current;
+      const acc = Math.min(OFFER_WINDOW_MS, was + (now - last) * P);
+      last = now;
+      offerMsRef.current = acc;
+      setOfferMs(acc);
+      if (acc >= OFFER_WINDOW_MS) { setTooSlow(true); return; }
+      if (Math.floor(acc / 1000) > Math.floor(was / 1000)) offerTick(OFFER_WINDOW_MS - acc <= 2000);
+    }, 40);
+    return () => clearInterval(id);
+  }, [offerKey, paused, tooSlow, P]);
+  useEffect(() => {
+    if (!tooSlow || game.phase !== 'bankerRead') return;
+    speechRef.current?.cancel();
+    const s = speak('Too slow.', P > 1 ? 2 : 1);
+    hit();
+    const id = setTimeout(() => dispatch({ type: 'expire' }), 1200 / P);
+    return () => { clearTimeout(id); s.cancel(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tooSlow]);
+
+  // the last safe: he thinks, he calls it, then the truth and your take
+  const finalKey = game.phase === 'finalCall' && game.finalCall ? `${gameNo.current}` : null;
+  useEffect(() => {
+    setFinalStage(0);
+    if (!finalKey || !game.finalCall) return;
+    const fc: FinalCall = game.finalCall;
+    stopSpeaking();
+    drumRoll(1500);
+    let s: { cancel: () => void } | null = null;
+    const t1 = setTimeout(() => {
+      setFinalStage(1);
+      hit();
+      s = speak(fc.line ?? (fc.call === 'dud' ? 'Dud.' : 'Loot.'), P > 1 ? 2 : 1);
+    }, 1500 / P);
+    const t2 = setTimeout(() => {
+      setFinalStage(2);
+      const now = performance.now();
+      if (fc.right) { setBustedAt(now); alarm(); }
+      else { finalPaid.current = true; setPayout({ at: now, amount: fc.after - fc.before }); coins(fc.after - fc.before); }
+    }, 3600 / P);
+    return () => { clearTimeout(t1); clearTimeout(t2); s?.cancel(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finalKey]);
 
   // payouts and busts: sounds and the scene's coin burst and alarm
-  const seen = useRef({ no: -1, pile: 0, log: 0, busted: false });
+  // strikes: the lamp flashes with the alarm sting; the second one sets the whole room off
+  const seen = useRef({ no: -1, pile: 0, log: 0, busted: false, strikes: 0 });
   useEffect(() => {
     const m = seen.current;
-    if (m.no !== gameNo.current) { seen.current = { no: gameNo.current, pile: game.pile, log: game.log.length, busted: game.busted }; return; }
+    const snap = { no: gameNo.current, pile: game.pile, log: game.log.length, busted: game.busted, strikes: game.strikes };
+    if (m.no !== gameNo.current) { seen.current = snap; return; }
     const now = performance.now();
-    if (game.pile > m.pile) { const amount = game.pile - m.pile; setPayout({ at: now, amount }); coins(amount); }
+    if (game.pile > m.pile) {
+      // the last safe's doubling already paid out on screen when he was wrong
+      if (finalPaid.current) finalPaid.current = false;
+      else { const amount = game.pile - m.pile; setPayout({ at: now, amount }); coins(amount); }
+    }
+    const struck = game.strikes > m.strikes;
+    if (struck) { setStrikeAt({ n: game.strikes, at: now }); alarm(); }
     if (game.log.length > m.log) {
       const o = game.log[game.log.length - 1];
-      if (o && o.kind === 'trap' && o.result === 'burned') { setBustedAt(now); alarm(); }
+      // he saw the dud on you and passed: his lamp flares, no alarm (the alarm is for strikes)
+      if (o && o.kind === 'trap' && o.result === 'burned' && !o.strike) setCatchPulse(now);
     }
-    if (game.busted && !m.busted) { setBustedAt(now); alarm(); }
-    seen.current = { no: gameNo.current, pile: game.pile, log: game.log.length, busted: game.busted };
-  }, [game.pile, game.log, game.busted]);
+    if (game.busted && !m.busted) { setBustedAt(now); if (!struck) alarm(); }
+    seen.current = snap;
+  }, [game.pile, game.log, game.busted, game.strikes]);
 
   // open every safe still shut, one at a time
   const hidden = useMemo(() => game.boxes.filter((b) => b.state === 'burned' || b.state === 'sealed').map((b) => b.id), [game.boxes]);
   useEffect(() => {
-    if (screen !== 'play' || game.phase !== 'reveal' || readStage === 'speak' || replayOwed) return;
+    if (screen !== 'play' || game.phase !== 'reveal' || replayOwed) return;
     if (revealN >= hidden.length) return;
     const id = setTimeout(() => setRevealN((n) => n + 1), (revealN === 0 ? 700 : 380) / P);
     return () => clearTimeout(id);
-  }, [screen, game.phase, readStage, replayOwed, revealN, hidden.length, P]);
+  }, [screen, game.phase, replayOwed, revealN, hidden.length, P]);
 
   // job over: tell sheet, history, stash, unlocks, share card (once per job)
   useEffect(() => {
@@ -550,13 +640,13 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     if (!replayOwed || !game.lastOutcome || !game.read) return null;
     const o = game.lastOutcome;
     const t = tape.current && tape.current.logIndex === game.log.length - 1 ? tape.current : null;
-    return { verdict: replayVerdict(o.features, game.read, o.kind, game.level), tape: t };
+    return { verdict: replayVerdict(o.features, game.read, o.kind, game.level, { result: o.result, strike: o.strike, strikes: o.strikes }), tape: t };
   }, [replayOwed, game.lastOutcome, game.read, game.log.length, game.level]);
   const finishReplay = useCallback(() => {
     if (!replayOwed) return;
     stopSpeaking();
     setReplayedN(game.log.length);
-    if (game.phase === 'audit') { setReadStage('none'); dispatch({ type: 'next' }); }
+    if (game.phase === 'audit') dispatch({ type: 'next' });
   }, [replayOwed, game.log.length, game.phase, dispatch]);
   useEffect(() => {
     if (!replay || paused) return;
@@ -576,20 +666,29 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   // ---------- actions ----------
   const pick = useCallback((id: number) => {
     if (screen !== 'play' || paused || game.phase !== 'board') return;
-    dialClicks(7, 800);
-    doorClunk(850);
     dispatch({ type: 'choose', boxId: id });
   }, [screen, paused, game.phase, dispatch]);
 
-  const sellOrOpen = useCallback((t: 'sell' | 'open') => {
-    if (game.phase !== 'bankerRead' || readStage !== 'after') return;
-    dispatch({ type: t });
-    setReadStage('none');
-  }, [game.phase, readStage, dispatch]);
+  const takeOrKeep = useCallback((t: 'sell' | 'open') => {
+    if (game.phase !== 'bankerRead' || tooSlow) return;
+    dispatch(t === 'sell' ? { type: 'sell', elapsedMs: offerMsRef.current } : { type: 'open' });
+  }, [game.phase, tooSlow, dispatch]);
 
   const leave = useCallback(() => {
-    if ((game.phase === 'audit' && readStage !== 'speak') || game.phase === 'board') { stopSpeaking(); setReplayedN(game.log.length); setReadStage('none'); dispatch({ type: 'leave' }); }
-  }, [game.phase, game.log.length, readStage, dispatch]);
+    if (game.phase === 'audit' || game.phase === 'finalChoice' || (game.phase === 'board' && !game.finalBet)) {
+      stopSpeaking(); setReplayedN(game.log.length); dispatch({ type: 'leave' });
+    }
+  }, [game.phase, game.finalBet, game.log.length, dispatch]);
+
+  const bet = useCallback(() => { if (game.phase === 'finalChoice') dispatch({ type: 'finalBet' }); }, [game.phase, dispatch]);
+
+  // his call is in: on to the end of the job (the call screen was this safe's replay)
+  const finishFinal = useCallback(() => {
+    if (game.phase !== 'finalCall' || finalStage < 2) return;
+    stopSpeaking();
+    setReplayedN(game.log.length);
+    dispatch({ type: 'next' });
+  }, [game.phase, finalStage, game.log.length, dispatch]);
 
   const finishReveal = useCallback(() => {
     if (game.phase === 'reveal' && revealN >= hidden.length) { stopCamera(); dispatch({ type: 'reveal' }); }
@@ -669,13 +768,14 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     if (game.phase === 'baseline' && k === 'h') { setWantPractice((w) => !w); return; }
     if (game.phase === 'practice' && k === 'k') { skipPractice(); return; }
     if (game.phase === 'practice' && (k === 'enter' || k === ' ')) { e.preventDefault(); practiceNext(); return; }
-    if (readStage === 'speak' && (k === ' ' || k === 'enter')) { e.preventDefault(); speechRef.current?.cancel(); return; }
     if (game.phase === 'board') {
       if (/^[0-9]$/.test(k)) { const idx = k === '0' ? 9 : Number(k) - 1; const b = game.boxes[idx]; if (b && b.state === 'sealed') pick(b.id); return; }
       if (k === 'l') leave();
       return;
     }
-    if (game.phase === 'bankerRead') { if (k === 'd') sellOrOpen('sell'); if (k === 'k') sellOrOpen('open'); return; }
+    if (game.phase === 'bankerRead') { if (k === 't') takeOrKeep('sell'); if (k === 'k') takeOrKeep('open'); return; }
+    if (game.phase === 'finalChoice') { if (k === 'l') leave(); if (k === 'd') bet(); return; }
+    if (game.phase === 'finalCall') { if (k === 'enter' || k === ' ') { e.preventDefault(); finishFinal(); } return; }
     if (replayOwed) { if (k === 'enter' || k === ' ') { e.preventDefault(); finishReplay(); } else if (k === 'l' && game.phase === 'audit' && runLeft(game) > 0) leave(); return; }
     if (game.phase === 'reveal' && (k === 'enter' || k === ' ')) { finishReveal(); return; }
     if (game.phase === 'over') {
@@ -698,13 +798,11 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
   // ---------- scene props ----------
   const inPractice = screen === 'play' && (game.phase === 'baseline' || game.phase === 'practice');
-  const holdId = readStage === 'speak' && game.lastOutcome?.decision === 'walk' ? game.lastOutcome.boxId : null;
   const revealed = new Set(game.phase === 'over' ? hidden : hidden.slice(0, game.phase === 'reveal' ? revealN : 0));
   const sceneBoxes: SceneBox[] = inPractice
     ? game.boxes.map((b): SceneBox => ({ id: b.id, state: 'sealed' }))
     : game.boxes.map((b): SceneBox => {
       const open = (k: BoxKind): SceneBox => ({ id: b.id, kind: k, state: k === 'trap' ? 'opened-trap' : 'opened-treasure' });
-      if (b.id === holdId) return { id: b.id, state: 'sealed' };
       if (revealed.has(b.id)) return b.state === 'burned' ? { id: b.id, kind: b.kind, state: 'burned-revealed' } : open(b.kind);
       switch (b.state) {
         case 'sealed': return { id: b.id, state: 'sealed' };
@@ -722,18 +820,19 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const sceneActive: number | null = inPractice
     ? null
     : game.phase === 'peek' || game.phase === 'bankerRead' ? game.activeBoxId
-      : (readStage !== 'none' || replay) && game.lastOutcome ? game.lastOutcome.boxId : null;
+      : (replay || game.phase === 'finalCall') && game.lastOutcome ? game.lastOutcome.boxId : null;
+  const fc = game.phase === 'finalCall' ? game.finalCall : null;
   const bankerState: BankerState = screen !== 'play' ? 'idle'
-    : replay ? (replay.verdict.caught ? 'walking' : 'speaking')
-      : readStage === 'speak' ? 'speaking'
-      : game.phase === 'peek' || game.phase === 'baseline' || (game.phase === 'practice' && practice.stage === 'peek') ? 'reading'
-        : game.phase === 'bankerRead' ? 'offering'
-          : game.phase === 'audit' && game.lastOutcome?.decision === 'walk' && readStage === 'after' ? 'walking'
+    : fc ? (finalStage === 0 ? 'reading' : finalStage === 1 ? 'speaking' : fc.right ? 'offering' : 'walking')
+      : replay ? (replay.verdict.caught ? 'walking' : 'speaking')
+        : game.phase === 'peek' || game.phase === 'baseline' || (game.phase === 'practice' && practice.stage === 'peek') ? 'reading'
+          : game.phase === 'bankerRead' ? (tooSlow ? 'walking' : 'offering')
             : 'idle';
   const onBoxClick = useCallback((id: number) => pick(id), [pick]);
 
   // how suspicious he is right now (0..1), for the scene and the heartbeat
   const alertLevel = screen !== 'play' || paused || game.phase === 'over' ? 0
+    : fc ? (finalStage < 2 ? 0.6 : fc.right ? 0.95 : 0.1)
     : game.phase === 'peek' ? liveAlert
       : replay ? (replay.verdict.caught ? 0.95 : 0.12)
         : game.phase === 'bankerRead' && game.read ? Math.max(game.read.pTrap, game.read.decision === 'unread' ? 0.5 : 0)
@@ -745,8 +844,18 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
   const menu = screen !== 'play' || game.phase === 'over';
   const sim = source?.kind === 'simulated';
-  const ruleStep = game.phase === 'board' ? 0 : game.phase === 'peek' ? 1 : readStage === 'speak' || replay ? 2 : game.phase === 'bankerRead' ? 3 : -1;
-  const statusChip: 'finding' | 'reading' | 'ready' = lost ? 'finding' : reading || readStage === 'speak' ? 'reading' : 'ready';
+  // the steps strip: crack (and the crack itself), hide it while he reads you, then take his cash or keep it
+  const ruleOn: number[] = game.phase === 'board' ? [0]
+    : game.phase === 'peek' ? (leadDone ? [1, 2] : [0])
+      : game.phase === 'bankerRead' || replay ? [3] : [];
+  const statusChip: 'finding' | 'reading' | 'ready' = lost ? 'finding' : reading ? 'reading' : 'ready';
+  const dbl = game.finalBet && (game.phase === 'board' || game.phase === 'peek' || game.phase === 'finalCall');
+  // what is on screen right now, for tests and screenshots
+  const sub = game.phase === 'peek' ? (leadDone ? 'look' : 'lead')
+    : game.phase === 'bankerRead' ? (tooSlow ? 'tooslow' : 'offer')
+      : game.phase === 'finalCall' ? `call${finalStage}`
+        : replay ? 'replay' : game.phase;
+  const shownPile = fc ? (finalStage >= 2 ? fc.after : fc.before) : undefined;
   const findingHint = (() => {
     if (!lost) return null;
     if (facePause === 'many') return 'Only one face in view, please.';
@@ -774,7 +883,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         quality="high"
         lite={live}
       />
-      <div className="vui" data-screen={screen} data-phase={game.phase} data-stage={readStage} data-job={jobId} data-practice={`${practice.idx}:${practice.stage}`} data-paused={paused ? '1' : '0'}>
+      <div className="vui" data-screen={screen} data-phase={game.phase} data-stage={sub} data-strikes={game.strikes} data-job={jobId} data-practice={`${practice.idx}:${practice.stage}`} data-paused={paused ? '1' : '0'}>
         {menu ? <div className="scrim-full" /> : <><div className="scrim-top" /><div className="scrim-bottom" /></>}
 
         {screen === 'title' && <TitleScreen onGo={() => fromTitle()} onSample={() => void sampleRun()} err={err} />}
@@ -796,7 +905,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         {screen === 'play' && game.phase !== 'over' && (
           <>
             <Hud game={game} job={job} daily={daily} />
-            <Purse game={game} stash={stash.total} />
+            <Purse game={game} stash={stash.total} shownPile={shownPile} strikeAt={strikeAt} />
             <BodyPanel bus={paused ? null : bus} stream={paused ? null : srcStatus?.stream ?? null} sim={sim} bpm={bpm} />
             {(game.phase === 'board' || game.phase === 'bankerRead') && <ValuesBoard game={game} />}
             <div className="topright">
@@ -805,7 +914,10 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
               {!sim && <span className="chip-soft">Esc turns the camera off</span>}
               <button className="chip-soft" onClick={toggleMute} style={{ border: 0, cursor: 'pointer', font: 'inherit' }}>M sound {muted ? 'off' : 'on'}</button>
             </div>
-            {job.hints && ruleStep >= 0 && !(lost && reading) && <div className="rs-top"><RuleStrip step={ruleStep} /></div>}
+            {dbl && !(lost && reading) && (
+              <div className="dbl-banner"><b>Double or nothing</b><span>Fool him on this safe and {money(fc ? fc.before : game.pile)} becomes {money((fc ? fc.before : game.pile) * 2)}</span></div>
+            )}
+            {!dbl && job.hints && ruleOn.length > 0 && !(lost && reading) && <div className="rs-top"><RuleStrip on={ruleOn} /></div>}
             <div className="stage">
               {/* rule strip lives at the top now, so it never covers the safe */}
               {lost && reading ? (
@@ -827,33 +939,48 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                     )
                   )}
                   {game.phase === 'practice' && practiceKind && (
-                    <PracticeStage idx={practice.idx} total={game.practice.length} kind={practiceKind} stage={practice.stage} peekMs={job.peekMs}
+                    <PracticeStage idx={practice.idx} total={game.practice.length} kind={practiceKind} stage={practice.stage} peekMs={job.peekMs} open={leadDone}
                       last={practice.peeks[practice.peeks.length - 1]?.features ?? null} recRef={recRef} bus={bus} reusedCalm={reusedCalm} onNext={practiceNext} onSkip={skipPractice} />
                   )}
                   {game.phase === 'board' && (
-                    <>
-                      <div className="prompt big">Click any safe to crack it</div>
-                      <div className="line">{runLeft(game)} safe{runLeft(game) === 1 ? '' : 's'} to go this job.</div>
-                      {game.log.length === 0 && memLine && <div className="line" style={{ opacity: 0.85, fontStyle: 'italic' }}>The Fence: &ldquo;{memLine}&rdquo;</div>}
-                      {game.log.length > 0 && <div className="actions"><Btn ghost k="L" onClick={leave}>Walk out with {money(game.pile)}</Btn></div>}
-                    </>
+                    game.finalBet ? (
+                      <>
+                        <div className="prompt big">Click any safe for the last one</div>
+                        <div className="line">He gets one call: loot or dud. Look nervous at loot, stay calm at a dud.</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="prompt big">Click any safe to crack it</div>
+                        <div className="line">{runLeft(game)} safe{runLeft(game) === 1 ? '' : 's'} to go this job.</div>
+                        {game.log.length === 0 && memLine && <div className="line" style={{ opacity: 0.85, fontStyle: 'italic' }}>The Fence: &ldquo;{memLine}&rdquo;</div>}
+                        {game.log.length > 0 && game.pile > 0 && <div className="actions"><Btn ghost k="L" onClick={leave}>Walk out with {money(game.pile)}</Btn></div>}
+                      </>
+                    )
                   )}
-                  {game.phase === 'peek' && activeBox && <PeekStage kind={activeBox.kind} value={activeBox.value} recRef={recRef} bus={bus} caught={liveCaught && job.hints} peekMs={job.peekMs} alert={job.hints ? liveAlert : null} />}
-                  {readStage === 'speak' && game.read && <Subtitle text={spoken} />}
-                  {game.phase === 'bankerRead' && readStage === 'after' && game.read && activeBox && (
-                    <OfferStage offer={game.read.offer ?? 0} blind={game.read.decision === 'unread'} reason={job.hints ? game.read.reason : null}
-                      saw={kindName(activeBox.kind, activeBox.value)} onSell={() => sellOrOpen('sell')} onOpen={() => sellOrOpen('open')} />
+                  {game.phase === 'peek' && activeBox && !leadDone && <Cracking />}
+                  {game.phase === 'peek' && activeBox && leadDone && (
+                    <PeekStage kind={activeBox.kind} value={activeBox.value} recRef={recRef} caught={liveCaught && job.hints} peekMs={job.peekMs}
+                      alert={job.hints ? liveAlert : null} final={game.finalBet} take={game.pile} />
+                  )}
+                  {game.phase === 'bankerRead' && game.read && activeBox && (
+                    <OfferStage offer={game.read.offer ?? 0} elapsed={offerMs} tooSlow={tooSlow} blind={game.read.decision === 'unread'} quote={spoken}
+                      kind={activeBox.kind} value={activeBox.value} strikes={game.strikes}
+                      onTake={() => takeOrKeep('sell')} onKeep={() => takeOrKeep('open')} />
+                  )}
+                  {fc && game.lastOutcome && (
+                    <FinalCallStage fc={fc} stage={finalStage} kind={game.lastOutcome.kind} value={game.lastOutcome.value} onNext={finishFinal} />
                   )}
                   {replay && game.lastOutcome && (
                     <ReplayStage game={game} verdict={replay.verdict} tape={replay.tape} peekMs={job.peekMs} onNext={finishReplay}
                       onLeave={game.phase === 'audit' && runLeft(game) > 0 ? leave : null} />
                   )}
-                  {game.phase === 'reveal' && readStage !== 'speak' && !replay && (
+                  {game.phase === 'reveal' && !replay && (
                     <RevealStage game={game} hidden={hidden} revealN={revealN} onDone={finishReveal} />
                   )}
                 </>
               )}
             </div>
+            {game.phase === 'finalChoice' && !(lost && reading) && <FinalChoice take={game.pile} onWalk={leave} onBet={bet} />}
           </>
         )}
 
@@ -890,8 +1017,8 @@ function TitleScreen({ onGo, onSample, err }: { onGo: () => void; onSample: () =
       <div className="title-word">The Vault</div>
       <div className="title-sub enter" style={{ ['--d' as string]: 3 }}>Crack the safes. Fool the Fence.</div>
       <div className="tagline enter" style={{ ['--d' as string]: 5 }}>
-        The Fence buys stolen goods, and he wants your safes. Only you see inside each one. He watches your breath, blinks, face and pulse on camera, then bids blind.
-        Dump the duds on him. Keep the real loot.
+        The Fence buys stolen goods, and he wants your safes. Only you see inside each one. He watches your breath, blinks, face and pulse on camera,
+        then names a price that drops every second. Take his cash or keep what is inside, and never let him find two duds.
       </div>
       <div className="actions enter" style={{ ['--d' as string]: 8 }}>
         <Btn primary big k="Enter" onClick={onGo}>Start the job</Btn>
@@ -915,7 +1042,7 @@ function JobsScreen({ sel, setSel, stash, sim, onPlay, onWipe, canWipe }: {
           <div className="eyebrow enter">Pick a job</div>
           <div className="display enter" style={{ ['--d' as string]: 1 }}>Seven jobs. The Fence reads more of you on each.</div>
           <div className="small enter" style={{ marginTop: 8, ['--d' as string]: 2 }}>The Fence buys stolen goods. He pays for your safes without seeing inside, so he reads you instead.</div>
-          <div className="enter" style={{ marginTop: 10, ['--d' as string]: 2 }}><RuleStrip step={-1} /></div>
+          <div className="enter" style={{ marginTop: 10, ['--d' as string]: 2 }}><RuleStrip /></div>
         </div>
         <div className="stash-big enter" style={{ ['--d' as string]: 2 }}>
           <div className="eyebrow">Your stash</div>
@@ -1033,8 +1160,8 @@ function CalmStage({ bus, recRef, wantPractice, howSeen, onToggle }: {
   );
 }
 
-function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm, peekMs, onNext, onSkip }: {
-  idx: number; total: number; kind: BoxKind; stage: PracticeState['stage']; last: PeekFeatures | null; peekMs: number;
+function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm, peekMs, open, onNext, onSkip }: {
+  idx: number; total: number; kind: BoxKind; stage: PracticeState['stage']; last: PeekFeatures | null; peekMs: number; open: boolean;
   recRef: React.MutableRefObject<{ progress: () => number } | null>; bus: SignalBus | null; reusedCalm: boolean; onNext: () => void; onSkip: () => void;
 }): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
@@ -1055,6 +1182,7 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
       </>
     );
   }
+  if (stage === 'peek' && !open) return <Cracking />;
   if (stage === 'peek') {
     return (
       <>
@@ -1086,10 +1214,22 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   );
 }
 
-function PeekStage({ kind, value, recRef, caught, peekMs, alert }: {
-  kind: BoxKind; value: number; recRef: React.MutableRefObject<{ progress: () => number } | null>; bus: SignalBus | null; caught: boolean; peekMs: number;
+/** The crack: dial and door only. What is inside stays hidden until the door is open. */
+function Cracking(): JSX.Element {
+  return (
+    <div className="cracking" role="status">
+      <svg className="dialicon" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="42" /><line x1="50" y1="50" x2="50" y2="18" /></svg>
+      <span className="word">Cracking…</span>
+    </div>
+  );
+}
+
+function PeekStage({ kind, value, recRef, caught, peekMs, alert, final, take }: {
+  kind: BoxKind; value: number; recRef: React.MutableRefObject<{ progress: () => number } | null>; caught: boolean; peekMs: number;
   /** his live suspicion 0..1, or null when the job gives no hints */
   alert: number | null;
+  /** the last safe, double or nothing: he calls it instead of making an offer */
+  final: boolean; take: number;
 }): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
   const secs = Math.max(0, Math.ceil((peekMs / 1000) * (1 - p)));
@@ -1103,12 +1243,14 @@ function PeekStage({ kind, value, recRef, caught, peekMs, alert }: {
           <div className="eyebrow">You found</div>
           <div className={`contents ${kind}`}>{kindName(kind, value)}</div>
         </div>
-        <div className="peek-timer" title="His offer comes when this runs out"><Ring progress={p} label={String(secs)} /></div>
+        <div className="peek-timer" title={final ? 'He calls it when this runs out' : 'His offer comes when this runs out'}><Ring progress={p} label={String(secs)} /></div>
       </div>
       <div className="peek-goal">
-        {dud
-          ? <>Hide it. Breathe like it is loot, so he pays you for this dud.</>
-          : <>Hide it. Stay calm, so he cannot tell what you found.</>}
+        {final
+          ? (dud ? <>Stay calm. Make him think it is loot.</> : <>Look nervous. Make him think it is a dud.</>)
+          : dud
+            ? <>Hide it. Breathe like it is loot, so he pays you for this dud.</>
+            : <>Hide it. Stay calm, so he cannot tell what you found.</>}
       </div>
       {a !== null && (
         <div className={`susp${a > 0.66 ? ' hot' : ''}`}>
@@ -1116,55 +1258,125 @@ function PeekStage({ kind, value, recRef, caught, peekMs, alert }: {
           <div className="susp-bar"><i style={{ width: `${Math.round(8 + a * 92)}%` }} /></div>
         </div>
       )}
-      <div className="peek-next">In {secs}s he makes his offer. Then you choose: <b>Dump it</b> for his cash, or <b>Keep it</b>.</div>
+      <div className="peek-next">
+        {final
+          ? <>In {secs}s he calls it: <b>loot</b> or <b>dud</b>. If he is wrong, your {money(take)} doubles.</>
+          : <>In {secs}s he names his price, and it drops every second. <b>Take his cash</b> fast, or <b>keep what is inside</b>.</>}
+      </div>
     </div>
   );
 }
 
-function OfferStage({ offer, blind, reason, saw, onSell, onOpen }: { offer: number; blind: boolean; reason: string | null; saw: string; onSell: () => void; onOpen: () => void }): JSX.Element {
+/** His offer: the big cash card is the button, and the price falls while the ring drains. */
+function OfferStage({ offer, elapsed, tooSlow, blind, quote, kind, value, strikes, onTake, onKeep }: {
+  offer: number; elapsed: number; tooSlow: boolean; blind: boolean; quote: string; kind: BoxKind; value: number; strikes: number;
+  onTake: () => void; onKeep: () => void;
+}): JSX.Element {
+  const left = Math.max(0, OFFER_WINDOW_MS - elapsed);
+  const late = left <= 2000;
+  const price = offerAt(offer, elapsed);
+  const dud = kind === 'trap';
+  const next = strikes + 1;
   return (
-    <>
-      {reason && <div className="line" style={{ fontStyle: 'italic' }}>&ldquo;{reason}&rdquo;</div>}
-      <div className="offer">
-        <div className="side">
-          <button className="btn dump big" onClick={onSell}><span className="lbl">Dump it</span><span className="key">D</span></button>
-          <div className="note">Take his cash. The safe is his.</div>
+    <div className="offer2">
+      {quote && <div className="quote"><span className="who">The Fence</span>&ldquo;{quote}&rdquo;</div>}
+      {tooSlow ? (
+        <div className="tooslow">Too slow.</div>
+      ) : (
+        <button className={`takecard${late ? ' late' : ''}`} onClick={onTake} aria-label={`Take his ${price}`}>
+          <Ring progress={left / OFFER_WINDOW_MS} label={String(Math.ceil(left / 1000))} />
+          <span className="what">
+            <span className="verb">{blind ? 'Take his blind' : 'Take his'}</span>
+            <span className="price">{money(price)}</span>
+            <span className="falls">Drops every second until you take it</span>
+          </span>
+          <span className="key">T</span>
+        </button>
+      )}
+      {dud && !tooSlow && (
+        <div className="risk">
+          <span className={`lamp${next >= MAX_STRIKES ? ' on' : ''}`} />
+          {next >= MAX_STRIKES
+            ? <>He will find this dud. Strike {next} sets off the alarm: you lose your take.</>
+            : <>He will find this dud: strike {next} of {MAX_STRIKES}. You keep his cash.</>}
         </div>
-        <div className="side">
-          <div className="cash">
-            <div className="lab">{blind ? 'Blind cash offer' : 'Cash offer'}</div>
-            <div className="price">{money(offer)}</div>
-            <div className="saw">You saw: {saw}</div>
-          </div>
+      )}
+      <Btn ghost k="K" onClick={onKeep} disabled={tooSlow}>Keep what is inside: {dud ? 'a dud' : money(value)}</Btn>
+    </div>
+  );
+}
+
+/** One safe left: bank the take, or bet it all on fooling him once more. */
+function FinalChoice({ take, onWalk, onBet }: { take: number; onWalk: () => void; onBet: () => void }): JSX.Element {
+  return (
+    <div className="final">
+      <div className="eyebrow enter">Double or nothing</div>
+      <div className="display enter" style={{ ['--d' as string]: 1 }}>One safe left.</div>
+      <div className="lab enter" style={{ ['--d' as string]: 2, color: 'var(--cream-dim)' }}>Your take</div>
+      <div className="take-big num">{money(take)}</div>
+      <div className="rules enter" style={{ ['--d' as string]: 3 }}>
+        He gets one call: loot or dud. If he calls it wrong, your take doubles to <b>{money(take * 2)}</b>. If he calls it right, you lose it all.
+      </div>
+      <div className="tip enter" style={{ ['--d' as string]: 3 }}>Fool him: look nervous if it is loot, stay calm if it is a dud.</div>
+      <div className="final-choice enter" style={{ ['--d' as string]: 4 }}>
+        <div className="opt">
+          <Btn big k="L" onClick={onWalk}>Walk out with {money(take)}</Btn>
+          <div className="note">Bank it now. The job ends here.</div>
         </div>
-        <div className="side">
-          <Btn primary big k="K" onClick={onOpen}>Keep it</Btn>
-          <div className="note">Keep the safe. You get what is inside.</div>
+        <div className="opt">
+          <button className="btn bet big" onClick={onBet}><span className="lbl">Double or nothing</span><span className="key">D</span></button>
+          <div className="note">Crack one more safe. If he calls it wrong, you walk out with {money(take * 2)}.</div>
         </div>
       </div>
-    </>
+    </div>
   );
+}
+
+/** His call on the last safe: he thinks, he calls it, then the truth and what it did to your take. */
+function FinalCallStage({ fc, stage, kind, value, onNext }: { fc: FinalCall; stage: number; kind: BoxKind; value: number; onNext: () => void }): JSX.Element {
+  const held = kind === 'trap' ? 'a dud' : kind === 'big' ? `gold bars worth ${money(value)}` : `cash worth ${money(value)}`;
+  return (
+    <div className="call">
+      {stage === 0 && <div className="thinking">He calls it…</div>}
+      {stage >= 1 && <div className={`word ${fc.call}`}>{fc.call === 'dud' ? 'Dud' : 'Loot'}</div>}
+      {stage === 1 && fc.line && <Subtitle text={fc.line} />}
+      {stage >= 2 && <div className="truth">It held {held}.</div>}
+      {stage >= 2 && (
+        <div className={`result ${fc.right ? 'lost' : 'won'}`}>
+          {fc.right ? 'He read you. You lose everything.' : `He was wrong. Your take doubles: ${money(fc.after)}`}
+        </div>
+      )}
+      {stage >= 2 && <div className="actions"><Btn primary k="Enter" onClick={onNext}>See how the job ended</Btn></div>}
+    </div>
+  );
+}
+
+/** The strike, in one line. */
+function strikeText(o: BoxOutcome): string {
+  const how = o.result === 'burned' ? 'He caught you at a dud.' : 'He found the dud you sold him.';
+  return o.strikes >= MAX_STRIKES ? `${how} Strike ${o.strikes}: the alarm goes off and you lose your take.` : `${how} Strike ${o.strikes}.`;
 }
 
 /** What the safe did to your take, in one line, with a stamp. */
 function outcomeCopy(game: GameState): { stamp: JSX.Element; line: string } {
   const o = game.lastOutcome!;
   const trap = o.kind === 'trap';
-  const offer = o.offer ?? 0;
+  const paid = o.paid ?? o.offer ?? 0;
   if (o.result === 'burned') {
     return trap
-      ? { stamp: <span className="stamp">Busted</span>, line: game.rules.caughtDudHeat > 0 ? 'He caught you at a dud. No cash, and the heat went up.' : 'He caught you at a dud. No cash this time.' }
+      ? { stamp: <span className="stamp">Caught</span>, line: 'He saw the dud on you and passed. No cash.' }
       : { stamp: <span className="stamp copper">He passed</span>, line: `He passed on it. The safe locked shut with ${money(o.value)} inside.` };
   }
-  if (o.result === 'sold' && trap) {
-    const heist = o.decision === 'offer';
-    const total = offer + (heist ? heistPay(offer, game.rules) : 0);
-    return {
-      stamp: <span className="stamp good">Dumped</span>,
-      line: heist ? `You dumped a dud on him. He paid ${money(total)} in all.` : `You dumped a dud on him blind for ${money(offer)}.`,
-    };
+  if (o.expired) {
+    return { stamp: <span className="stamp copper">Too slow</span>, line: trap ? 'His offer ran out. You kept the dud: nothing added.' : `His offer ran out. You kept what was inside: ${money(o.value)} added.` };
   }
-  if (o.result === 'sold') return { stamp: <span className="stamp copper">Sold</span>, line: `You sold real loot for ${money(offer)}. It held ${money(o.value)}.` };
+  if (o.result === 'sold' && trap) {
+    if (game.busted) return { stamp: <span className="stamp">Busted</span>, line: `You sold him a dud for ${money(paid)}, and he found it.` };
+    const heist = o.decision === 'offer';
+    const total = paid + (heist ? heistPay(paid, game.rules) : 0);
+    return { stamp: <span className="stamp good">Sold him a dud</span>, line: heist ? `He paid ${money(total)} in all for it.` : `He paid ${money(paid)} blind for it.` };
+  }
+  if (o.result === 'sold') return { stamp: <span className="stamp copper">Sold</span>, line: `You took his ${money(paid)}. It held ${money(o.value)}.` };
   if (trap) return { stamp: <span className="stamp">Dud</span>, line: 'You kept a dud. Nothing added.' };
   return { stamp: <span className="stamp good">Kept</span>, line: `${money(o.value)} added to your take.` };
 }
@@ -1174,11 +1386,13 @@ function ReplayStage({ game, verdict, tape, peekMs, onNext, onLeave }: {
 }): JSX.Element {
   const { stamp, line } = outcomeCopy(game);
   const left = runLeft(game);
+  const o = game.lastOutcome!;
   return (
     <div className="replay" key={game.log.length}>
       <div className="replay-head">
         {stamp}
         <span className="replay-out">{line}</span>
+        {o.strike && <span className="strike-line"><span className="lamp on" />{strikeText(o)}</span>}
       </div>
       <div className="stage-card">
         <div className="lab">{verdict.caught ? 'Where he caught you' : 'What he saw'}</div>
@@ -1189,7 +1403,7 @@ function ReplayStage({ game, verdict, tape, peekMs, onNext, onLeave }: {
       </div>
       <Subtitle text={verdict.line} />
       <div className="actions" style={{ marginTop: 2 }}>
-        <Btn primary k="Enter" onClick={onNext}>{left > 0 ? `Next safe · ${left} to go` : game.phase === 'reveal' ? 'Go on' : 'Open the rest'}</Btn>
+        <Btn primary k="Enter" onClick={onNext}>{game.phase === 'reveal' ? 'Go on' : left === 1 && game.pile > 0 && !game.finalBet ? 'The last safe' : left > 0 ? `Next safe · ${left} to go` : 'Open the rest'}</Btn>
         {onLeave && game.pile > 0 && <Btn ghost k="L" onClick={onLeave}>Walk out with {money(game.pile)}</Btn>}
       </div>
     </div>
@@ -1199,11 +1413,16 @@ function ReplayStage({ game, verdict, tape, peekMs, onNext, onLeave }: {
 function RevealStage({ game, hidden, revealN, onDone }: { game: GameState; hidden: number[]; revealN: number; onDone: () => void }): JSX.Element {
   const shown = hidden.slice(0, revealN);
   const done = revealN >= hidden.length;
-  const head = game.busted ? 'Full heat. Busted, you leave with nothing.' : game.left ? `You walked out with ${money(game.pile)}.` : `Job done. Your take: ${money(game.pile)}.`;
+  const fc = game.finalCall;
+  const head = game.busted ? 'Two strikes. The alarm went off: you leave with nothing.'
+    : fc ? (fc.right ? 'He read you on the last safe. You leave with nothing.' : `He guessed wrong. You walk out with ${money(game.pile)}.`)
+      : game.left ? `You walked out with ${money(game.pile)}.` : `Job done. Your take: ${money(game.pile)}.`;
   const burned = shown.map((id) => game.boxes.find((x) => x.id === id)!).filter((b) => b.state === 'burned');
   return (
     <>
-      {game.busted ? <span className="stamp">Busted</span> : <span className="stamp good">{game.left ? 'Walked out' : 'Job done'}</span>}
+      {game.busted ? <span className="stamp">Busted</span>
+        : fc ? (fc.right ? <span className="stamp">Read you</span> : <span className="stamp good">Doubled</span>)
+          : <span className="stamp good">{game.left ? 'Walked out' : 'Job done'}</span>}
       <div className="prompt big">{head}</div>
       <div className="line" style={{ minHeight: '2.8em' }}>
         {shown.length === 0 ? 'Now every safe you did not keep swings open.' : burned.length === 0 ? 'The safes you did not crack are open.' : burned.map((b) => (
@@ -1217,8 +1436,9 @@ function RevealStage({ game, hidden, revealN, onDone }: { game: GameState; hidde
 
 function verdictFor(game: GameState): { cls: string; text: string; why: string } {
   const sc = game.score!;
-  if (sc.busted) return { cls: 'busted', text: 'Busted', why: 'Full heat. The Fence threw you out with nothing.' };
-  if (sc.won) return { cls: 'clean', text: 'Clean job', why: `You took at least ${money(sc.target)} and he caught no more duds than allowed.` };
+  if (sc.busted) return { cls: 'busted', text: 'Busted', why: 'Two strikes. The alarm went off and you lost your take.' };
+  if (sc.finalCall?.right) return { cls: 'busted', text: 'He read you', why: 'You bet your take on the last safe and he called it right. You lost it all.' };
+  if (sc.won) return { cls: 'clean', text: 'Clean job', why: sc.finalCall ? `He guessed wrong on the last safe and your take doubled. Clean.` : `You took at least ${money(sc.target)} and he caught no more duds than allowed.` };
   const misses: string[] = [];
   if (sc.pile < sc.target) misses.push(`${money(sc.target - sc.pile)} short of the ${money(sc.target)} target`);
   if (sc.trapsCaught > sc.maxTrapsCaught) misses.push(`he caught ${sc.trapsCaught} duds, ${sc.maxTrapsCaught} allowed`);
@@ -1277,7 +1497,7 @@ function EndScreen({ game, job, end, cardUrl, onAgain, onJobs, onSave }: {
           <span>Stash <b>{money(end.stashAfter.total)}</b></span>
         </div>
         <div className="small enter" style={{ ['--d' as string]: 3 }}>
-          {sheet.readLine} {sc.trapsSold > 0 && `You dumped ${sc.trapsSold} dud${sc.trapsSold > 1 ? 's' : ''} on him.`} {caught > 0 && `He caught you at ${caught}.`}
+          {sheet.readLine} {sc.trapsSold > 0 && `You sold him ${sc.trapsSold} dud${sc.trapsSold > 1 ? 's' : ''}.`} {caught > 0 && `He caught you at ${caught}.`}
         </div>
         <div className="tell-card enter" style={{ ['--d' as string]: 4 }}>
           <div className="lab">Your tell</div>

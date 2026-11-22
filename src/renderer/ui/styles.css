@@ -330,3 +330,92 @@
 .susp.hot .susp-lab b { color: var(--alarm); }
 .peek-next { margin-top: 10px; font-size: var(--fs-s); color: rgba(58,7,16,0.75); }
 .peek-next b { color: var(--velvet); }
+
+/* ---------- rush: the crack, the ticking offer, the alarm lamps, double or nothing ---------- */
+@keyframes spin { to { transform: rotate(360deg) } }
+@keyframes flash { 0%, 100% { background: var(--alarm); box-shadow: 0 0 0 3px rgba(255,74,61,0.35), 0 0 26px 6px rgba(255,74,61,0.85) } 50% { background: #5a0a0e; box-shadow: 0 0 0 3px rgba(255,74,61,0.2), 0 0 0 0 rgba(255,74,61,0) } }
+@keyframes shake { 0%, 100% { transform: none } 20% { transform: translateX(-5px) } 40% { transform: translateX(5px) } 60% { transform: translateX(-3px) } 80% { transform: translateX(3px) } }
+@keyframes urgent { 0%, 100% { transform: scale(1) } 50% { transform: scale(1.035) } }
+@keyframes slam { 0% { opacity: 0; transform: scale(2.6) } 55% { opacity: 1; transform: scale(0.92) } 100% { transform: scale(1) } }
+
+/* cracking: nothing about the contents yet */
+.cracking { display: flex; align-items: center; gap: 14px; background: rgba(42,5,12,0.78); padding: 12px 26px 12px 14px; border-radius: 99px; animation: rise 0.3s var(--ease) both; }
+.cracking .dialicon { width: 44px; height: 44px; flex: none; }
+.cracking .dialicon circle { fill: var(--cream); stroke: var(--copper); stroke-width: 6; }
+.cracking .dialicon line { stroke: var(--velvet); stroke-width: 6; stroke-linecap: round; transform-origin: 50px 50px; animation: spin 0.9s steps(12) infinite; }
+.cracking .word { font-family: var(--bold); font-weight: 700; font-size: var(--fs-l); color: var(--cream); }
+
+/* double or nothing banner, top centre while the last safe plays */
+.dbl-banner { position: absolute; top: var(--gut); left: 50%; transform: translateX(-50%); z-index: 3; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  background: var(--crimson); color: var(--cream); border-radius: 14px; padding: 8px 22px 9px; box-shadow: 0 5px 0 #5a0a14, 0 12px 30px rgba(20,0,4,0.5); white-space: nowrap; animation: fade 0.45s var(--ease) both; }
+.dbl-banner b { font-family: var(--display); font-weight: 400; font-size: var(--fs-l); letter-spacing: 0.06em; line-height: 1; }
+.dbl-banner span { font-size: var(--fs-xs); font-weight: 700; color: #ffd9c8; }
+
+/* the offer: his quote, the big ticking cash button, keep what is inside */
+.offer2 { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 100%; }
+.quote { font-size: var(--fs-m); color: var(--cream); font-style: italic; text-shadow: 0 2px 12px rgba(30,2,8,0.9); max-width: 34em; }
+.quote .who { font-style: normal; font-weight: 700; font-size: var(--fs-xs); letter-spacing: 0.16em; text-transform: uppercase; color: var(--cream); background: var(--velvet); padding: 2px 10px; border-radius: 99px; margin-right: 8px; vertical-align: 0.15em; }
+.takecard { font: inherit; border: 0; cursor: pointer; display: flex; align-items: center; gap: clamp(12px, 1.4vw, 22px); background: var(--cream); color: var(--velvet-deep); border-radius: 22px;
+  padding: 12px clamp(18px, 1.8vw, 30px) 12px 14px; box-shadow: 0 8px 0 var(--cream-dim), 0 20px 44px rgba(20,0,4,0.55), 0 0 0 4px var(--loot); text-align: left;
+  transition: transform 0.08s, box-shadow 0.08s, filter 0.15s; animation: popin 0.4s var(--pop) both; }
+.takecard:hover { filter: brightness(1.04); }
+.takecard:active { transform: translateY(7px); box-shadow: 0 1px 0 var(--cream-dim), 0 6px 14px rgba(20,0,4,0.4), 0 0 0 4px var(--loot); }
+.takecard:focus-visible { outline: 3px solid var(--copper); outline-offset: 4px; }
+.takecard.late { box-shadow: 0 8px 0 var(--cream-dim), 0 20px 44px rgba(20,0,4,0.55), 0 0 0 4px var(--alarm); animation: urgent 0.5s ease-in-out infinite; }
+.takecard.gone { cursor: default; filter: saturate(0.4); animation: none; }
+.takecard .ring { width: clamp(64px, 6vw, 96px); height: clamp(64px, 6vw, 96px); }
+.takecard .ring .prog { stroke: var(--loot); transition: stroke-dashoffset 0.08s linear, stroke 0.3s; }
+.takecard.late .ring .prog { stroke: var(--alarm); }
+.takecard .ring text { font-size: 38px; }
+.takecard .what { display: flex; flex-direction: column; gap: 2px; }
+.takecard .verb { font-family: var(--bold); font-weight: 700; font-size: var(--fs-m); color: var(--velvet); text-transform: uppercase; letter-spacing: 0.08em; }
+.takecard .price { font-family: var(--bold); font-weight: 700; font-size: clamp(46px, 4.6vw, 92px); line-height: 0.95; color: var(--velvet); font-variant-numeric: tabular-nums; }
+.takecard.late .price { color: var(--crimson); }
+.takecard .falls { font-size: var(--fs-xs); font-weight: 700; color: rgba(58,7,16,0.65); }
+.takecard .key { font-size: var(--fs-s); align-self: center; background: var(--loot); color: #fff; padding: 0.3em 0.7em; }
+.takecard.late .key { background: var(--alarm); }
+.tooslow { font-family: var(--display); font-size: var(--fs-xl); color: var(--alarm); text-shadow: 0 4px 0 var(--velvet-deep); animation: slam 0.4s var(--pop) both; }
+.risk { display: inline-flex; align-items: center; gap: 10px; background: rgba(42,5,12,0.82); color: var(--cream); font-weight: 700; font-size: var(--fs-s); padding: 7px 16px 7px 8px; border-radius: 99px; max-width: 100%; }
+.risk .lamp { width: 20px; height: 20px; }
+
+/* alarm lamps in the Take panel */
+.lamps-wrap { margin-top: 10px; border-top: 2px dashed rgba(107,15,26,0.18); padding-top: 8px; }
+.lamps { display: flex; align-items: center; gap: 10px; }
+.lamps .lab { flex: 1; }
+.lamp { width: 26px; height: 26px; border-radius: 50%; background: #d9c3a3; box-shadow: inset 0 -4px 0 rgba(58,7,16,0.2), inset 0 3px 4px rgba(255,255,255,0.5); position: relative; flex: none; }
+.lamp::after { content: ""; position: absolute; left: 6px; top: 4px; width: 8px; height: 6px; border-radius: 50%; background: rgba(255,255,255,0.55); }
+.lamp.on { background: var(--alarm); box-shadow: 0 0 0 3px rgba(255,74,61,0.3), 0 0 18px 3px rgba(255,74,61,0.7), inset 0 -4px 0 rgba(90,10,14,0.4); }
+.lamp.flash { animation: flash 0.32s linear 7; }
+.lamps-rule { font-size: var(--fs-xs); line-height: 1.3; color: rgba(58,7,16,0.75); margin-top: 6px; font-weight: 500; }
+.purse.shake { animation: shake 0.45s ease-in-out 2; }
+
+/* a strike in the replay */
+.strike-line { display: inline-flex; align-items: center; gap: 10px; background: var(--alarm); color: #fff; font-weight: 700; font-size: var(--fs-m); padding: 8px 18px 8px 10px; border-radius: 99px; box-shadow: 0 5px 0 #8a1410, 0 10px 26px rgba(20,0,4,0.5); animation: popin 0.4s var(--pop) both; }
+.strike-line .lamp { width: 22px; height: 22px; }
+
+/* the last safe: walk out or double or nothing */
+.final { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: var(--gut); pointer-events: auto;
+  background: radial-gradient(ellipse at 50% 45%, rgba(58,7,16,0.74), rgba(42,5,12,0.95) 70%); animation: fade 0.4s var(--ease) both; }
+.final .display { font-size: var(--fs-xl); }
+.final .take-big { font-size: clamp(64px, 8vw, 150px); }
+.final .rules { font-size: var(--fs-m); max-width: 30em; line-height: 1.45; color: var(--cream); }
+.final .rules b { color: #ffd27a; }
+.final-choice { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(14px, 2.4vw, 40px); margin-top: 8px; }
+.final-choice .opt { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.final-choice .note { font-size: var(--fs-s); color: var(--cream-dim); max-width: 16em; line-height: 1.35; }
+.btn.bet { background: var(--crimson); color: #fff; box-shadow: 0 5px 0 #5a0a14, 0 10px 22px rgba(20,0,4,0.45); }
+.btn.bet:hover { box-shadow: 0 6px 0 #5a0a14, 0 12px 24px rgba(20,0,4,0.5); }
+.btn.bet:active { box-shadow: 0 0 0 #5a0a14; }
+.btn.bet .key { background: rgba(255,255,255,0.22); }
+
+/* his call on the last safe */
+.call { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.call .thinking { font-family: var(--display); font-size: var(--fs-xl); color: var(--cream); text-shadow: 0 4px 0 var(--velvet-deep); animation: breathe 0.8s ease-in-out infinite; }
+.call .word { font-family: var(--display); font-size: clamp(70px, 9vw, 170px); line-height: 0.9; letter-spacing: 0.04em; text-shadow: 0 6px 0 var(--velvet-deep), 0 18px 44px rgba(20,0,4,0.6); animation: slam 0.45s var(--pop) both; }
+.call .word.dud { color: var(--alarm); }
+.call .word.loot { color: #ffd27a; }
+.call .truth { font-size: var(--fs-m); color: var(--cream); text-shadow: 0 2px 12px rgba(30,2,8,0.9); animation: rise 0.4s var(--ease) both; }
+.call .result { font-family: var(--bold); font-weight: 700; font-size: var(--fs-l); line-height: 1.15; padding: 10px 22px; border-radius: 16px; animation: popin 0.45s var(--pop) both; }
+.call .result.won { background: var(--loot); color: #fff; box-shadow: 0 6px 0 #146b49, 0 14px 34px rgba(20,0,4,0.5); }
+.call .result.lost { background: var(--alarm); color: #fff; box-shadow: 0 6px 0 #8a1410, 0 14px 34px rgba(20,0,4,0.5); }
+.final .tip { font-size: var(--fs-m); font-weight: 700; color: var(--velvet-deep); background: var(--cream); padding: 8px 18px; border-radius: 99px; box-shadow: 0 4px 0 var(--cream-dim); }

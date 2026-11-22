@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { VaultScene, type VaultSceneProps } from '../scene/VaultScene';
-import { PEEK_MS, VALUE_TABLE, type Baseline, type GameState, type Job, type ReplayMark } from '../engine';
+import { MAX_STRIKES, PEEK_MS, VALUE_TABLE, type Baseline, type GameState, type Job, type ReplayMark } from '../engine';
 import type { SignalFrame } from '../signals/types';
 import type { SignalBus } from './signalBus';
 
@@ -152,7 +152,8 @@ export function Reads({ list }: { list: string[] }): JSX.Element {
 }
 
 export function caughtCount(game: GameState): number {
-  return game.log.filter((o) => o.kind === 'trap' && (o.result === 'burned' || o.decision === 'unread')).length;
+  // on the final bet he caught you if he called the dud a dud
+  return game.log.filter((o) => o.kind === 'trap' && (o.final ? o.decision === 'walk' : o.result === 'burned' || o.decision === 'unread')).length;
 }
 
 /** Goal and progress: always on screen during a job. */
@@ -178,17 +179,28 @@ export function Hud({ game, job, daily }: { game: GameState; job: Job; daily: bo
   );
 }
 
-/** Take (this run), Stash (lifetime) and heat, bottom right where the coins land. */
-export function Purse({ game, stash }: { game: GameState; stash: number }): JSX.Element {
-  const heatPct = Math.round(game.heat * 100);
+/**
+ * Take (this run), Stash (lifetime) and the two alarm lamps, bottom right where the coins land.
+ * shownPile holds the take back while a result is still a secret (the last safe's call).
+ */
+export function Purse({ game, stash, shownPile, strikeAt }: {
+  game: GameState; stash: number; shownPile?: number; strikeAt?: { n: number; at: number } | null;
+}): JSX.Element {
+  const pile = shownPile ?? game.pile;
+  const fresh = strikeAt && performance.now() - strikeAt.at < 2600 ? strikeAt : null;
   return (
-    <div className="purse panel">
+    <div className={`purse panel${fresh ? ' shake' : ''}`}>
       <div className="lab">Take</div>
-      <RollNum value={game.pile} className={`take num${game.pile >= game.rules.target ? ' met' : ''}`} />
+      <RollNum value={pile} className={`take num${pile >= game.rules.target ? ' met' : ''}`} />
       <div className="stashline">Stash <b className="num">{money(stash)}</b></div>
-      <div className="heat">
-        <div className="row"><span>Heat</span><span className="num">{heatPct}</span></div>
-        <div className="bar"><div className="fill" style={{ width: `${heatPct}%` }} /></div>
+      <div className="lamps-wrap" aria-label={`Strikes: ${game.strikes} of ${MAX_STRIKES}`}>
+        <div className="lamps">
+          <span className="lab">Alarm</span>
+          {Array.from({ length: MAX_STRIKES }, (_, i) => (
+            <span key={fresh && fresh.n === i + 1 ? `f${fresh.at}` : `l${i}`} className={`lamp${i < game.strikes ? ' on' : ''}${fresh && fresh.n === i + 1 ? ' flash' : ''}`} />
+          ))}
+        </div>
+        <div className="lamps-rule">{MAX_STRIKES} strikes and the alarm goes off: you lose your take.</div>
       </div>
     </div>
   );
@@ -215,12 +227,12 @@ export function ValuesBoard({ game }: { game: GameState }): JSX.Element {
   );
 }
 
-/** The first minute, always visible on the job screen. */
-export function RuleStrip({ step }: { step: number }): JSX.Element {
-  const steps = ['Crack a safe', 'Look inside', 'He reads you', 'Dump duds, keep loot'];
+/** The first minute, always visible on the job screen. `on` lights the steps happening now. */
+export function RuleStrip({ on = [] }: { on?: number[] }): JSX.Element {
+  const steps = ['Crack a safe', 'Hide it', 'He reads you', 'Take his cash or keep it'];
   return (
     <div className="rulestrip">
-      {steps.map((s, i) => <span key={s} className={`rs${i === step ? ' on' : ''}`}><i>{i + 1}</i>{s}</span>)}
+      {steps.map((s, i) => <span key={s} className={`rs${on.includes(i) ? ' on' : ''}`}><i>{i + 1}</i>{s}</span>)}
     </div>
   );
 }
