@@ -15,7 +15,8 @@
  *   call           his last call: drone only (sfx.ts plays the drum roll and the hit)
  *   bust           low and dark after the alarm
  *
- * Stings land on the moments: sold, kept, passed, caught (with the alarm), bust, last safe won, last safe lost.
+ * Stings land on the moments: sold, kept, passed, caught (with the alarm), bust, last safe won, last safe lost,
+ * and no bet (he lost you on the last safe).
  * The bed ducks under his voice (audioBus.ts) and M silences it with everything else.
  */
 import { useEffect, useRef } from 'react';
@@ -25,7 +26,7 @@ import { OFFER_WINDOW_MS } from '../engine/game';
 
 export type MusicMode =
   | 'off' | 'menu' | 'calm' | 'board' | 'crack' | 'look' | 'offer' | 'replay' | 'last' | 'call' | 'after' | 'reveal' | 'over' | 'bust' | 'paused';
-export type StingKind = 'sold' | 'kept' | 'passed' | 'caught' | 'bust' | 'finalWin' | 'finalLoss';
+export type StingKind = 'sold' | 'kept' | 'passed' | 'caught' | 'bust' | 'finalWin' | 'finalLoss' | 'noBet';
 
 type BassStyle = 'walk' | 'half' | 'pulse' | 'ostinato' | null;
 interface ModeSpec {
@@ -554,6 +555,11 @@ export class HeistMusic {
         this.brass(at, [50, 57, 62, 66, 69, 71, 76], 1.5, 0.6, 1.3, 0, d);
         vibeRun([74, 78, 81, 83, 86, 90, 93], at + 0.1, 0.07, 0.12);
         break;
+      case 'noBet':
+        // no read, no bet: a suspended chord that never lands
+        this.brass(at, [43, 50, 55, 57], 1.2, 0.4, 0.5, 0, d);
+        this.vibes(at + 0.15, 69, 1.4, 0.08, d);
+        break;
       case 'finalLoss':
         // nothing: a dark chord that sinks
         this.boom(at, 0.55, d);
@@ -634,6 +640,7 @@ export interface MusicSnap {
   strikes: number;
   busted: boolean;
   finalStage: number;
+  /** his last call was right (you lose the take); null when there was no call or no bet */
   finalRight: boolean | null;
 }
 
@@ -669,7 +676,7 @@ export function stingsFor(p: MusicSnap, s: MusicSnap): StingKind[] {
     else if (s.last.result === 'burned') out.push('passed');
     else if (!s.last.expired) out.push('kept');
   }
-  if (s.finalStage >= 2 && p.finalStage < 2 && s.finalRight !== null) out.push(s.finalRight ? 'finalLoss' : 'finalWin');
+  if (s.phase === 'finalCall' && s.finalStage >= 2 && p.finalStage < 2) out.push(s.finalRight === null ? 'noBet' : s.finalRight ? 'finalLoss' : 'finalWin');
   return out;
 }
 

@@ -51,7 +51,7 @@ interface PeekTape { frames: SignalFrame[]; baseline: Baseline; logIndex: number
 
 const today = (): string => new Date().toLocaleDateString('en-CA');
 /** What is inside, in heist words. */
-const kindName = (k: BoxKind, v?: number): string => (k === 'trap' ? 'Dud: a dye pack' : k === 'big' ? `Gold bars${v ? `, ${money(v)}` : ''}` : `Cash${v ? `, ${money(v)}` : ''}`);
+const kindName = (k: BoxKind, v?: number): string => (k === 'trap' ? 'Empty safe' : k === 'big' ? `Gold bars${v ? `, ${money(v)}` : ''}` : `Cash${v ? `, ${money(v)}` : ''}`);
 const secs = (ms: number): string => (ms / 1000).toFixed(1);
 
 /** Credits: with the camera on and no input for this long outside a read, the camera turns off. */
@@ -568,12 +568,13 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     const t1 = setTimeout(() => {
       setFinalStage(1);
       hit();
-      s = speak(fc.line ?? (fc.call === 'dud' ? 'Dud.' : 'Loot.'), P > 1 ? 2 : 1);
+      s = speak(fc.line ?? (fc.call === 'dud' ? 'Empty.' : fc.call === 'loot' ? 'Full.' : 'No bet.'), P > 1 ? 2 : 1);
     }, 1500 / P);
     const t2 = setTimeout(() => {
       setFinalStage(2);
       const now = performance.now();
-      if (fc.right) { setBustedAt(now); alarm(); }
+      if (fc.call === 'none') { /* no read, no bet: the take stays */ }
+      else if (fc.right) { setBustedAt(now); alarm(); }
       else { finalPaid.current = true; setPayout({ at: now, amount: fc.after - fc.before }); coins(fc.after - fc.before); }
     }, 3600 / P);
     return () => { clearTimeout(t1); clearTimeout(t2); s?.cancel(); };
@@ -881,7 +882,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   useMusic({
     screen, phase: game.phase, stage: sub, practice: practice.stage, paused, pace: P, gameNo: gameNo.current,
     logLen: game.log.length, last: lastLog ? { result: lastLog.result, strike: lastLog.strike, expired: lastLog.expired, final: lastLog.final } : null,
-    strikes: game.strikes, busted: game.busted, finalStage, finalRight: fc ? fc.right : null,
+    strikes: game.strikes, busted: game.busted, finalStage, finalRight: fc && fc.call !== 'none' ? fc.right : null,
   });
   const shownPile = fc ? (finalStage >= 2 ? fc.after : fc.before) : undefined;
   const findingHint = (() => {
@@ -974,7 +975,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                     game.finalBet ? (
                       <>
                         <div className="prompt big">Click any safe for the last one</div>
-                        <div className="line">He gets one call: loot or dud. Look nervous at loot, stay calm at a dud.</div>
+                        <div className="line">He gets one call: full or empty. Look nervous if it is full, stay calm if it is empty.</div>
                       </>
                     ) : (
                       <>
@@ -1046,7 +1047,7 @@ function TitleScreen({ onGo, onSample, err }: { onGo: () => void; onSample: () =
       <div className="title-sub enter" style={{ ['--d' as string]: 3 }}>Crack the safes. Fool the Fence.</div>
       <div className="tagline enter" style={{ ['--d' as string]: 5 }}>
         The Fence buys stolen goods, and he wants your safes. Only you see inside each one. He watches your breath, blinks, face and pulse on camera,
-        then names a price that drops every second. Take his cash or keep what is inside, and never let him find two duds.
+        then names a price on a five second clock. Take his cash or keep what is inside, and never let him find two empty safes.
       </div>
       <div className="actions enter" style={{ ['--d' as string]: 8 }}>
         <Btn primary big k="Enter" onClick={onGo}>Start the job</Btn>
@@ -1193,7 +1194,7 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
   recRef: React.MutableRefObject<{ progress: () => number } | null>; bus: SignalBus | null; reusedCalm: boolean; onNext: () => void; onSkip: () => void;
 }): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
-  const what = kind === 'trap' ? 'a dud' : kind === 'big' ? 'gold bars' : 'cash';
+  const what = kind === 'trap' ? 'an empty safe' : kind === 'big' ? 'gold bars' : 'cash';
   if (stage === 'intro') {
     return (
       <>
@@ -1236,7 +1237,7 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
     <>
       <div className="eyebrow">Noted</div>
       <div className="prompt big">{note}</div>
-      <div className="line">{idx + 1 < total ? 'He wrote that down. One more.' : 'He has seen you at a dud and at loot. Now the real safes.'}</div>
+      <div className="line">{idx + 1 < total ? 'He wrote that down. One more.' : 'He has seen you at an empty safe and a full one. Now the real safes.'}</div>
       <div className="actions"><Btn primary k="Space" onClick={onNext}>{idx + 1 < total ? 'Next practice safe' : 'To the safes'}</Btn></div>
     </>
   );
@@ -1275,9 +1276,9 @@ function PeekStage({ kind, value, recRef, caught, peekMs, alert, final, take }: 
       </div>
       <div className="peek-goal">
         {final
-          ? (dud ? <>Stay calm. Make him think it is loot.</> : <>Look nervous. Make him think it is a dud.</>)
+          ? (dud ? <>Breathe slow and even. Make him think it is full.</> : <>Hold your breath a moment. Make him think it is empty.</>)
           : dud
-            ? <>Hide it. Breathe like it is loot, so he pays you for this dud.</>
+            ? <>Hide it. Breathe like it is full, so he pays you for this empty safe.</>
             : <>Hide it. Stay calm, so he cannot tell what you found.</>}
       </div>
       {a !== null && (
@@ -1288,8 +1289,8 @@ function PeekStage({ kind, value, recRef, caught, peekMs, alert, final, take }: 
       )}
       <div className="peek-next">
         {final
-          ? <>In {secs}s he calls it: <b>loot</b> or <b>dud</b>. If he is wrong, your {money(take)} doubles.</>
-          : <>In {secs}s he names his price, and it drops every second. <b>Take his cash</b> fast, or <b>keep what is inside</b>.</>}
+          ? <>In {secs}s he calls it: <b>full</b> or <b>empty</b>. If he is wrong, your {money(take)} doubles.</>
+          : <>In {secs}s he names his price. You get five seconds to <b>take his cash</b> or <b>keep what is inside</b>.</>}
       </div>
     </div>
   );
@@ -1320,11 +1321,11 @@ function OfferStage({ offer, elapsed, tooSlow, flinched, blind, quote, kind, val
             </button>
             <button className="choice keep" onClick={onKeep}>
               <span className="lab">Keep the safe</span>
-              <span className="amt num">{dud ? 'Dud' : money(value)}</span>
+              <span className="amt num">{dud ? 'Empty' : money(value)}</span>
               <span className="key">K</span>
             </button>
           </div>
-          <div className="watch">{dud ? `He is still watching. Sell him this dud and it is strike ${next} of ${MAX_STRIKES}.` : 'He is still watching. Flinch and the deal is off.'}</div>
+          <div className="watch">{dud ? `He is still watching. Sell him this empty safe and it is strike ${next} of ${MAX_STRIKES}.` : 'He is still watching. Flinch and the deal is off.'}</div>
         </>
       )}
     </div>
@@ -1348,16 +1349,19 @@ function FinalChoice({ take, onWalk, onBet }: { take: number; onWalk: () => void
 
 /** His call on the last safe: he thinks, he calls it, then the truth and what it did to your take. */
 function FinalCallStage({ fc, stage, kind, value, onNext }: { fc: FinalCall; stage: number; kind: BoxKind; value: number; onNext: () => void }): JSX.Element {
-  const held = kind === 'trap' ? 'a dud' : kind === 'big' ? `gold bars worth ${money(value)}` : `cash worth ${money(value)}`;
+  const truth = kind === 'trap' ? 'It was empty.' : kind === 'big' ? `It was full: gold bars worth ${money(value)}.` : `It was full: cash worth ${money(value)}.`;
+  const word = fc.call === 'dud' ? 'Empty' : fc.call === 'loot' ? 'Full' : 'No read';
   return (
     <div className="call">
       {stage === 0 && <div className="thinking">He calls it…</div>}
-      {stage >= 1 && <div className={`word ${fc.call}`}>{fc.call === 'dud' ? 'Dud' : 'Loot'}</div>}
+      {stage >= 1 && <div className="says">{fc.call === 'none' ? 'He could not see you' : 'He says it is'}</div>}
+      {stage >= 1 && <div className={`word ${fc.call}`}>{word}</div>}
+      {stage >= 1 && fc.why && <div className="why"><b>What he saw:</b> {fc.why}</div>}
       {stage === 1 && fc.line && <Subtitle text={fc.line} />}
-      {stage >= 2 && <div className="truth">It held {held}.</div>}
+      {stage >= 2 && <div className="truth">{truth}</div>}
       {stage >= 2 && (
-        <div className={`result ${fc.right ? 'lost' : 'won'}`}>
-          {fc.right ? 'He read you. You lose everything.' : `He was wrong. Your take doubles: ${money(fc.after)}`}
+        <div className={`result ${fc.call === 'none' ? 'even' : fc.right ? 'lost' : 'won'}`}>
+          {fc.call === 'none' ? `No bet. You keep ${money(fc.before)}.` : fc.right ? 'He read you. You lose everything.' : `He was wrong. Your take doubles: ${money(fc.after)}`}
         </div>
       )}
       {stage >= 2 && <div className="actions"><Btn primary k="Enter" onClick={onNext}>See how the job ended</Btn></div>}
@@ -1367,7 +1371,7 @@ function FinalCallStage({ fc, stage, kind, value, onNext }: { fc: FinalCall; sta
 
 /** The strike, in one line. */
 function strikeText(o: BoxOutcome): string {
-  const how = o.result === 'burned' ? 'He caught you at a dud.' : 'He found the dud you sold him.';
+  const how = o.result === 'burned' ? 'He caught you at an empty safe.' : 'He found the empty safe you sold him.';
   return o.strikes >= MAX_STRIKES ? `${how} Strike ${o.strikes}: the alarm goes off and you lose your take.` : `${how} Strike ${o.strikes}.`;
 }
 
@@ -1378,20 +1382,20 @@ function outcomeCopy(game: GameState): { stamp: JSX.Element; line: string } {
   const paid = o.paid ?? o.offer ?? 0;
   if (o.result === 'burned') {
     return trap
-      ? { stamp: <span className="stamp">Caught</span>, line: 'He saw the dud on you and passed. No cash.' }
+      ? { stamp: <span className="stamp">Caught</span>, line: 'He saw the empty safe on you and passed. No cash.' }
       : { stamp: <span className="stamp copper">He passed</span>, line: `He passed on it. The safe locked shut with ${money(o.value)} inside.` };
   }
   if (o.expired) {
-    return { stamp: <span className="stamp copper">No deal</span>, line: trap ? 'No deal. You kept the dud: nothing added.' : `No deal. You kept what was inside: ${money(o.value)} added.` };
+    return { stamp: <span className="stamp copper">No deal</span>, line: trap ? 'No deal. You kept the empty safe: nothing added.' : `No deal. You kept what was inside: ${money(o.value)} added.` };
   }
   if (o.result === 'sold' && trap) {
-    if (game.busted) return { stamp: <span className="stamp">Busted</span>, line: `You sold him a dud for ${money(paid)}, and he found it.` };
+    if (game.busted) return { stamp: <span className="stamp">Busted</span>, line: `You sold him an empty safe for ${money(paid)}, and he found it.` };
     const heist = o.decision === 'offer';
     const total = paid + (heist ? heistPay(paid, game.rules) : 0);
-    return { stamp: <span className="stamp good">Sold him a dud</span>, line: heist ? `He paid ${money(total)} in all for it.` : `He paid ${money(paid)} blind for it.` };
+    return { stamp: <span className="stamp good">Sold him an empty</span>, line: heist ? `He paid ${money(total)} in all for it.` : `He paid ${money(paid)} blind for it.` };
   }
   if (o.result === 'sold') return { stamp: <span className="stamp copper">Sold</span>, line: `You took his ${money(paid)}. It held ${money(o.value)}.` };
-  if (trap) return { stamp: <span className="stamp">Dud</span>, line: 'You kept a dud. Nothing added.' };
+  if (trap) return { stamp: <span className="stamp">Empty</span>, line: 'You kept an empty safe. Nothing added.' };
   return { stamp: <span className="stamp good">Kept</span>, line: `${money(o.value)} added to your take.` };
 }
 
@@ -1440,7 +1444,7 @@ function RevealStage({ game, hidden, revealN, onDone }: { game: GameState; hidde
       <div className="prompt big">{head}</div>
       <div className="line" style={{ minHeight: '2.8em' }}>
         {shown.length === 0 ? 'Now every safe you did not keep swings open.' : burned.length === 0 ? 'The safes you did not crack are open.' : burned.map((b) => (
-          <div key={b.id}>Safe {b.id + 1} held {b.kind === 'trap' ? 'a dud' : b.kind === 'big' ? `gold bars worth ${money(b.value)}` : `cash worth ${money(b.value)}`}. {b.kind === 'trap' ? 'He passed on a dud. Good call for him.' : 'He passed on real loot. Bad call for him.'}</div>
+          <div key={b.id}>Safe {b.id + 1} held {b.kind === 'trap' ? 'nothing' : b.kind === 'big' ? `gold bars worth ${money(b.value)}` : `cash worth ${money(b.value)}`}. {b.kind === 'trap' ? 'He passed on an empty safe. Good call for him.' : 'He passed on a full safe. Bad call for him.'}</div>
         ))}
       </div>
       {done && <div className="actions"><Btn primary k="Enter" onClick={onDone}>See your tell</Btn></div>}
@@ -1509,7 +1513,7 @@ function EndScreen({ game, job, end, cardUrl, onAgain, onJobs, onSave }: {
           <span>Stash <b>{money(end.stashAfter.total)}</b></span>
         </div>
         <div className="small enter" style={{ ['--d' as string]: 3 }}>
-          {sheet.readLine} {sc.trapsSold > 0 && `You sold him ${sc.trapsSold} dud${sc.trapsSold > 1 ? 's' : ''}.`} {caught > 0 && `He caught you at ${caught}.`}
+          {sheet.readLine} {sc.trapsSold > 0 && `You sold him ${sc.trapsSold} empty safe${sc.trapsSold > 1 ? 's' : ''}.`} {caught > 0 && `He caught you at ${caught}.`}
         </div>
         <div className="tell-card enter" style={{ ['--d' as string]: 4 }}>
           <div className="lab">Your tell</div>

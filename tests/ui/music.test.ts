@@ -68,6 +68,8 @@ describe('music follows the job', () => {
     expect(stingsFor(snap({ logLen: 2 }), call)).toEqual([]);
     expect(stingsFor(call, { ...call, finalStage: 2, finalRight: true })).toEqual(['finalLoss']);
     expect(stingsFor(call, { ...call, finalStage: 2, finalRight: false })).toEqual(['finalWin']);
+    // he lost you: no bet, a neutral sting, never the win
+    expect(stingsFor(call, { ...call, finalStage: 2, finalRight: null })).toEqual(['noBet']);
   });
 
   it('walks the bass from the root into the next chord', () => {
