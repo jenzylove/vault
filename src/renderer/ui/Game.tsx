@@ -17,6 +17,7 @@ import { FaceWatch, GapWatch, STALE_MS, type FaceProblem } from '../signals/line
 import { V_OK, V_NO_FACE, V_MANY_FACES, validationWords } from '../signals/status';
 import { Lineup } from './Lineup';
 import { KeyEntry } from './KeyEntry';
+import { SdkFeed } from './SdkFeed';
 import type { BankerState, SceneBox, SceneBoxKind, ScenePracticeBox } from '../scene/types';
 import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
@@ -85,6 +86,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const [bus, setBus] = useState<SignalBus | null>(null);
   const [consented, setConsented] = useState(false);
   const [paused, setPaused] = useState(false);
+  // the raw Presage feed panel (F): the SDK's own numbers, for anyone who wants to see under the hood
+  const [feedOn, setFeedOn] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [keyDraft, setKeyDraft] = useState<string>(loadKey);
   const [calmFailed, setCalmFailed] = useState(false);
@@ -755,6 +758,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     if (tag === 'INPUT') return;
     const k = e.key.toLowerCase();
     if (k === 'm') { toggleMute(); return; }
+    if (k === 'f' && (screen === 'play' || screen === 'lineup')) { setFeedOn((v) => !v); return; }
     if (screen === 'lineup') return; // the lineup screen owns its keys
     if (screen === 'play' && paused) {
       if (k === 'enter' || k === ' ') void resume();
@@ -943,6 +947,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
             <Hud game={game} job={job} daily={daily} />
             <Purse game={game} stash={stash.total} shownPile={shownPile} strikeAt={strikeAt} />
             <BodyPanel bus={paused ? null : bus} stream={paused ? null : srcStatus?.stream ?? null} sim={sim} bpm={bpm} />
+            {feedOn && <SdkFeed source={paused ? null : source} validation={srcStatus?.validation ?? null} sim={sim} />}
             {(game.phase === 'board' || game.phase === 'bankerRead') && <ValuesBoard game={game} />}
             <div className="topright">
               <span className={`chip-status ${statusChip}`}><span className="dot" />{statusChip === 'finding' ? 'Finding you' : statusChip === 'reading' ? 'Reading you' : 'Ready'}</span>
