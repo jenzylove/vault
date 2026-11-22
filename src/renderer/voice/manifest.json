@@ -1,7 +1,1588 @@
 {
-  "voice": "",
-  "rate": "",
-  "pitch": "",
-  "fx": "",
-  "clips": {}
+ "voice": "en-US-ChristopherNeural",
+ "rate": "-8%",
+ "pitch": "-8Hz",
+ "fx": "fx5: shift 0.955; silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,areverse,silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.06,areverse,silenceremove=stop_periods=-1:stop_duration=0.35:stop_threshold=-42dB:stop_silence=0.35,asetrate=22920,aresample=24000,atempo=1.04712,highpass=f=55,bass=g=3:f=150:w=0.7,equalizer=f=3000:t=q:w=1.4:g=-2.5,treble=g=-2:f=7500,acompressor=threshold=-22dB:ratio=3:attack=4:release=90:makeup=2.5,aecho=0.9:0.6:23|41:0.08|0.05; gain to -16.0 LUFS; alimiter=limit=0.84:attack=2:release=60:level=false; opus 24k mono",
+ "clips": {
+  "a flicker, nothing more. you got me.": [
+   "voice/fed29c7d.ogg",
+   3222
+  ],
+  "a smile, but calm breath. maybe gold, maybe not.": [
+   "voice/9439dd1d.ogg",
+   4568
+  ],
+  "an empty safe in my bag. that is a strike.": [
+   "voice/40e481bd.ogg",
+   3446
+  ],
+  "another empty safe. two strikes. sound the alarm.": [
+   "voice/0c1c696e.ogg",
+   4789
+  ],
+  "big one, i can tell.": [
+   "voice/17548825.ogg",
+   1707
+  ],
+  "called it.": [
+   "voice/aea68915.ogg",
+   668
+  ],
+  "called it. double or nothing, and it is nothing.": [
+   "voice/67c2bda5.ogg",
+   3443
+  ],
+  "calm breath, full safe. i believed it.": [
+   "voice/1832d234.ogg",
+   3473
+  ],
+  "caught at an empty safe. that costs you a strike.": [
+   "voice/6056d414.ogg",
+   3745
+  ],
+  "caught you. one strike.": [
+   "voice/8ad21b64.ogg",
+   2227
+  ],
+  "clean. i did not see it coming.": [
+   "voice/f16e5ab6.ogg",
+   2707
+  ],
+  "close call. something in your blinking moved. i'll risk it.": [
+   "voice/331c306c.ogg",
+   4698
+  ],
+  "close call. something in your breathing moved. i'll risk it.": [
+   "voice/37561b6a.ogg",
+   4684
+  ],
+  "close call. something in your face moved. i'll risk it.": [
+   "voice/3924766d.ogg",
+   4663
+  ],
+  "cool as ice. i never saw it.": [
+   "voice/4129aa1a.ogg",
+   2848
+  ],
+  "could not see a thing. i guessed.": [
+   "voice/4c10ea3e.ogg",
+   2682
+  ],
+  "could not see you. that is my price and no more.": [
+   "voice/a70bb420.ogg",
+   3513
+  ],
+  "empty, and i saw it. strike one.": [
+   "voice/d95f63e8.ogg",
+   3154
+  ],
+  "empty, like i said.": [
+   "voice/ee654fb3.ogg",
+   1588
+  ],
+  "empty.": [
+   "voice/5adb2c4c.ogg",
+   620
+  ],
+  "empty. i have seen that look on you before.": [
+   "voice/c2e0899b.ogg",
+   3119
+  ],
+  "empty. i read you. you found nothing.": [
+   "voice/a49ddb50.ogg",
+   3769
+  ],
+  "empty. i saw your breath stop.": [
+   "voice/c64c1fab.ogg",
+   2608
+  ],
+  "empty. something changed when you looked.": [
+   "voice/2bbbaeab.ogg",
+   3034
+  ],
+  "empty. that breath hold says it all.": [
+   "voice/ebc5e2fe.ogg",
+   2850
+  ],
+  "empty. you could not hide that one.": [
+   "voice/bd41910c.ogg",
+   2699
+  ],
+  "empty. you held your breath. i call it empty.": [
+   "voice/7e879234.ogg",
+   3839
+  ],
+  "empty. you moved like you do at empty safes.": [
+   "voice/2d4b7d8d.ogg",
+   3498
+  ],
+  "empty. you stopped breathing when you looked.": [
+   "voice/938c2813.ogg",
+   3137
+  ],
+  "empty. your body says so.": [
+   "voice/ece22c7f.ogg",
+   2549
+  ],
+  "empty. your breath gave it away.": [
+   "voice/a84c12e1.ogg",
+   2595
+  ],
+  "empty. your chest went still. i know that look.": [
+   "voice/b055756c.ogg",
+   4225
+  ],
+  "even breath, calm eyes. i'll pay.": [
+   "voice/303b2dde.ogg",
+   3289
+  ],
+  "even breathing. i trusted it.": [
+   "voice/4f59d13e.ogg",
+   2499
+  ],
+  "fair enough. that is my price for the safe.": [
+   "voice/b0e0e6e8.ogg",
+   3238
+  ],
+  "fair enough. that one was real.": [
+   "voice/d4982fb1.ogg",
+   2696
+  ],
+  "fooled me, and you did not cash in.": [
+   "voice/ce536e3c.ogg",
+   2390
+  ],
+  "full, i think. here is my price.": [
+   "voice/9b421176.ogg",
+   3031
+  ],
+  "full, i think. your breath stayed even.": [
+   "voice/4411b7a6.ogg",
+   3197
+  ],
+  "full, like i thought.": [
+   "voice/b5834aed.ogg",
+   1429
+  ],
+  "full, probably. my money is on the table.": [
+   "voice/5b286a85.ogg",
+   3515
+  ],
+  "full.": [
+   "voice/173ddef2.ogg",
+   592
+  ],
+  "full. calm face, calm breath.": [
+   "voice/41de8371.ogg",
+   3076
+  ],
+  "full. i believe what i see.": [
+   "voice/b79bf275.ogg",
+   2490
+  ],
+  "full. nothing moved on you.": [
+   "voice/cac6f334.ogg",
+   2551
+  ],
+  "full. you are too steady for an empty safe.": [
+   "voice/89cd2595.ogg",
+   3419
+  ],
+  "full. you looked too calm to be bluffing.": [
+   "voice/7e026197.ogg",
+   3130
+  ],
+  "full. your breath never broke.": [
+   "voice/c390bd2c.ogg",
+   2704
+  ],
+  "gold bars. that smile was real. i'll pay well.": [
+   "voice/8456fe89.ogg",
+   4681
+  ],
+  "gold bars. your breathing picked up. here is my price.": [
+   "voice/594c95cc.ogg",
+   4764
+  ],
+  "gold, i think. that is my offer.": [
+   "voice/78d7792d.ogg",
+   3134
+  ],
+  "gold. your face gave it away.": [
+   "voice/17306835.ogg",
+   2618
+  ],
+  "gold? you smiled, but your breath stayed calm.": [
+   "voice/6b61e9e6.ogg",
+   3774
+  ],
+  "i almost had you there. not quite.": [
+   "voice/8900c547.ogg",
+   2831
+  ],
+  "i almost passed. your blinking moved.": [
+   "voice/fe420556.ogg",
+   3141
+  ],
+  "i almost passed. your breathing moved.": [
+   "voice/73270bc0.ogg",
+   3200
+  ],
+  "i almost passed. your face moved.": [
+   "voice/7ab1abbf.ogg",
+   3139
+  ],
+  "i believed you.": [
+   "voice/6bde9cd7.ogg",
+   1026
+  ],
+  "i buy it.": [
+   "voice/5c0fdf51.ogg",
+   874
+  ],
+  "i called full. right again.": [
+   "voice/6260be58.ogg",
+   2484
+  ],
+  "i called it. your take is mine.": [
+   "voice/ac983fe1.ogg",
+   2573
+  ],
+  "i caught you at an empty safe. that is a strike.": [
+   "voice/6b2c5e6f.ogg",
+   3338
+  ],
+  "i checked. nothing inside. strike one.": [
+   "voice/7cce75e6.ogg",
+   4071
+  ],
+  "i could not find your tell this time.": [
+   "voice/a9c4d586.ogg",
+   1962
+  ],
+  "i could not read you on that one, so i pay low.": [
+   "voice/13a1b876.ogg",
+   2934
+  ],
+  "i could not read you there, so i offered blind.": [
+   "voice/b4f08c76.ogg",
+   2861
+  ],
+  "i could not see you. no bet. keep your take.": [
+   "voice/9dfe570f.ogg",
+   4050
+  ],
+  "i could not watch you, so i pay blind.": [
+   "voice/6b3a31a2.ogg",
+   2638
+  ],
+  "i could not watch you. no bet this time.": [
+   "voice/2eaf4d8b.ogg",
+   3163
+  ],
+  "i do not love your blinking. this is generous.": [
+   "voice/da5bdabb.ogg",
+   3418
+  ],
+  "i do not love your breathing. this is generous.": [
+   "voice/b7dc968d.ogg",
+   3461
+  ],
+  "i do not love your face. this is generous.": [
+   "voice/a2f8df9a.ogg",
+   3504
+  ],
+  "i felt it, but i bought it. you got me.": [
+   "voice/a6481265.ogg",
+   3102
+  ],
+  "i found nothing on you last time. i am watching closer.": [
+   "voice/af9295a6.ogg",
+   4045
+  ],
+  "i had you.": [
+   "voice/2ee52ed8.ogg",
+   881
+  ],
+  "i knew it was empty.": [
+   "voice/e5a123c8.ogg",
+   1360
+  ],
+  "i know your tell. last time you blinked more at empty safes.": [
+   "voice/9bcd0629.ogg",
+   4150
+  ],
+  "i know your tell. last time you blinked more at full safes.": [
+   "voice/d91a8cfd.ogg",
+   4221
+  ],
+  "i know your tell. last time you held your breath at empty safes.": [
+   "voice/d8628e71.ogg",
+   4337
+  ],
+  "i know your tell. last time you held your breath at full safes.": [
+   "voice/07063dd5.ogg",
+   4336
+  ],
+  "i know your tell. last time you smiled at empty safes.": [
+   "voice/5881dbe1.ogg",
+   4097
+  ],
+  "i know your tell. last time you smiled at full safes.": [
+   "voice/2489bfe5.ogg",
+   4125
+  ],
+  "i know your tell. last time your breathing changed pace at empty safes.": [
+   "voice/f043e180.ogg",
+   4876
+  ],
+  "i know your tell. last time your breathing changed pace at full safes.": [
+   "voice/8803174a.ogg",
+   4965
+  ],
+  "i know your tell. last time your breathing went shallow at empty safes.": [
+   "voice/c22e1071.ogg",
+   4778
+  ],
+  "i know your tell. last time your breathing went shallow at full safes.": [
+   "voice/dbc5f3d5.ogg",
+   4785
+  ],
+  "i know your tell. last time your face showed surprise at empty safes.": [
+   "voice/e9a57d3f.ogg",
+   4853
+  ],
+  "i know your tell. last time your face showed surprise at full safes.": [
+   "voice/7b5fb3c3.ogg",
+   4857
+  ],
+  "i know your tell. last time your face tightened at empty safes.": [
+   "voice/aa0316e6.ogg",
+   4310
+  ],
+  "i know your tell. last time your face tightened at full safes.": [
+   "voice/ac2f7178.ogg",
+   4367
+  ],
+  "i know your tell. last time your pulse climbed at empty safes.": [
+   "voice/653df766.ogg",
+   4399
+  ],
+  "i know your tell. last time your pulse climbed at full safes.": [
+   "voice/fa775ef8.ogg",
+   4450
+  ],
+  "i lost you on that one. a blind guess.": [
+   "voice/e8fc3fe4.ogg",
+   3207
+  ],
+  "i lost you on that one. the bet is off.": [
+   "voice/000762ce.ogg",
+   3158
+  ],
+  "i lost you there. this is a blind offer.": [
+   "voice/925f7cc9.ogg",
+   3162
+  ],
+  "i missed it. enjoy the double.": [
+   "voice/ac42599d.ogg",
+   2512
+  ],
+  "i opened it. empty. one strike.": [
+   "voice/8bf24b11.ogg",
+   3436
+  ],
+  "i passed.": [
+   "voice/fb1d60a2.ogg",
+   947
+  ],
+  "i read full, and full it was.": [
+   "voice/3db019dd.ogg",
+   2300
+  ],
+  "i read you. empty pockets tonight.": [
+   "voice/b3914026.ogg",
+   2880
+  ],
+  "i remember you. last time you blinked more at empty safes.": [
+   "voice/9d3181b0.ogg",
+   4039
+  ],
+  "i remember you. last time you blinked more at full safes.": [
+   "voice/84e8db9a.ogg",
+   4112
+  ],
+  "i remember you. last time you held your breath at empty safes.": [
+   "voice/dcdc6330.ogg",
+   4238
+  ],
+  "i remember you. last time you held your breath at full safes.": [
+   "voice/5f45641a.ogg",
+   4250
+  ],
+  "i remember you. last time you smiled at empty safes.": [
+   "voice/4670d498.ogg",
+   4000
+  ],
+  "i remember you. last time you smiled at full safes.": [
+   "voice/f88c9052.ogg",
+   4022
+  ],
+  "i remember you. last time your breathing changed pace at empty safes.": [
+   "voice/d36812c3.ogg",
+   4780
+  ],
+  "i remember you. last time your breathing changed pace at full safes.": [
+   "voice/8c706787.ogg",
+   4846
+  ],
+  "i remember you. last time your breathing went shallow at empty safes.": [
+   "voice/a4feef26.ogg",
+   4677
+  ],
+  "i remember you. last time your breathing went shallow at full safes.": [
+   "voice/60ca7cb8.ogg",
+   4696
+  ],
+  "i remember you. last time your face showed surprise at empty safes.": [
+   "voice/bb334640.ogg",
+   4745
+  ],
+  "i remember you. last time your face showed surprise at full safes.": [
+   "voice/9be9020a.ogg",
+   4750
+  ],
+  "i remember you. last time your face tightened at empty safes.": [
+   "voice/86689269.ogg",
+   4204
+  ],
+  "i remember you. last time your face tightened at full safes.": [
+   "voice/e540903d.ogg",
+   4255
+  ],
+  "i remember you. last time your pulse climbed at empty safes.": [
+   "voice/fb3f5193.ogg",
+   4300
+  ],
+  "i remember you. last time your pulse climbed at full safes.": [
+   "voice/e45b22f7.ogg",
+   4342
+  ],
+  "i saw a hint and let it go. my mistake.": [
+   "voice/cfbb18dc.ogg",
+   3536
+  ],
+  "i saw a smile, nothing else. that is all i pay.": [
+   "voice/85407003.ogg",
+   4337
+  ],
+  "i saw nothing, and you kept the empty safe anyway.": [
+   "voice/c7284930.ogg",
+   3264
+  ],
+  "i saw nothing. you got me.": [
+   "voice/f7bfcd0b.ogg",
+   2557
+  ],
+  "i saw something, but not enough. you got me.": [
+   "voice/8b8692e2.ogg",
+   3709
+  ],
+  "i saw the empty safe on you. strike one.": [
+   "voice/0256e0c8.ogg",
+   3412
+  ],
+  "i smell gold. my money is on the table.": [
+   "voice/4bb42c65.ogg",
+   3346
+  ],
+  "i trusted that one.": [
+   "voice/a48144fe.ogg",
+   1328
+  ],
+  "i walked away.": [
+   "voice/42710fcc.ogg",
+   1083
+  ],
+  "i was ready to pay. you kept it.": [
+   "voice/79612dc3.ogg",
+   2727
+  ],
+  "i was wrong. take double and go.": [
+   "voice/3e7f03a7.ogg",
+   2909
+  ],
+  "i would have bought that empty safe. you kept it.": [
+   "voice/580e1103.ogg",
+   3146
+  ],
+  "i'll take a chance.": [
+   "voice/b0a4899d.ogg",
+   1259
+  ],
+  "last job you blinked more at empty safes. i wrote it down.": [
+   "voice/14850844.ogg",
+   4314
+  ],
+  "last job you blinked more at full safes. i wrote it down.": [
+   "voice/53bb1c40.ogg",
+   4380
+  ],
+  "last job you held your breath at empty safes. i wrote it down.": [
+   "voice/6455a398.ogg",
+   4506
+  ],
+  "last job you held your breath at full safes. i wrote it down.": [
+   "voice/29548b94.ogg",
+   4563
+  ],
+  "last job you smiled at empty safes. i wrote it down.": [
+   "voice/8f1fcc84.ogg",
+   4316
+  ],
+  "last job you smiled at full safes. i wrote it down.": [
+   "voice/65f30580.ogg",
+   4308
+  ],
+  "last job your breathing changed pace at empty safes. i wrote it down.": [
+   "voice/8dc0206b.ogg",
+   5102
+  ],
+  "last job your breathing changed pace at full safes. i wrote it down.": [
+   "voice/f5a4028d.ogg",
+   5145
+  ],
+  "last job your breathing went shallow at empty safes. i wrote it down.": [
+   "voice/d6a20c14.ogg",
+   4957
+  ],
+  "last job your breathing went shallow at full safes. i wrote it down.": [
+   "voice/6df61770.ogg",
+   4975
+  ],
+  "last job your face showed surprise at empty safes. i wrote it down.": [
+   "voice/b4b5329a.ogg",
+   4998
+  ],
+  "last job your face showed surprise at full safes. i wrote it down.": [
+   "voice/f6700496.ogg",
+   5022
+  ],
+  "last job your face tightened at empty safes. i wrote it down.": [
+   "voice/b0e7d9f9.ogg",
+   4464
+  ],
+  "last job your face tightened at full safes. i wrote it down.": [
+   "voice/62c5a80b.ogg",
+   4505
+  ],
+  "last job your pulse climbed at empty safes. i wrote it down.": [
+   "voice/e04b0791.ogg",
+   4584
+  ],
+  "last job your pulse climbed at full safes. i wrote it down.": [
+   "voice/8b785573.ogg",
+   4658
+  ],
+  "last time i could not find your tell. i am looking harder now.": [
+   "voice/6893067e.ogg",
+   4049
+  ],
+  "last time you blinked more at empty safes. i am watching for that now.": [
+   "voice/dd750435.ogg",
+   4620
+  ],
+  "last time you blinked more at empty safes. let us see if you learned.": [
+   "voice/e9711b1a.ogg",
+   4480
+  ],
+  "last time you blinked more at full safes. i am watching for that now.": [
+   "voice/152a3b01.ogg",
+   4703
+  ],
+  "last time you blinked more at full safes. let us see if you learned.": [
+   "voice/fe1baa7e.ogg",
+   4563
+  ],
+  "last time you gave me nothing. let us try again.": [
+   "voice/f175edb5.ogg",
+   3542
+  ],
+  "last time you held your breath at empty safes. i am watching for that now.": [
+   "voice/ffc49ea9.ogg",
+   4807
+  ],
+  "last time you held your breath at empty safes. let us see if you learned.": [
+   "voice/9d554206.ogg",
+   4656
+  ],
+  "last time you held your breath at full safes. i am watching for that now.": [
+   "voice/befa6a65.ogg",
+   4830
+  ],
+  "last time you held your breath at full safes. let us see if you learned.": [
+   "voice/9dd3418a.ogg",
+   4699
+  ],
+  "last time you smiled at empty safes. i am watching for that now.": [
+   "voice/7784e685.ogg",
+   4592
+  ],
+  "last time you smiled at empty safes. let us see if you learned.": [
+   "voice/82b7002a.ogg",
+   4447
+  ],
+  "last time you smiled at full safes. i am watching for that now.": [
+   "voice/f63ea4f1.ogg",
+   4612
+  ],
+  "last time you smiled at full safes. let us see if you learned.": [
+   "voice/885551ae.ogg",
+   4465
+  ],
+  "last time your breathing changed pace at empty safes. i am watching for that now.": [
+   "voice/37191b28.ogg",
+   5381
+  ],
+  "last time your breathing changed pace at empty safes. let us see if you learned.": [
+   "voice/f0a7d335.ogg",
+   5232
+  ],
+  "last time your breathing changed pace at full safes. i am watching for that now.": [
+   "voice/85e7d95e.ogg",
+   5438
+  ],
+  "last time your breathing changed pace at full safes. let us see if you learned.": [
+   "voice/b02b42bf.ogg",
+   5289
+  ],
+  "last time your breathing went shallow at empty safes. i am watching for that now.": [
+   "voice/d411b515.ogg",
+   5257
+  ],
+  "last time your breathing went shallow at empty safes. let us see if you learned.": [
+   "voice/6ba033fa.ogg",
+   5118
+  ],
+  "last time your breathing went shallow at full safes. i am watching for that now.": [
+   "voice/1d6f37e1.ogg",
+   5296
+  ],
+  "last time your breathing went shallow at full safes. let us see if you learned.": [
+   "voice/49afd25e.ogg",
+   5144
+  ],
+  "last time your face showed surprise at empty safes. i am watching for that now.": [
+   "voice/cf244aef.ogg",
+   5336
+  ],
+  "last time your face showed surprise at empty safes. let us see if you learned.": [
+   "voice/66ee2a70.ogg",
+   5191
+  ],
+  "last time your face showed surprise at full safes. i am watching for that now.": [
+   "voice/c44e14bb.ogg",
+   5350
+  ],
+  "last time your face showed surprise at full safes. let us see if you learned.": [
+   "voice/6d64e0e4.ogg",
+   5204
+  ],
+  "last time your face tightened at empty safes. i am watching for that now.": [
+   "voice/2075491a.ogg",
+   4797
+  ],
+  "last time your face tightened at empty safes. let us see if you learned.": [
+   "voice/a236baf3.ogg",
+   4647
+  ],
+  "last time your face tightened at full safes. i am watching for that now.": [
+   "voice/c2f80b18.ogg",
+   4855
+  ],
+  "last time your face tightened at full safes. let us see if you learned.": [
+   "voice/4b99cea5.ogg",
+   4707
+  ],
+  "last time your pulse climbed at empty safes. i am watching for that now.": [
+   "voice/80459b62.ogg",
+   4875
+  ],
+  "last time your pulse climbed at empty safes. let us see if you learned.": [
+   "voice/d57ab5fb.ogg",
+   4741
+  ],
+  "last time your pulse climbed at full safes. i am watching for that now.": [
+   "voice/0ba90450.ogg",
+   4937
+  ],
+  "last time your pulse climbed at full safes. let us see if you learned.": [
+   "voice/544a885d.ogg",
+   4799
+  ],
+  "look.": [
+   "voice/30d41e0c.ogg",
+   622
+  ],
+  "looks full to me.": [
+   "voice/4f1219e9.ogg",
+   1161
+  ],
+  "my audit found it empty. strike one.": [
+   "voice/1666c492.ogg",
+   3056
+  ],
+  "my call was right. better luck next job.": [
+   "voice/e7ce0907.ogg",
+   3290
+  ],
+  "my loss.": [
+   "voice/1d9037fc.ogg",
+   975
+  ],
+  "never fails.": [
+   "voice/9122f2fa.ogg",
+   1230
+  ],
+  "nice smile. calm chest. i'll meet you halfway.": [
+   "voice/10a43b84.ogg",
+   4442
+  ],
+  "nice try. that empty safe is a strike.": [
+   "voice/ee97a3c7.ogg",
+   3265
+  ],
+  "no bet.": [
+   "voice/a50ba0cd.ogg",
+   832
+  ],
+  "no read on you there. i guessed.": [
+   "voice/056cbb43.ogg",
+   2756
+  ],
+  "no read on you, so no call. keep what you have.": [
+   "voice/9406c015.ogg",
+   3971
+  ],
+  "no tell last time. i will find it.": [
+   "voice/0c9c037f.ogg",
+   2985
+  ],
+  "not a flicker. you got me clean.": [
+   "voice/0493129f.ogg",
+   2746
+  ],
+  "not a ripple in your breath. i'm buying.": [
+   "voice/b94e99ee.ogg",
+   2892
+  ],
+  "nothing moved. i took your word.": [
+   "voice/426babce.ogg",
+   2736
+  ],
+  "nothing showed. well played.": [
+   "voice/bddeeaa7.ogg",
+   2515
+  ],
+  "on the edge. your blinking twitched. final offer.": [
+   "voice/c93d6f13.ogg",
+   4412
+  ],
+  "on the edge. your breathing twitched. final offer.": [
+   "voice/24e9f429.ogg",
+   4429
+  ],
+  "on the edge. your face twitched. final offer.": [
+   "voice/be0b1612.ogg",
+   4313
+  ],
+  "out of my sight, out of my price. take it or leave it.": [
+   "voice/b6660d78.ogg",
+   4123
+  ],
+  "out of my sight. i will not bet blind. keep it.": [
+   "voice/e99c90b7.ogg",
+   4382
+  ],
+  "real smile, real gold. i am buying.": [
+   "voice/be85a012.ogg",
+   3816
+  ],
+  "right again. you leave with nothing.": [
+   "voice/afcf9528.ogg",
+   2708
+  ],
+  "right there.": [
+   "voice/58d72387.ogg",
+   804
+  ],
+  "risky. your blinking moved a little.": [
+   "voice/0d3bc36c.ogg",
+   2760
+  ],
+  "risky. your breathing moved a little.": [
+   "voice/d9ce8e90.ogg",
+   2764
+  ],
+  "risky. your face moved a little.": [
+   "voice/9511502f.ogg",
+   2732
+  ],
+  "second empty safe, second strike. you are busted.": [
+   "voice/7795bd2f.ogg",
+   4262
+  ],
+  "see that?": [
+   "voice/e106adce.ogg",
+   769
+  ],
+  "see?": [
+   "voice/a8b2a201.ogg",
+   649
+  ],
+  "should i have?": [
+   "voice/e283102e.ogg",
+   944
+  ],
+  "smooth breathing. full, i say.": [
+   "voice/1b1039b0.ogg",
+   2911
+  ],
+  "so i passed.": [
+   "voice/b9a22c42.ogg",
+   1176
+  ],
+  "something changed when you looked.": [
+   "voice/9a9762b2.ogg",
+   1910
+  ],
+  "something good in there. i'll pay.": [
+   "voice/e7cbb469.ogg",
+   2596
+  ],
+  "something in your blinking bugs me. i'll still pay.": [
+   "voice/762a216e.ogg",
+   3622
+  ],
+  "something in your breathing bugs me. i'll still pay.": [
+   "voice/e150da28.ogg",
+   3663
+  ],
+  "something in your face bugs me. i'll still pay.": [
+   "voice/23858243.ogg",
+   3545
+  ],
+  "something moved. not enough. well played.": [
+   "voice/f8f3b818.ogg",
+   3974
+  ],
+  "steady as a vault door. i believed you.": [
+   "voice/3cb98f4c.ogg",
+   3091
+  ],
+  "steady breathing. i believe it.": [
+   "voice/87414bf3.ogg",
+   2575
+  ],
+  "strike two. you are done here.": [
+   "voice/f8515430.ogg",
+   2768
+  ],
+  "that empty safe you sold me? that is one strike.": [
+   "voice/6bb92bc5.ogg",
+   3494
+  ],
+  "that grin says gold.": [
+   "voice/6458a356.ogg",
+   1602
+  ],
+  "that is my price. take it or leave it.": [
+   "voice/cb58f8d2.ogg",
+   3092
+  ],
+  "that is strike two. the alarm is on.": [
+   "voice/b0312b3d.ogg",
+   3061
+  ],
+  "that is why i passed.": [
+   "voice/e61c21b7.ogg",
+   1627
+  ],
+  "that looks like gold to me.": [
+   "voice/89d094cc.ogg",
+   1532
+  ],
+  "that smile says gold. your breath says maybe.": [
+   "voice/1f629385.ogg",
+   3636
+  ],
+  "that smile was worth something. so is my offer.": [
+   "voice/e67f47bd.ogg",
+   3676
+  ],
+  "that spooked me.": [
+   "voice/90c59de3.ogg",
+   1145
+  ],
+  "that was enough for me to pass.": [
+   "voice/53cd4dba.ogg",
+   1867
+  ],
+  "there.": [
+   "voice/f2545165.ogg",
+   495
+  ],
+  "told you. hand it over.": [
+   "voice/5eb9a661.ogg",
+   2147
+  ],
+  "too slow.": [
+   "voice/378e1420.ogg",
+   991
+  ],
+  "two empty safes. two strikes. get out.": [
+   "voice/2367f3dd.ogg",
+   4333
+  ],
+  "two strikes. nobody cheats me twice.": [
+   "voice/8959ff2d.ogg",
+   3498
+  ],
+  "welcome back. last time you blinked more at empty safes. not again.": [
+   "voice/73d6e35b.ogg",
+   5449
+  ],
+  "welcome back. last time you blinked more at full safes. not again.": [
+   "voice/4ed6192d.ogg",
+   5533
+  ],
+  "welcome back. last time you held your breath at empty safes. not again.": [
+   "voice/334b992f.ogg",
+   5644
+  ],
+  "welcome back. last time you held your breath at full safes. not again.": [
+   "voice/8e280081.ogg",
+   5652
+  ],
+  "welcome back. last time you smiled at empty safes. not again.": [
+   "voice/0e5050c3.ogg",
+   5411
+  ],
+  "welcome back. last time you smiled at full safes. not again.": [
+   "voice/be893c85.ogg",
+   5431
+  ],
+  "welcome back. last time your breathing changed pace at empty safes. not again.": [
+   "voice/37abee66.ogg",
+   6195
+  ],
+  "welcome back. last time your breathing changed pace at full safes. not again.": [
+   "voice/7574c1f2.ogg",
+   6263
+  ],
+  "welcome back. last time your breathing went shallow at empty safes. not again.": [
+   "voice/d209fee9.ogg",
+   6079
+  ],
+  "welcome back. last time your breathing went shallow at full safes. not again.": [
+   "voice/568eaefb.ogg",
+   6110
+  ],
+  "welcome back. last time your face showed surprise at empty safes. not again.": [
+   "voice/24d2be13.ogg",
+   6152
+  ],
+  "welcome back. last time your face showed surprise at full safes. not again.": [
+   "voice/c01d3cf5.ogg",
+   6161
+  ],
+  "welcome back. last time your face tightened at empty safes. not again.": [
+   "voice/63c8dbfc.ogg",
+   5610
+  ],
+  "welcome back. last time your face tightened at full safes. not again.": [
+   "voice/fb177b18.ogg",
+   5671
+  ],
+  "welcome back. last time your pulse climbed at empty safes. not again.": [
+   "voice/8fe296c6.ogg",
+   5710
+  ],
+  "welcome back. last time your pulse climbed at full safes. not again.": [
+   "voice/ebe617d2.ogg",
+   5755
+  ],
+  "well played. double your take.": [
+   "voice/d43fa651.ogg",
+   2543
+  ],
+  "wrong call. double it is.": [
+   "voice/d34f3e60.ogg",
+   2548
+  ],
+  "you beat me and walked away from the money.": [
+   "voice/a36c4806.ogg",
+   2232
+  ],
+  "you beat my eyes last time. i am sharper now.": [
+   "voice/7f9ebfdf.ogg",
+   3731
+  ],
+  "you blink more when you see a full one.": [
+   "voice/cffe0cd3.ogg",
+   2329
+  ],
+  "you blink more when you see an empty safe.": [
+   "voice/d212153c.ogg",
+   2528
+  ],
+  "you blinked 10 times in 3 seconds.": [
+   "voice/c884b3a1.ogg",
+   2682
+  ],
+  "you blinked 10 times in 4 seconds.": [
+   "voice/4bcee8ce.ogg",
+   2693
+  ],
+  "you blinked 10 times in 5 seconds.": [
+   "voice/dfe3922f.ogg",
+   2799
+  ],
+  "you blinked 11 times in 3 seconds.": [
+   "voice/d407f886.ogg",
+   2698
+  ],
+  "you blinked 11 times in 4 seconds.": [
+   "voice/2c709099.ogg",
+   2697
+  ],
+  "you blinked 11 times in 5 seconds.": [
+   "voice/bd2c4d08.ogg",
+   2799
+  ],
+  "you blinked 12 times in 3 seconds.": [
+   "voice/8948fb33.ogg",
+   2752
+  ],
+  "you blinked 12 times in 4 seconds.": [
+   "voice/a797a13c.ogg",
+   2741
+  ],
+  "you blinked 12 times in 5 seconds.": [
+   "voice/0e08cc4d.ogg",
+   2829
+  ],
+  "you blinked 13 times in 3 seconds.": [
+   "voice/7d19c260.ogg",
+   2934
+  ],
+  "you blinked 13 times in 4 seconds.": [
+   "voice/1c36f85f.ogg",
+   2933
+  ],
+  "you blinked 13 times in 5 seconds.": [
+   "voice/a9003d7e.ogg",
+   3030
+  ],
+  "you blinked 14 times in 3 seconds.": [
+   "voice/472af51d.ogg",
+   2867
+  ],
+  "you blinked 14 times in 4 seconds.": [
+   "voice/4f2e9382.ogg",
+   2876
+  ],
+  "you blinked 14 times in 5 seconds.": [
+   "voice/458af143.ogg",
+   2973
+  ],
+  "you blinked 15 times in 3 seconds.": [
+   "voice/3edc3532.ogg",
+   2905
+  ],
+  "you blinked 15 times in 4 seconds.": [
+   "voice/fdc7ec0d.ogg",
+   2881
+  ],
+  "you blinked 15 times in 5 seconds.": [
+   "voice/843686fc.ogg",
+   2989
+  ],
+  "you blinked 16 times in 3 seconds.": [
+   "voice/257c676f.ogg",
+   2898
+  ],
+  "you blinked 16 times in 4 seconds.": [
+   "voice/d0c689f0.ogg",
+   2894
+  ],
+  "you blinked 16 times in 5 seconds.": [
+   "voice/cb9c99e1.ogg",
+   2987
+  ],
+  "you blinked 17 times in 3 seconds.": [
+   "voice/8852a52c.ogg",
+   2968
+  ],
+  "you blinked 17 times in 4 seconds.": [
+   "voice/35b40663.ogg",
+   2946
+  ],
+  "you blinked 17 times in 5 seconds.": [
+   "voice/0d9f99a2.ogg",
+   3095
+  ],
+  "you blinked 18 times in 3 seconds.": [
+   "voice/b9358c09.ogg",
+   2913
+  ],
+  "you blinked 18 times in 4 seconds.": [
+   "voice/d036e936.ogg",
+   2915
+  ],
+  "you blinked 18 times in 5 seconds.": [
+   "voice/2abbf357.ogg",
+   2989
+  ],
+  "you blinked 19 times in 3 seconds.": [
+   "voice/7b9839ae.ogg",
+   2859
+  ],
+  "you blinked 19 times in 4 seconds.": [
+   "voice/c5dc6c81.ogg",
+   2841
+  ],
+  "you blinked 19 times in 5 seconds.": [
+   "voice/f284bf90.ogg",
+   2943
+  ],
+  "you blinked 2 times in 3 seconds.": [
+   "voice/afbf2078.ogg",
+   2590
+  ],
+  "you blinked 2 times in 4 seconds.": [
+   "voice/d1cd2a17.ogg",
+   2592
+  ],
+  "you blinked 2 times in 5 seconds.": [
+   "voice/57bd23f6.ogg",
+   2684
+  ],
+  "you blinked 20 times in 3 seconds.": [
+   "voice/8f67c97e.ogg",
+   2684
+  ],
+  "you blinked 20 times in 4 seconds.": [
+   "voice/4a582391.ogg",
+   2665
+  ],
+  "you blinked 20 times in 5 seconds.": [
+   "voice/63814e60.ogg",
+   2780
+  ],
+  "you blinked 3 times in 3 seconds.": [
+   "voice/d1cccbcb.ogg",
+   2709
+  ],
+  "you blinked 3 times in 4 seconds.": [
+   "voice/2ecdf014.ogg",
+   2699
+  ],
+  "you blinked 3 times in 5 seconds.": [
+   "voice/2c30a345.ogg",
+   2781
+  ],
+  "you blinked 4 times in 3 seconds.": [
+   "voice/83924aea.ogg",
+   2633
+  ],
+  "you blinked 4 times in 4 seconds.": [
+   "voice/07554465.ogg",
+   2620
+  ],
+  "you blinked 4 times in 5 seconds.": [
+   "voice/9fc2f2b4.ogg",
+   2741
+  ],
+  "you blinked 5 times in 3 seconds.": [
+   "voice/81d8d775.ogg",
+   2713
+  ],
+  "you blinked 5 times in 4 seconds.": [
+   "voice/f3e7227a.ogg",
+   2726
+  ],
+  "you blinked 5 times in 5 seconds.": [
+   "voice/061a4c3b.ogg",
+   2834
+  ],
+  "you blinked 6 times in 3 seconds.": [
+   "voice/8695d044.ogg",
+   2671
+  ],
+  "you blinked 6 times in 4 seconds.": [
+   "voice/53217b3b.ogg",
+   2691
+  ],
+  "you blinked 6 times in 5 seconds.": [
+   "voice/40ee517a.ogg",
+   2787
+  ],
+  "you blinked 7 times in 3 seconds.": [
+   "voice/b5c6c927.ogg",
+   2754
+  ],
+  "you blinked 7 times in 4 seconds.": [
+   "voice/6f545a88.ogg",
+   2734
+  ],
+  "you blinked 7 times in 5 seconds.": [
+   "voice/de989e19.ogg",
+   2845
+  ],
+  "you blinked 8 times in 3 seconds.": [
+   "voice/91296176.ogg",
+   2548
+  ],
+  "you blinked 8 times in 4 seconds.": [
+   "voice/b2ffb549.ogg",
+   2558
+  ],
+  "you blinked 8 times in 5 seconds.": [
+   "voice/e92b5df8.ogg",
+   2672
+  ],
+  "you blinked 9 times in 3 seconds.": [
+   "voice/4a300791.ogg",
+   2706
+  ],
+  "you blinked 9 times in 4 seconds.": [
+   "voice/8f3fad7e.ogg",
+   2712
+  ],
+  "you blinked 9 times in 5 seconds.": [
+   "voice/0276685f.ogg",
+   2821
+  ],
+  "you blinked once in 3 seconds.": [
+   "voice/d0ef44bb.ogg",
+   2229
+  ],
+  "you blinked once in 4 seconds.": [
+   "voice/046399c4.ogg",
+   2202
+  ],
+  "you blinked once in 5 seconds.": [
+   "voice/4cadcff5.ogg",
+   2281
+  ],
+  "you did not take a single breath.": [
+   "voice/8da34d7c.ogg",
+   1880
+  ],
+  "you flinched. the deal is off.": [
+   "voice/cad8aa9b.ogg",
+   2783
+  ],
+  "you fooled me. your take doubles.": [
+   "voice/7033b625.ogg",
+   2816
+  ],
+  "you gave me nothing. good work.": [
+   "voice/b1dc0712.ogg",
+   2548
+  ],
+  "you got me on the last one. double.": [
+   "voice/455cd8ed.ogg",
+   2653
+  ],
+  "you had me fooled, then kept the empty safe.": [
+   "voice/808a87d8.ogg",
+   2976
+  ],
+  "you hid well last time. not today.": [
+   "voice/1026f53a.ogg",
+   2957
+  ],
+  "you hold your breath when you see a full one.": [
+   "voice/4a1c7f9c.ogg",
+   2454
+  ],
+  "you hold your breath when you see an empty safe.": [
+   "voice/56c7d61d.ogg",
+   2647
+  ],
+  "you lit up. gold, i bet.": [
+   "voice/1d59219c.ogg",
+   2589
+  ],
+  "you slipped away from me. blind offer.": [
+   "voice/f33e788a.ogg",
+   3050
+  ],
+  "you slipped my eye. take it or leave it.": [
+   "voice/c7575297.ogg",
+   3088
+  ],
+  "you slipped out of view. the bet is off.": [
+   "voice/ef2606e4.ogg",
+   3051
+  ],
+  "you smile when you see a full one.": [
+   "voice/e822072e.ogg",
+   2188
+  ],
+  "you smile when you see an empty safe.": [
+   "voice/2119a5cb.ogg",
+   2362
+  ],
+  "you smiled the way you smile at empty safes.": [
+   "voice/0fa0172f.ogg",
+   2864
+  ],
+  "you smiled. your breath did not. that is my offer.": [
+   "voice/a127dcc0.ogg",
+   4521
+  ],
+  "you sold me an empty safe. strike one. do not do it again.": [
+   "voice/7bf9292b.ogg",
+   5077
+  ],
+  "you started talking the moment you looked.": [
+   "voice/320b43eb.ogg",
+   2266
+  ],
+  "you stayed steady. i bought it.": [
+   "voice/9c87849f.ogg",
+   2504
+  ],
+  "you stopped blinking.": [
+   "voice/9be9a5a5.ogg",
+   1335
+  ],
+  "you stopped breathing for 1 second.": [
+   "voice/926e8bc9.ogg",
+   2259
+  ],
+  "you stopped breathing for 2 seconds.": [
+   "voice/874afeff.ogg",
+   2386
+  ],
+  "you stopped breathing for 3 seconds.": [
+   "voice/19d3de9e.ogg",
+   2496
+  ],
+  "you stopped breathing for 4 seconds.": [
+   "voice/f00091b1.ogg",
+   2490
+  ],
+  "you stopped breathing for 5 seconds.": [
+   "voice/8928f300.ogg",
+   2540
+  ],
+  "you stopped breathing for 6 seconds.": [
+   "voice/359a4803.ogg",
+   2471
+  ],
+  "you stopped breathing for 7 seconds.": [
+   "voice/2c117342.ogg",
+   2524
+  ],
+  "you stopped breathing for 8 seconds.": [
+   "voice/61d6f585.ogg",
+   2394
+  ],
+  "you were out of sight. my offer was blind.": [
+   "voice/ee817fe7.ogg",
+   3318
+  ],
+  "your breath never broke. full.": [
+   "voice/7b9569d2.ogg",
+   2684
+  ],
+  "your breath stayed even. i believed you.": [
+   "voice/3b3b2172.ogg",
+   2973
+  ],
+  "your breathing changes pace when you see a full one.": [
+   "voice/52ddb8d2.ogg",
+   2923
+  ],
+  "your breathing changes pace when you see an empty safe.": [
+   "voice/093a2f4f.ogg",
+   3141
+  ],
+  "your breathing goes shallow when you see a full one.": [
+   "voice/38ca6a98.ogg",
+   2888
+  ],
+  "your breathing goes shallow when you see an empty safe.": [
+   "voice/65383369.ogg",
+   3086
+  ],
+  "your breathing slowed by 10 percent.": [
+   "voice/a3402e47.ogg",
+   2298
+  ],
+  "your breathing slowed by 20 percent.": [
+   "voice/a6efa5a6.ogg",
+   2430
+  ],
+  "your breathing slowed by 30 percent.": [
+   "voice/a8a5b841.ogg",
+   2417
+  ],
+  "your breathing slowed by 40 percent.": [
+   "voice/4a4e0440.ogg",
+   2416
+  ],
+  "your breathing slowed by 50 percent.": [
+   "voice/a9e56213.ogg",
+   2493
+  ],
+  "your breathing slowed by 60 percent.": [
+   "voice/aebe84a2.ogg",
+   2450
+  ],
+  "your breathing slowed by 70 percent.": [
+   "voice/d527a82d.ogg",
+   2488
+  ],
+  "your breathing slowed by 80 percent.": [
+   "voice/963cfe9c.ogg",
+   2390
+  ],
+  "your breathing slowed by 90 percent.": [
+   "voice/0f4e0f1f.ogg",
+   2437
+  ],
+  "your breathing sped up by 10 percent.": [
+   "voice/1f8139b6.ogg",
+   2275
+  ],
+  "your breathing sped up by 100 percent.": [
+   "voice/ede1a88c.ogg",
+   2623
+  ],
+  "your breathing sped up by 110 percent.": [
+   "voice/2c6d250f.ogg",
+   2886
+  ],
+  "your breathing sped up by 120 percent.": [
+   "voice/b764ed4e.ogg",
+   2974
+  ],
+  "your breathing sped up by 130 percent.": [
+   "voice/3b4b0b69.ogg",
+   2965
+  ],
+  "your breathing sped up by 140 percent.": [
+   "voice/a2705128.ogg",
+   2980
+  ],
+  "your breathing sped up by 150 percent.": [
+   "voice/1c039e3b.ogg",
+   2985
+  ],
+  "your breathing sped up by 20 percent.": [
+   "voice/0cc99ed7.ogg",
+   2380
+  ],
+  "your breathing sped up by 30 percent.": [
+   "voice/3d107894.ogg",
+   2378
+  ],
+  "your breathing sped up by 40 percent.": [
+   "voice/18ae8dbd.ogg",
+   2370
+  ],
+  "your breathing sped up by 50 percent.": [
+   "voice/7a9b71b2.ogg",
+   2478
+  ],
+  "your breathing sped up by 60 percent.": [
+   "voice/70601aa3.ogg",
+   2468
+  ],
+  "your breathing sped up by 70 percent.": [
+   "voice/8a37d690.ogg",
+   2457
+  ],
+  "your breathing sped up by 80 percent.": [
+   "voice/348cda49.ogg",
+   2379
+  ],
+  "your breathing sped up by 90 percent.": [
+   "voice/a80c972e.ogg",
+   2434
+  ],
+  "your breathing went 10 percent shallower.": [
+   "voice/2f3778f5.ogg",
+   2369
+  ],
+  "your breathing went 20 percent shallower.": [
+   "voice/f17c4abc.ogg",
+   2415
+  ],
+  "your breathing went 30 percent shallower.": [
+   "voice/1343592f.ogg",
+   2445
+  ],
+  "your breathing went 40 percent shallower.": [
+   "voice/f90ed98e.ogg",
+   2440
+  ],
+  "your breathing went 50 percent shallower.": [
+   "voice/cfef2b11.ogg",
+   2493
+  ],
+  "your breathing went 60 percent shallower.": [
+   "voice/f2682138.ogg",
+   2527
+  ],
+  "your breathing went 70 percent shallower.": [
+   "voice/d2a4687b.ogg",
+   2521
+  ],
+  "your breathing went 80 percent shallower.": [
+   "voice/050b508a.ogg",
+   2353
+  ],
+  "your breathing went 90 percent shallower.": [
+   "voice/1ef7a7ed.ogg",
+   2482
+  ],
+  "your face jumped.": [
+   "voice/f216e48a.ogg",
+   1255
+  ],
+  "your face shows surprise when you see a full one.": [
+   "voice/ad989aba.ogg",
+   2936
+  ],
+  "your face shows surprise when you see an empty safe.": [
+   "voice/7d6c7f77.ogg",
+   3105
+  ],
+  "your face tightens when you see a full one.": [
+   "voice/90069049.ogg",
+   2498
+  ],
+  "your face tightens when you see an empty safe.": [
+   "voice/805898f6.ogg",
+   2690
+  ],
+  "your pulse climbs when you see a full one.": [
+   "voice/c52e0bef.ogg",
+   2445
+  ],
+  "your pulse climbs when you see an empty safe.": [
+   "voice/16953ca8.ogg",
+   2632
+  ],
+  "your smile dropped.": [
+   "voice/ee866cce.ogg",
+   1369
+  ]
+ }
 }

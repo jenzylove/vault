@@ -115,7 +115,8 @@ export function speak(text: string, pace = 1): { done: Promise<void>; cancel: ()
     if (plan) {
       stopSpeaking();
       const total = plan.reduce((s, [, ms]) => s + ms, 0) + GAP_MS * (plan.length - 1);
-      timer = setTimeout(() => finish(), total + 2000);
+      // a safety net only: the line normally ends on the last clip ending
+      timer = setTimeout(() => finish(), total + 3000);
       setTalking(true);
       const handle = playClips(plan, (ok) => {
         if (current === handle) { current = null; setTalking(false); }

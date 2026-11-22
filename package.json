@@ -9,7 +9,8 @@
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "voice": "python scripts/voice/gen.py"
   },
   "overrides": {
     "@smartspectra/node-sdk-linux-x64": "file:./stubs/linux-x64",

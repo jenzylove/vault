@@ -148,7 +148,7 @@ export const UNREAD = [
 
 export const OFFER = {
   smileCalm: [
-    "Gold? You smiled, but your breathing did not change. I'm not sure. That is my price.",
+    'Gold? You smiled, but your breath stayed calm.',
     'A smile, but calm breath. Maybe gold, maybe not.',
     'You smiled. Your breath did not. That is my offer.',
     'That smile says gold. Your breath says maybe.',
