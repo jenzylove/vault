@@ -25,6 +25,8 @@ Crack safes, hide what you found, and sell them to The Fence. He never sees insi
 2. Press **S** on the title screen for the sample run, or **Start the job** for live play. Live play asks once for your Presage key and keeps it encrypted on your PC.
 3. For the best read: laptop at eye level, sit back an arm's length so your chest is in view, light in front of you.
 
+Live play runs on Windows 10 and 11. Built from source on macOS or Linux, the sample run plays and live play stays off.
+
 ## How a job plays
 
 1. **He learns your calm.** Ten seconds of normal breathing. Your breathing trace from the SDK becomes your own baseline.

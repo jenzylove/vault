@@ -67,9 +67,10 @@ ipcMain.handle('vault:key:forget', (e) => {
   forgetKey();
 });
 
-// Native camera session. The renderer SDK copies every 1280x720 frame out of the page and over IPC,
-// which cannot keep 30 fps on a busy laptop (SDK error "frame rate too low"). Here the SDK reads the
-// camera itself in this process and only the small metrics packets cross to the page.
+// Native SDK session in this process. Two inputs: page fed (default), where the page opens the camera at
+// 640x360 with the camera's own exposure and sends RGBA frames here (about 0.9 MB a frame, measured at
+// about 6 ms a copy), and the SDK's own camera as the fallback. The SDK's renderer bridge at 1280x720
+// could not keep 30 fps on a busy laptop. Only metrics cross back to the page.
 // One session per window; it is stopped on stop, on a new start, and when the window goes away.
 type NativeSdk = {
   on(ev: string, cb: (...a: never[]) => void): unknown;

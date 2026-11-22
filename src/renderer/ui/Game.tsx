@@ -1143,35 +1143,6 @@ function ConsentScreen({ onAgree, onBack }: { onAgree: () => void; onBack: () =>
   );
 }
 
-function KeyScreen({ draft, setDraft, err, keyOnFile, onLive, onSim, onForget }: {
-  draft: string; setDraft: (s: string) => void; err: string | null; keyOnFile: boolean; onLive: () => void; onSim: () => void; onForget: () => void;
-}): JSX.Element {
-  return (
-    <div className="center">
-      <div className="sheet">
-        <div className="eyebrow">Presage key</div>
-        <div className="display">{keyOnFile ? 'Your Presage key is ready.' : 'Paste your Presage key.'}</div>
-        <div className="body">{keyOnFile
-          ? 'A key is set up on this computer. Press Enter to use your camera, or paste a different key.'
-          : 'It lets SmartSpectra read your breathing from the webcam. It stays on this computer.'}</div>
-        <form style={{ marginTop: 18 }} onSubmit={(e) => { e.preventDefault(); onLive(); }}>
-          <input className="field" type="password" spellCheck={false} autoComplete="off" placeholder={keyOnFile ? 'key on this computer' : 'your key'}
-            value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Presage API key" />
-        </form>
-        {err && <div className="err">{err}</div>}
-        <div className="actions">
-          <Btn primary k="Enter" onClick={onLive}>Use my camera</Btn>
-          <Btn ghost k="S" onClick={onSim}>Try a sample run (no camera)</Btn>
-        </div>
-        <div className="small" style={{ marginTop: 14 }}>
-          No key? The sample run plays the whole game with a simulated body and made up signals, clearly marked on screen.
-          {draft && <> <button className="link" onClick={onForget}>Forget my key</button></>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function CalmStage({ bus, recRef, wantPractice, howSeen, onToggle }: {
   bus: SignalBus | null; recRef: React.MutableRefObject<{ progress: () => number } | null>; wantPractice: boolean; howSeen: boolean; onToggle: () => void;
 }): JSX.Element {
@@ -1202,11 +1173,12 @@ function PracticeStage({ idx, total, kind, stage, last, recRef, bus, reusedCalm,
 }): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
   const what = kind === 'trap' ? 'an empty safe' : kind === 'big' ? 'gold bars' : 'cash';
+  const holds = kind === 'trap' ? 'is empty' : kind === 'big' ? 'holds gold bars' : 'holds cash';
   if (stage === 'intro') {
     return (
       <>
         <div className="eyebrow">Practice safe {idx + 1} of {total} · nothing counts</div>
-        <div className="prompt big">Practice: this safe holds {what}, and he knows it.</div>
+        <div className="prompt big">Practice: this safe {holds}, and he knows it.</div>
         <div className="line">
           {idx === 0 && reusedCalm ? 'He remembers your calm from last time. ' : ''}
           Look inside so he learns how your breath reacts. No money and no strikes here. The real job starts after.

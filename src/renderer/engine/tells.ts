@@ -255,7 +255,8 @@ export function hideTrend(earlier: readonly TellHistoryEntry[], sheet: TellSheet
   const key = named ?? sheet.biggest?.key ?? null;
   if (!key) return { key, trend: 'unknown', line: 'He has not found a tell on you yet.' };
   const cur = sheet.tells.find((t) => t.key === key);
-  if (!cur || cur.nTrap === 0 || cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no empty safe from you this run, so he could not check.' };
+  if (!cur || cur.nTrap === 0) return { key, trend: 'unknown', line: 'He saw no empty safe from you this run, so he could not check.' };
+  if (cur.nTreasure === 0) return { key, trend: 'unknown', line: 'He saw no full safe from you this run, so he could not check.' };
   const before = [...earlier].reverse().map((g) => g.tells[key]).find((t) => t && t.effect !== 0);
   if (!before) return { key, trend: 'unknown', line: 'No earlier run to compare it with yet.' };
   const was = Math.abs(before.effect);
