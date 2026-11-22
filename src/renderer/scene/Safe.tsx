@@ -194,7 +194,7 @@ export const Safe = memo(function Safe({ id, label, home, homeScale = 1, look, m
   const st = useRef({
     heroT: hero ? 1 : 0, spin: 0, spinTarget: 0, facing: false, prev: state, since: 0,
     open: 0, dial: 0, lever: 0, chain: state === 'burned' ? 1 : 0, scorch: state === 'burned' || state === 'burned-revealed' ? 1 : 0,
-    hover: 0, splat: state === 'opened-trap' ? 1 : 0,
+    hover: 0, splat: state === 'opened-trap' ? 1 : 0, land: 0,
   });
   const tmp = useMemo(() => ({ a: new THREE.Vector3(), b: new THREE.Vector3(), c: new THREE.Vector3() }), []);
 
@@ -242,15 +242,13 @@ export const Safe = memo(function Safe({ id, label, home, homeScale = 1, look, m
     // ---- dial, lever, door ----
     let dialA = 0, leverA = 0, openT = 0;
     if (state === 'peeking') {
-      // dial clicks right, left, right, then the lever drops and the door swings
-      const k = t - 0.25;
-      if (k > 0) {
-        const seg = (x: number, x0: number, x1: number) => ease((x - x0) / (x1 - x0));
-        dialA = seg(k, 0, 0.45) * 2.6 - seg(k, 0.5, 0.85) * 1.5 + seg(k, 0.9, 1.15) * 0.8;
-        dialA = Math.round(dialA / (TAU / 50)) * (TAU / 50); // ticks
-        leverA = seg(k, 1.15, 1.4);
-        openT = seg(k, 1.35, 1.95);
-      }
+      // the slow crack (UI sounds match this, see PEEK_LEAD_MS): it flies out by 0.9 s, the dial clicks right,
+      // left, right until 1.35 s, the lever drops, the door creaks ajar, sticks, then swings wide by 2.0 s
+      const seg = (x: number, x0: number, x1: number) => ease((x - x0) / (x1 - x0));
+      dialA = seg(t, 0.5, 0.8) * 2.6 - seg(t, 0.84, 1.08) * 1.5 + seg(t, 1.12, 1.32) * 0.8;
+      dialA = Math.round(dialA / (TAU / 50)) * (TAU / 50); // ticks
+      leverA = seg(t, 1.32, 1.46);
+      openT = 0.14 * seg(t, 1.46, 1.64) + 0.86 * seg(t, 1.7, 2.0);
     } else if (wantOpen) {
       leverA = 1; openT = ease((t - 0.15) / 0.55);
       if (a.open > openT) openT = a.open; // already open: stay open
@@ -277,16 +275,29 @@ export const Safe = memo(function Safe({ id, label, home, homeScale = 1, look, m
     doorMat.color.copy(DOOR_COL).lerp(SCORCH_COL, a.scorch * 0.6);
     doorMat.emissiveIntensity = a.hover * 0.6 + (clickable ? 0.04 + Math.sin(now * 2.2 + id) * 0.02 : 0);
 
-    // ---- light spill when open ----
-    const lit = a.open * (contents ? 1 : 0.35);
-    const dud = contents === 'trap';
+    // ---- contents land once the door is all the way open: nothing gives them away before ----
+    // on a crack they fall in from 2.0 s and hit the floor at 2.2 s, with the UI's chime or sting (PEEK_LEAD_MS)
+    const landGo = state === 'peeking' ? t >= 2.0 && a.open > 0.9 : a.open > 0.9;
+    a.land = landGo ? Math.min(1, a.land + dt / 0.32) : a.open < 0.05 ? 0 : a.land;
+    if (contentsRef.current) {
+      const l = a.land;
+      // drop in from above with one small bounce
+      const drop = l < 0.6 ? 1 - (l / 0.6) ** 2 : Math.abs(Math.sin(((l - 0.6) / 0.4) * Math.PI)) * 0.12;
+      contentsRef.current.position.y = -H / 2 + T + drop * 0.16;
+      contentsRef.current.scale.setScalar(0.75 + 0.25 * Math.min(1, l / 0.6));
+    }
+
+    // ---- light spill when open: plain warm until the contents land, then their colour ----
+    const landed = a.land > 0.05;
+    const lit = a.open * (contents && landed ? 1 : 0.35);
+    const dud = landed && contents === 'trap';
     const blink = dud ? (Math.sin(now * 9) > 0.2 ? 1 : 0.35) : 1;
     spillMat.opacity = lit * (dud ? 0.22 * blink : 0.2) * (0.6 + 0.4 * fly);
     spillMat.color.set(dud ? PAL.alarm : '#ffc070');
     if (spill.current) spill.current.visible = spillMat.opacity > 0.01;
     backGlowMat.opacity = 0; // no glare inside: the contents should read, not a light
     backGlowMat.color.set(dud ? PAL.alarm : '#ffb050');
-    if (contentsRef.current) contentsRef.current.visible = a.open > 0.02 && !!contents;
+    if (contentsRef.current) contentsRef.current.visible = landed && !!contents;
 
     // the shared hero light follows the active safe
     if (hero || a.heroT > 0.01) {
