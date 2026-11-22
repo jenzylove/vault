@@ -891,7 +891,7 @@ function TitleScreen({ onGo, onSample, err }: { onGo: () => void; onSample: () =
       <div className="title-word">The Vault</div>
       <div className="title-sub enter" style={{ ['--d' as string]: 3 }}>Crack the safes. Fool the Fence.</div>
       <div className="tagline enter" style={{ ['--d' as string]: 5 }}>
-        Only you see inside each safe. The Fence watches your breath, blinks, face and pulse on camera, then bids blind.
+        The Fence buys stolen goods, and he wants your safes. Only you see inside each one. He watches your breath, blinks, face and pulse on camera, then bids blind.
         Dump the duds on him. Keep the real loot.
       </div>
       <div className="actions enter" style={{ ['--d' as string]: 8 }}>
@@ -915,6 +915,7 @@ function JobsScreen({ sel, setSel, stash, sim, onPlay, onWipe, canWipe }: {
         <div>
           <div className="eyebrow enter">Pick a job</div>
           <div className="display enter" style={{ ['--d' as string]: 1 }}>Seven jobs. The Fence reads more of you on each.</div>
+          <div className="small enter" style={{ marginTop: 8, ['--d' as string]: 2 }}>The Fence buys stolen goods. He pays for your safes without seeing inside, so he reads you instead.</div>
           <div className="enter" style={{ marginTop: 10, ['--d' as string]: 2 }}><RuleStrip step={-1} /></div>
         </div>
         <div className="stash-big enter" style={{ ['--d' as string]: 2 }}>
