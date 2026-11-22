@@ -1,0 +1,68 @@
+# Windows x64 installer: npm run dist  ->  dist/The-Vault-Setup-<version>.exe
+appId: site.jdollar.thevault
+productName: The Vault
+copyright: Copyright © 2026 JDollar
+directories:
+  output: dist
+  buildResources: build
+# The installed app keeps its own data folder (%APPDATA%\The Vault), apart from development runs.
+extraMetadata:
+  productName: The Vault
+electronLanguages: [en-US]
+
+# Only the built app and the runtime packages go in. node_modules holds just the production dependencies
+# (@smartspectra/node-sdk with koffi and protobufjs): React, three and friends are bundled into out/renderer.
+files:
+  - out/**/*
+  - package.json
+  - "!**/.env"
+  - "!**/.env.*"
+  - "!**/*.map"
+  - "!{src,stubs,tests,docs,scripts,recordings,dist}/**"
+  # Presage platform payloads for other systems (stubs here) and koffi builds for other systems
+  - "!node_modules/@smartspectra/node-sdk-{linux,darwin}-*{,/**}"
+  - "!node_modules/koffi/build/koffi/{darwin,freebsd,linux,musl,openbsd}_*/**"
+  - "!node_modules/koffi/build/koffi/win32_{arm64,ia32}/**"
+  - "!node_modules/koffi/{src,vendor,doc}/**"
+
+# The SDK's native runtime cannot load from inside app.asar: koffi.node, the Presage DLLs and the graph/
+# model files stay as real files in resources/app.asar.unpacked (src/main/index.ts points the SDK there).
+asar: true
+asarUnpack:
+  - node_modules/koffi/**
+  - node_modules/@smartspectra/node-sdk-win32-x64/**
+
+# The native parts ship prebuilt (koffi is Node API, Presage DLLs are plain DLLs): never rebuild from source.
+npmRebuild: false
+nodeGypRebuild: false
+buildDependenciesFromSource: false
+electronDist: node_modules/electron/dist
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Microsoft C++ runtime the Presage DLLs link against (MSVCP140, VCRUNTIME140 and friends), placed beside
+  # The Vault.exe so live play works on machines without the Visual C++ Redistributable.
+  extraFiles:
+    - from: C:/Windows/System32
+      to: .
+      filter:
+        - msvcp140.dll
+        - msvcp140_atomic_wait.dll
+        - vcruntime140.dll
+        - vcruntime140_1.dll
+        - vcruntime140_threads.dll
+        - concrt140.dll
+
+nsis:
+  oneClick: true
+  perMachine: false
+  runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: The Vault
+  artifactName: The-Vault-Setup-${version}.${ext}
+  deleteAppDataOnUninstall: false
+
+publish: null

@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "description": "A banker reads your breath while you peek inside the box. Built on the Presage SmartSpectra SDK.",
+  "author": "JDollar",
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "pack": "electron-vite build && electron-builder --dir",
+    "dist": "electron-vite build && electron-builder --win --x64",
     "preview": "electron-vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -18,23 +21,24 @@
     "@smartspectra/node-sdk-darwin-arm64": "file:./stubs/darwin-arm64"
   },
   "dependencies": {
+    "@smartspectra/node-sdk": "^3.5.0"
+  },
+  "devDependencies": {
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
     "@react-three/postprocessing": "^2.19.1",
-    "@smartspectra/node-sdk": "^3.5.0",
-    "postprocessing": "^6.39.6",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "three": "^0.187.0"
-  },
-  "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
     "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^6.3.0",
     "electron": "^45.3.2",
+    "electron-builder": "26.18.0",
     "electron-vite": "^6.0.0",
+    "postprocessing": "^6.39.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.187.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
