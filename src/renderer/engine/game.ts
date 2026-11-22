@@ -128,7 +128,7 @@ export interface Scoreboard {
   rank: string;
   /** Traps the banker walked away from (he read you). */
   trapsCaught: number;
-  /** Beat this banker: pile >= target and he caught at most maxTrapsCaught of your traps. */
+  /** Beat this banker: pile >= target before the alarm goes off. */
   won: boolean;
   target: number;
   maxTrapsCaught: number;
@@ -303,7 +303,8 @@ export function computeScore(s: GameState): Scoreboard {
     level: s.level,
     rank: cfg.rank,
     trapsCaught,
-    won: !s.busted && s.pile >= rules.target && trapsCaught <= rules.maxTrapsCaught && treasuresBurned <= rules.maxBurned,
+    // one rule on screen: reach the target before the alarm (strikes are the only catch limit)
+    won: !s.busted && s.pile >= rules.target,
     target: rules.target,
     maxTrapsCaught: rules.maxTrapsCaught,
     maxBurned: rules.maxBurned,

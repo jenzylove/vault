@@ -156,7 +156,7 @@ describe('banker ladder', () => {
     const r = playSimGame('steady', 4, { level: 1 }).result;
     expect(r.level).toBe(1);
     expect(r.rank).toBe('Pickpocket');
-    expect(r.won).toBe(!r.busted && r.pile >= r.target && r.trapsCaught <= r.maxTrapsCaught && r.treasuresBurned <= r.maxBurned);
+    expect(r.won).toBe(!r.busted && r.pile >= r.target);
   });
 });
 

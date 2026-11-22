@@ -159,14 +159,12 @@ export function caughtCount(game: GameState): number {
 /** Goal and progress: always on screen during a job. */
 export function Hud({ game, job, daily }: { game: GameState; job: Job; daily: boolean }): JSX.Element {
   const r = game.rules;
-  const caught = caughtCount(game);
   const played = game.log.length;
   const active = game.phase === 'peek' || game.phase === 'bankerRead' ? 1 : 0;
-  const may = r.maxTrapsCaught === 0 ? 'He may catch no duds' : `He may catch ${r.maxTrapsCaught} dud${r.maxTrapsCaught === 1 ? '' : 's'}`;
   return (
     <div className="hud panel">
       <div className="hud-job">{daily ? 'Daily Heist' : job.name}</div>
-      <div className="hud-goal">Take <b>{money(r.target)}</b> from {r.safes} safes. {may}.</div>
+      <div className="hud-goal">Take <b>{money(r.target)}</b> from {r.safes} safes before the alarm.</div>
       <div className="pips" aria-label={`Safe ${Math.min(r.safes, played + active)} of ${r.safes}`}>
         {Array.from({ length: r.safes }, (_, i) => {
           const o = game.log[i];
@@ -175,7 +173,6 @@ export function Hud({ game, job, daily }: { game: GameState; job: Job; daily: bo
             : o.kind === 'trap' ? (o.result === 'sold' ? 'dumped' : 'caught') : o.result === 'burned' ? 'lost' : 'kept') : i === played && active ? 'now' : '';
           return <span key={i} className={`pip ${cls}`} />;
         })}
-        <span className={`caught${caught > r.maxTrapsCaught ? ' over' : ''}`}>Caught {caught} of {r.maxTrapsCaught}</span>
       </div>
     </div>
   );

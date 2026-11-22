@@ -1444,11 +1444,9 @@ function verdictFor(game: GameState): { cls: string; text: string; why: string }
   const sc = game.score!;
   if (sc.busted) return { cls: 'busted', text: 'Busted', why: 'Two strikes. The alarm went off and you lost your take.' };
   if (sc.finalCall?.right) return { cls: 'busted', text: 'He read you', why: 'You bet your take on the last safe and he called it right. You lost it all.' };
-  if (sc.won) return { cls: 'clean', text: 'Clean job', why: sc.finalCall ? `He guessed wrong on the last safe and your take doubled. Clean.` : `You took at least ${money(sc.target)} and he caught no more duds than allowed.` };
+  if (sc.won) return { cls: 'clean', text: 'Clean job', why: sc.finalCall ? `He guessed wrong on the last safe and your take doubled. Clean.` : `You took at least ${money(sc.target)} before the alarm.` };
   const misses: string[] = [];
   if (sc.pile < sc.target) misses.push(`${money(sc.target - sc.pile)} short of the ${money(sc.target)} target`);
-  if (sc.trapsCaught > sc.maxTrapsCaught) misses.push(`he caught ${sc.trapsCaught} duds, ${sc.maxTrapsCaught} allowed`);
-  if (sc.treasuresBurned > sc.maxBurned) misses.push(`he passed on ${sc.treasuresBurned} safes of real loot`);
   return { cls: 'short', text: 'Not clean', why: `${misses.join(', and ')}.`.replace(/^./, (c) => c.toUpperCase()) };
 }
 
