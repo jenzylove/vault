@@ -16,6 +16,7 @@ import { useHeartbeat } from './heartbeat';
 import { FaceWatch, GapWatch, STALE_MS, type FaceProblem } from '../signals/lineup';
 import { V_OK, V_NO_FACE, V_MANY_FACES, validationWords } from '../signals/status';
 import { Lineup } from './Lineup';
+import { KeyEntry } from './KeyEntry';
 import type { BankerState, SceneBox, SceneBoxKind, ScenePracticeBox } from '../scene/types';
 import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
@@ -921,7 +922,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
         )}
         {screen === 'consent' && <ConsentScreen onAgree={afterConsent} onBack={() => setScreen('jobs')} />}
         {screen === 'key' && (
-          <KeyScreen draft={keyDraft} setDraft={setKeyDraft} err={err} keyOnFile={keyOnFile}
+          <KeyEntry draft={keyDraft} setDraft={setKeyDraft} err={err} keyOnFile={keyOnFile}
             onLive={() => void choose({ mode: 'live', key: keyDraft })} onSim={() => void choose({ mode: 'simulated' })}
             onForget={() => { forgetKey(); setKeyDraft(''); }} />
         )}

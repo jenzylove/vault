@@ -1,6 +1,6 @@
 /**
- * Local only storage. Game results and tell summaries (never raw signals), the Presage key the player
- * pasted (never logged), and whether they have read the consent screen this session.
+ * Local only storage. Game results and tell summaries (never raw signals) and whether they have read the
+ * consent screen this session. The Presage key is not kept here: see loadKey below.
  */
 import { emptyHistory, emptyStash, parseStash, type Stash, type TellHistory } from '../engine';
 
@@ -39,8 +39,11 @@ const FIRST_KEY = 'vault.firstJobOffered.v1';
 export function firstJobOffered(): boolean { return safeGet(FIRST_KEY) === '1'; }
 export function markFirstJobOffered(): void { safeSet(FIRST_KEY, '1'); }
 
-export function loadKey(): string { return safeGet(KEY_KEY) ?? ''; }
-export function saveKey(k: string): void { safeSet(KEY_KEY, k.trim() || null); }
+// The Presage key lives in the main process, encrypted in the app's data folder (src/main/keyStore.ts); the
+// page hands a pasted key over when live play starts (App.tsx) and never reads it back. Older builds kept a
+// plain copy in localStorage, so all three of these only clear that copy.
+export function loadKey(): string { safeSet(KEY_KEY, null); return ''; }
+export function saveKey(_k: string): void { safeSet(KEY_KEY, null); }
 export function forgetKey(): void { safeSet(KEY_KEY, null); }
 
 /** Optional time multiplier for screenshots of the simulated body (?speed=8). Never above 20. */

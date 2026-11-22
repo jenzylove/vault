@@ -1,25 +1,39 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { canEncrypt, cleanKey, forgetKey, savedKey, saveKey } from './keyStore';
 
-// The Presage key lives in .env (PRESAGE_API_KEY) or the environment. It is read here, handed to the
-// renderer only when it asks for it to start a session, and never logged.
-function readKey(): string | null {
+// The Presage key, in this order: the PRESAGE_API_KEY environment variable, a .env file (development
+// runs only, never the installed app), then the key the player pasted in the game (keyStore.ts).
+// It stays in this process, goes only to the SDK constructor, and is never logged.
+type KeyFrom = 'env' | 'file' | 'saved';
+function findKey(): { key: string; from: KeyFrom } | null {
   const fromEnv = process.env.PRESAGE_API_KEY?.trim();
-  if (fromEnv) return fromEnv;
-  for (const dir of [app.getAppPath(), process.cwd()]) {
-    const file = join(dir, '.env');
-    if (!existsSync(file)) continue;
-    try {
-      for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
-        const m = /^\s*(?:export\s+)?PRESAGE_API_KEY\s*=\s*(.*)\s*$/.exec(line);
-        if (!m) continue;
-        const v = (m[1] ?? '').replace(/^(['"])(.*)\1$/, '$2').trim();
-        if (v) return v;
-      }
-    } catch { /* unreadable .env: no key */ }
+  if (fromEnv) return { key: fromEnv, from: 'env' };
+  if (!app.isPackaged) {
+    for (const dir of [app.getAppPath(), process.cwd()]) {
+      const file = join(dir, '.env');
+      if (!existsSync(file)) continue;
+      try {
+        for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+          const m = /^\s*(?:export\s+)?PRESAGE_API_KEY\s*=\s*(.*)\s*$/.exec(line);
+          if (!m) continue;
+          const v = (m[1] ?? '').replace(/^(['"])(.*)\1$/, '$2').trim();
+          if (v) return { key: v, from: 'file' };
+        }
+      } catch { /* unreadable .env: no key */ }
+    }
   }
-  return null;
+  const saved = savedKey();
+  return saved ? { key: saved, from: 'saved' } : null;
+}
+
+// Installed app: the Presage runtime DLLs sit unpacked beside app.asar (electron-builder.yml, asarUnpack).
+// Windows cannot load a DLL from inside the archive, so point the SDK at the unpacked copy.
+const CAPI: Partial<Record<NodeJS.Platform, string>> = { win32: 'smartspectra_capi.dll', darwin: 'libsmartspectra_capi.dylib', linux: 'libsmartspectra_capi.so' };
+if (app.isPackaged && !process.env.SMARTSPECTRA_CAPI_PATH && CAPI[process.platform]) {
+  const lib = join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', '@smartspectra', `node-sdk-${process.platform}-${process.arch}`, CAPI[process.platform]!);
+  if (existsSync(lib)) process.env.SMARTSPECTRA_CAPI_PATH = lib;
 }
 
 // Presage main process bridge. Loading it starts no session (and spends no credits); a session only
@@ -36,7 +50,22 @@ if (process.env.VAULT_NO_SDK !== '1') {
   }
 }
 
-ipcMain.handle('vault:presage', () => ({ key: bindIpc ? readKey() : null, sdk: !!bindIpc }));
+// What the page may know: whether live play can run and where the key comes from. Never the key itself.
+ipcMain.handle('vault:presage', () => {
+  const k = bindIpc ? findKey() : null;
+  return { sdk: !!bindIpc, hasKey: !!k, from: k?.from ?? null, encrypted: canEncrypt() };
+});
+// The player pasted a key: keep it (encrypted) for the SDK. Only our own page may set or clear it.
+ipcMain.handle('vault:key:save', (e, raw: unknown) => {
+  if (!ownPage(e.senderFrame?.url ?? '')) throw new Error('not allowed');
+  const key = cleanKey(raw);
+  if (!key) return { ok: false, saved: false, encrypted: false };
+  return { ok: true, ...saveKey(key) };
+});
+ipcMain.handle('vault:key:forget', (e) => {
+  if (!ownPage(e.senderFrame?.url ?? '')) throw new Error('not allowed');
+  forgetKey();
+});
 
 // Native camera session. The renderer SDK copies every 1280x720 frame out of the page and over IPC,
 // which cannot keep 30 fps on a busy laptop (SDK error "frame rate too low"). Here the SDK reads the
@@ -77,7 +106,7 @@ async function stopNative(id: number): Promise<void> {
 ipcMain.handle('vault:native:start', async (e, metrics: number[]) => {
   const wc = e.sender;
   await stopNative(wc.id);
-  const key = readKey();
+  const key = findKey()?.key;
   if (!bindIpc || !key) throw new Error('Live mode is off: no SDK or no Presage key.');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('@smartspectra/node-sdk') as {
@@ -124,6 +153,12 @@ function createWindow(): void {
     webPreferences: { preload: join(__dirname, '../preload/index.js'), sandbox: false, contextIsolation: true, offscreen: hidden },
   });
   if (!hidden) win.once('ready-to-show', () => win.show());
+  // The only outside link is where to get a free Presage key: open it in the browser, never in the game window.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\/physiology\.presagetech\.com(\/|$)/.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => { if (!ownPage(url)) e.preventDefault(); });
   // The SDK binding tears its session down when this window closes.
   if (bindIpc) bindIpc(win, { logger: (level, msg) => (level === 'error' ? console.error : level === 'warn' ? console.warn : console.log)(`[smartspectra] ${msg}`) });
   if (process.env.ELECTRON_RENDERER_URL) win.loadURL(process.env.ELECTRON_RENDERER_URL);

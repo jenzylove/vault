@@ -444,3 +444,7 @@
 .final .take-big { margin: 4px 0 6px; }
 .final .final-choice { display: flex; gap: 16px; justify-content: center; margin-top: 18px; }
 .choices .choice .lab { color: inherit; }
+
+/* Presage key entry (KeyEntry.tsx): links read in velvet on the cream sheet */
+.key-entry .link { color: var(--velvet); font-weight: 700; text-underline-offset: 3px; }
+.key-entry .link:hover { color: var(--crimson); }
