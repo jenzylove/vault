@@ -1,4 +1,8 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+// simulated games are slow when the probe runs alongside in another worker
+vi.setConfig({ testTimeout: 60000 });
+import { WALK } from '../../src/renderer/engine/lines';
 import {
   newGame, step, RULES, VALUE_TABLE, createBanker, learnBaseline, SimBody, makeSimPlayer, extractFeatures,
   type GameState, type PeekFeatures, type Baseline, BASELINE_MS, PEEK_MS,
@@ -66,7 +70,7 @@ describe('step', () => {
     s = step(s, { type: 'choose', boxId: trap.id });
     s = step(s, { type: 'peekDone', features: caught });
     expect(s.read?.decision).toBe('walk');
-    expect(s.read?.reason).toBe('Dud. Your breath stopped for 2.0 seconds.');
+    expect(WALK.breath('2.0')).toContain(s.read?.reason);
     expect(s.read?.signal).toBe('breath');
     expect(s.boxes.find((b) => b.id === trap.id)!.state).toBe('burned');
     expect(s.log[0]!.correct).toBeNull();
@@ -90,16 +94,15 @@ describe('step', () => {
     expect(s.lastOutcome?.correct).toBe(false);
   });
 
-  test('full heat busts you: the banker throws you out with nothing', () => {
+  test('heat alone never busts you: only strikes do', () => {
     let s = toBoard();
-    s = { ...s, pile: 1000, heatParts: { ...s.heatParts, traps: 0.9 }, heat: 0.9, trapsBought: 3 };
-    const trap = s.boxes.find((b) => b.kind === 'trap')!;
-    s = step(s, { type: 'choose', boxId: trap.id });
+    s = { ...s, pile: 1000, heatParts: { ...s.heatParts, traps: 1 }, heat: 1 };
+    const box = s.boxes.find((b) => b.kind === 'small')!;
+    s = step(s, { type: 'choose', boxId: box.id });
     s = step(s, { type: 'peekDone', features: calm });
-    if (s.phase === 'bankerRead') s = step(s, { type: 'sell' });
-    expect(s.busted).toBe(true);
-    expect(s.phase).toBe('reveal');
-    expect(s.pile).toBe(0);
+    if (s.phase === 'bankerRead') s = step(s, { type: 'open' });
+    expect(s.busted).toBe(false);
+    expect(s.phase).toBe('audit');
   });
 
   test('leaving keeps the pile and ends the game', () => {
@@ -137,6 +140,6 @@ describe('createBanker (stateful wrapper)', () => {
     const r = b.read(f, g.boxes[0]!, g);
     expect(r.decision).toBe('walk');
     expect(r.signal).toBe('breath');
-    expect(r.reason).toMatch(/^Dud\. Your breath stopped for \d\.\d seconds\.$/);
+    expect(r.reason).toMatch(/^Dud\. .*\d\.\d seconds/);
   });
 });

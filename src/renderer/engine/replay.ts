@@ -6,6 +6,8 @@ import type { BankerRead, BoxKind, PeekFeatures } from './types';
 import { MIN_QUALITY } from './features';
 import { levelConfig, type LevelNo } from './levels';
 import { PEEK_MS } from './timing';
+import { VERDICT, pickLine, strikeLine, type LinePick } from './lines';
+import type { BoxOutcome } from './game';
 
 export type MarkKind = 'catch' | 'shallow' | 'rate' | 'blinks' | 'face' | 'pulse' | 'talk';
 export interface ReplayMark {
@@ -65,16 +67,38 @@ export function replayMarks(f: PeekFeatures, level: LevelNo): ReplayMark[] {
   return out;
 }
 
-/** His one line once the box is settled. kind is what the box held (the player saw it). */
-export function replayVerdict(f: PeekFeatures, read: BankerRead, kind: BoxKind, level: LevelNo): ReplayVerdict {
+/** What the replay knows about how the safe was settled (all optional: older callers pass none). */
+export interface VerdictContext {
+  /** how the safe was settled */
+  result?: BoxOutcome['result'];
+  /** this safe cost a strike */
+  strike?: boolean;
+  /** strikes after this safe (the outcome carries it) */
+  strikes?: number;
+  /** seeded line pick; defaults to the one his read was spoken from */
+  pick?: LinePick;
+}
+
+/**
+ * His one line once the box is settled. kind is what the box held (the player saw it).
+ * Pass the settled BoxOutcome as ctx so a dud you sold him (or a Double Cross catch) is called as a strike.
+ */
+export function replayVerdict(f: PeekFeatures, read: BankerRead, kind: BoxKind, level: LevelNo, ctx: VerdictContext = {}): ReplayVerdict {
   const marks = replayMarks(f, level);
+  const pick = ctx.pick ?? read.lines;
+  if (ctx.strike) {
+    const how = read.decision === 'walk' ? 'caught' : 'sold';
+    return { line: strikeLine(Math.max(1, ctx.strikes ?? 1), how, pick), caught: read.decision === 'walk', marks };
+  }
   if (read.decision === 'walk') {
-    return { line: `There. ${detailFor(f, read.driver ?? null)} ${kind === 'trap' ? 'I knew it was a dud.' : 'So I passed.'}`, caught: true, marks };
+    const d = detailFor(f, read.driver ?? null);
+    return { line: kind === 'trap' ? pickLine(VERDICT.walkDud(d), pick, 'verdict.walkDud') : pickLine(VERDICT.walkLoot(d), pick, 'verdict.walkLoot'), caught: true, marks };
   }
-  if (read.decision === 'unread') return { line: 'I could not read you there, so I paid blind.', caught: false, marks };
+  if (read.decision === 'unread') return { line: pickLine(VERDICT.unread, pick, 'verdict.unread'), caught: false, marks };
   if (kind === 'trap') {
+    if (ctx.result === 'opened') return { line: pickLine(VERDICT.dudKept, pick, 'verdict.dudKept'), caught: false, marks };
     const saw = marks.some((m) => m.kind !== 'talk') && read.pTrap > 0.35;
-    return { line: saw ? 'I saw something, but not enough. You got me.' : 'I saw nothing. You got me.', caught: false, marks };
+    return { line: saw ? pickLine(VERDICT.missedSaw, pick, 'verdict.missedSaw') : pickLine(VERDICT.missed, pick, 'verdict.missed'), caught: false, marks };
   }
-  return { line: f.breathCatchMs === 0 ? 'Your breath stayed even. I believed you.' : 'I believed you.', caught: false, marks };
+  return { line: f.breathCatchMs === 0 ? pickLine(VERDICT.believedCalm, pick, 'verdict.believedCalm') : pickLine(VERDICT.believed, pick, 'verdict.believed'), caught: false, marks };
 }

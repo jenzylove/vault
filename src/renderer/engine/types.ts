@@ -63,4 +63,6 @@ export interface BankerRead {
   signal: BankerSignal;
   /** The single measure that carried the call, when one did. */
   driver?: 'breath' | 'shallow' | 'rate' | 'blinks' | 'joy' | 'alarm' | null;
+  /** The seeded pick his line came from (game seed and turn), so the replay speaks from the same pick. */
+  lines?: { seed: number; turn: number };
 }

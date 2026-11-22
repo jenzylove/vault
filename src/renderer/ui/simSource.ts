@@ -7,8 +7,17 @@ import type { BoxKind } from '../engine';
 import type { SignalFrame, SignalSource, SourceStatus } from '../signals/types';
 import { StatusHub } from '../signals/status';
 
-/** A source that can be told what the player just saw (only a simulated body needs this). */
-export interface PeekAware { onPeek(kind: BoxKind): void }
+/** Which look this is: the game's seed and turn (engine linePick(game)). Makes a sample job repeatable. */
+export interface PeekKey { seed: number; turn: number }
+
+/** A source that can be told what the player just saw (only a simulated body needs this).
+ *  Call it when the contents show (the start of the read). */
+export interface PeekAware { onPeek(kind: BoxKind, at?: PeekKey): void }
+
+/** One number from the game's seed and turn: the sample body's draw for that look. */
+export function peekKey(at: PeekKey): number {
+  return (Math.imul((at.seed >>> 0) ^ 0x2c1b3c6d, 0x9e3779b1) + Math.imul(at.turn + 1, 0x85ebca6b)) >>> 0;
+}
 export function isPeekAware(s: SignalSource): s is SignalSource & PeekAware {
   return typeof (s as Partial<PeekAware>).onPeek === 'function';
 }
@@ -25,9 +34,15 @@ export class SimulatedSource implements SignalSource, PeekAware {
   private readonly fps = 30;
   private hub = new StatusHub(); // no camera: no stream, no validation packets, never an SDK error
 
-  /** speed > 1 runs simulated time faster than the wall clock (screenshots and tests only). */
-  constructor(seed = Date.now() % 100000, strategy: Strategy = 'honest', private speed = 1) {
-    this.body = new SimBody(makeSimPlayer(strategy, seed), seed, this.fps);
+  /**
+   * The sample run body gives itself away at about half the duds (see SAMPLE_BODY in engine/sim.ts).
+   * Pass the job's seed to make a sample job repeatable. 'honest' (the old default) also plays the
+   * sample body; any other strategy plays that strategy.
+   * speed > 1 runs simulated time faster than the wall clock (screenshots and tests only).
+   */
+  constructor(seed = Date.now() % 100000, strategy: Strategy = 'sample', private speed = 1) {
+    const s = strategy === 'honest' ? 'sample' : strategy;
+    this.body = new SimBody(makeSimPlayer(s, seed), seed, this.fps);
   }
 
   subscribe(cb: (f: SignalFrame) => void): () => void {
@@ -35,7 +50,7 @@ export class SimulatedSource implements SignalSource, PeekAware {
     return () => { this.subs.delete(cb); };
   }
 
-  onPeek(kind: BoxKind): void { this.body.react(kind); }
+  onPeek(kind: BoxKind, at?: PeekKey): void { this.body.react(kind, at ? peekKey(at) : undefined); }
 
   status(): SourceStatus { return this.hub.get(); }
   onStatus(cb: (s: SourceStatus) => void): () => void { return this.hub.on(cb); }

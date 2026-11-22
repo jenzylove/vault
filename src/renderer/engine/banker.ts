@@ -3,6 +3,7 @@ import { MIN_QUALITY } from './features';
 import { clamp } from './dsp';
 import { DEFAULT_LEVEL, levelConfig, type LevelNo } from './levels';
 import { PEEK_MS } from './timing';
+import { OFFER, UNREAD, WALK, pickLine, type LinePick } from './lines';
 
 /**
  * The banker: a per player Gaussian naive Bayes (trap vs treasure) over standardized features,
@@ -53,6 +54,8 @@ export interface BankerView {
   trapsBought: number;
   board: { kind: BoxKind | null; value: number }[]; // kind known only for revealed boxes; null = unknown
   boxesTotal: { small: number[]; big: number[]; trap: number };
+  /** seeded pick for his spoken line (the game's seed and turn); absent = the first line of each bank */
+  lines?: LinePick;
 }
 
 export function featureVector(f: PeekFeatures): number[] {
@@ -176,41 +179,42 @@ const secs = (ms: number): string => (ms / 1000).toFixed(1);
 const pct = (x: number): number => Math.round(Math.abs(x) * 100);
 
 function walkReason(f: PeekFeatures, driver: FeatureName | null, view: BankerView): string {
-  if (f.talking && (driver === null || GROUP[driver] === 'breath')) return 'Dud. You started talking the moment you looked.';
+  const pick = view.lines;
+  if (f.talking && (driver === null || GROUP[driver] === 'breath')) return pickLine(WALK.talking, pick, 'walk.talking');
   switch (driver) {
-    case 'breath': return `Dud. Your breath stopped for ${secs(f.breathCatchMs)} seconds.`;
-    case 'shallow': return `Dud. Your breathing went ${pct(f.shallowing)}percent shallower.`;
+    case 'breath': return pickLine(WALK.breath(secs(f.breathCatchMs)), pick, 'walk.breath');
+    case 'shallow': return pickLine(WALK.shallow(pct(f.shallowing)), pick, 'walk.shallow');
     case 'rate': return f.rateChange <= -0.99
-      ? 'Dud. You did not take a single breath.'
-      : `Dud. Your breathing ${f.rateChange > 0 ? 'sped up' : 'slowed'} by ${pct(f.rateChange)} percent.`;
+      ? pickLine(WALK.noBreath, pick, 'walk.noBreath')
+      : pickLine(WALK.rate(f.rateChange > 0 ? 'sped up' : 'slowed', pct(f.rateChange)), pick, 'walk.rate');
     case 'blinks': {
       const secsW = Math.round((f.windowMs ?? PEEK_MS) / 1000);
-      if (f.blinkBurst < 0) return `Dud. You stopped blinking for ${secsW} seconds.`;
-      return `Dud. You blinked ${f.blinkCount ?? 0} times in ${secsW} seconds. You usually blink ${Math.round(f.expectedBlinks ?? 0)}.`;
+      if (f.blinkBurst < 0) return pickLine(WALK.blinkStop(secsW), pick, 'walk.blinkStop');
+      return pickLine(WALK.blinkBurst(f.blinkCount ?? 0, secsW, Math.round(f.expectedBlinks ?? 0)), pick, 'walk.blinkBurst');
     }
     case 'joy': return (f.exprDelta.happy ?? 0) > 0
-      ? 'Dud. You smiled, and you smiled the same way at your last dud.'
-      : 'Dud. Your smile dropped the moment you looked.';
-    case 'alarm': return `Dud. Your face jumped: surprise up ${pct((f.exprDelta.surprise ?? 0) + (f.exprDelta.fear ?? 0))} points.`;
+      ? pickLine(WALK.smile, pick, 'walk.smile')
+      : pickLine(WALK.smileDrop, pick, 'walk.smileDrop');
+    case 'alarm': return pickLine(WALK.alarm(pct((f.exprDelta.surprise ?? 0) + (f.exprDelta.fear ?? 0))), pick, 'walk.alarm');
     default: return view.trapsBought > 0
-      ? `Not worth it. You already sold me ${view.trapsBought} dud${view.trapsBought > 1 ? 's' : ''}.`
-      : 'Dud. Something changed when you looked. I pass.';
+      ? pickLine(WALK.sold(view.trapsBought === 1 ? 'a dud' : `${view.trapsBought} duds`), pick, 'walk.sold')
+      : pickLine(WALK.vague, pick, 'walk.vague');
   }
 }
 
-function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number, ev: number[], walkAt: number, face: boolean): string {
+function offerReason(f: PeekFeatures, pTrap: number, pBig: number, offer: number, ev: number[], walkAt: number, face: boolean, pick: LinePick | undefined): string {
   const smiled = face && (f.exprDelta.happy ?? 0) > 0.06;
   const calmBreath = f.breathCatchMs === 0 && Math.abs(f.rateChange) < 0.3 && f.shallowing < 0.2;
-  if (smiled && calmBreath && pBig < 0.5) return `Gold? You smiled, but your breathing didn't change. I'm not sure. I'll pay ${offer}.`;
-  if (pBig >= 0.5) return `Gold bars. ${smiled ? 'That smile was real.' : 'Your breathing picked up.'} I'll pay ${offer}.`;
+  if (smiled && calmBreath && pBig < 0.5) return pickLine(OFFER.smileCalm(offer), pick, 'offer.smileCalm');
+  if (pBig >= 0.5) return smiled ? pickLine(OFFER.bigSmile(offer), pick, 'offer.bigSmile') : pickLine(OFFER.big(offer), pick, 'offer.big');
   if (pTrap > walkAt * 0.75) {
     const worst = ev.indexOf(Math.max(...ev));
     const name = FEATURE_NAMES[worst] ?? 'breath';
     const what = GROUP[name] === 'breath' ? 'your breathing' : GROUP[name] === 'blinks' ? 'your blinking' : 'your face';
-    return `Close call. Something in ${what} moved. I'll risk ${offer}.`;
+    return pickLine(OFFER.close(what, offer), pick, 'offer.close');
   }
-  if (f.breathCatchMs === 0) return `Real loot, I think. Your breath stayed even. I'll pay ${offer}.`;
-  return `Real loot, I think. I'll pay ${offer}.`;
+  if (f.breathCatchMs === 0) return pickLine(OFFER.calm(offer), pick, 'offer.calm');
+  return pickLine(OFFER.plain(offer), pick, 'offer.plain');
 }
 
 /** Pure read. Decides walk, offer or unread, prices it, and says why in one plain sentence. */
@@ -227,7 +231,7 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
     const pTrap = clamp((urTraps + PRIOR.pseudo * pri.pTrap) / (ur.length + PRIOR.pseudo), 0.02, 0.98);
     const evT = pri.pBigGivenTreasure * pri.bigMean + (1 - pri.pBigGivenTreasure) * pri.smallMean;
     const offer = round10((1 - pTrap) * evT * (1 - m) * BANKER_RULES.unreadDiscount);
-    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: `I could not read you on that one, so I'll only pay ${offer}.`, signal: 'none', driver: null };
+    return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: pickLine(UNREAD(offer), view.lines, 'unread'), signal: 'none', driver: null, lines: view.lines };
   }
 
   const ev = evidence(model, f);
@@ -265,12 +269,12 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
     if (best < 0.7) driver = null; // no single signal carried it: heat or the board did
     if (caught) driver = 'breath';
     const d = driver as FeatureName | null;
-    return { pTrap, pBig, decision: 'walk', reason: walkReason(f, d, view), signal: d ? GROUP[d] : 'none', driver: d };
+    return { pTrap, pBig, decision: 'walk', reason: walkReason(f, d, view), signal: d ? GROUP[d] : 'none', driver: d, lines: view.lines };
   }
   // the signal that most supported "treasure"
   let best = Infinity;
   let calmDriver: FeatureName | null = null;
   ev.forEach((x, i) => { if (x < best) { best = x; calmDriver = FEATURE_NAMES[i] ?? null; } });
   const cd = calmDriver as FeatureName | null;
-  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, offer, ev, walkAt, face), signal: cd && best < -0.5 ? GROUP[cd] : 'none', driver: null };
+  return { pTrap, pBig, decision: 'offer', offer, reason: offerReason(f, pTrap, pBig, offer, ev, walkAt, face, view.lines), signal: cd && best < -0.5 ? GROUP[cd] : 'none', driver: null, lines: view.lines };
 }

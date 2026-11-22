@@ -16,7 +16,8 @@ export type Strategy =
   | 'freeze'      // freezes blank at every peek (breath stops, blinks stop, face flat)
   | 'holdBreath'  // inhales and holds through every peek
   | 'fakeSmile'   // natural breath, puts on a big smile at traps
-  | 'hide';       // ducks out of the camera at traps
+  | 'hide'        // ducks out of the camera at traps
+  | 'sample';     // the keyless sample run: gives itself away at about half the duds, now and then a small hold at loot
 
 export const STRATEGIES: readonly Strategy[] = ['honest', 'steady', 'fakeGasp', 'freeze', 'holdBreath', 'fakeSmile', 'hide'];
 
@@ -35,6 +36,8 @@ export interface SimPlayerParams {
   pulseLeak: number;         // bpm rise per trap seen
   bigExcite: number;         // breathing speeds up at a big treasure (share)
   fakeGaspAtTreasure: boolean;
+  /** the sample run body: its reactions come from SAMPLE_BODY, drawn per look from a seeded stream */
+  sample: boolean;
   freeze: boolean;
   holdEveryPeek: boolean;
   fakeSmileAtTrap: boolean;
@@ -69,6 +72,7 @@ export function makeSimPlayer(strategy: Strategy, seed: number): SimPlayerParams
     holdEveryPeek: false,
     fakeSmileAtTrap: false,
     hideAtTrap: false,
+    sample: false,
     blinkRatePerMin: r.range(8, 22),
     pulse: r.range(60, 85),
     dropoutPerMin: r.range(0, 1.5),
@@ -104,9 +108,26 @@ export function makeSimPlayer(strategy: Strategy, seed: number): SimPlayerParams
     case 'hide':
       p.hideAtTrap = true;
       break;
+    case 'sample':
+      // a fairly steady thief who slips about half the time; reactions come from SAMPLE_BODY
+      p.sample = true;
+      p.talkProb = 0;
+      p.dropoutPerMin = Math.min(p.dropoutPerMin, 0.3);
+      break;
   }
   return p;
 }
+
+/** How the sample run body gives itself away. Shares of looks, times in ms. */
+export const SAMPLE_BODY = {
+  dudSlip: 0.5,                 // share of duds where it gives itself away
+  dudHoldMs: [1000, 2500],      // the breath hold when it slips
+  dudHoldAtMs: [150, 800],      // how soon after the contents show
+  dudBlinkBurst: 0.4,           // when it slips: chance of a blink burst too
+  quietBlinkBurst: 0.15,        // when it does not slip: chance of a blink burst alone
+  lootHold: 0.2,                // share of loot looks with a small hold
+  lootHoldMs: [500, 1100],
+} as const;
 
 type SegKind = 'in' | 'top' | 'out' | 'bottom' | 'sharpIn' | 'hold';
 interface Seg { kind: SegKind; start: number; dur: number; from: number; to: number; }
@@ -140,9 +161,12 @@ export class SimBody {
   private pulseExtra = 0;
   private pulseAvg: number;
   private suppressBlinksUntil = 0;
+  private readonly seed: number;
+  private looks = 0;
 
   constructor(params: SimPlayerParams, seed: number, fps = 30) {
     this.params = params;
+    this.seed = seed;
     this.r = createRng(seed ^ 0x51ed27);
     this.dtMs = 1000 / fps;
     this.cycleP = params.periodMs;
@@ -254,9 +278,14 @@ export class SimBody {
     return out;
   }
 
-  /** The player has just seen the contents of a box. Schedule this player's reactions. */
-  react(kind: BoxKind): void {
+  /**
+   * The player has just seen the contents of a box. Schedule this player's reactions.
+   * `key` seeds the sample body's draw for this look (pass a key from the game seed and turn so a job
+   * replays the same); without it the sample body counts its own looks from its seed.
+   */
+  react(kind: BoxKind, key?: number): void {
     const p = this.params;
+    if (p.sample) { this.reactSample(kind, key); return; }
     const r = this.r;
     const t = this.t;
     const treasure = kind !== 'trap';
@@ -301,6 +330,38 @@ export class SimBody {
       if (p.fakeGaspAtTreasure) {
         this.pending.push({ at: t + r.range(400, 1200), type: 'catch', holdMs: r.range(1200, 2200) });
       }
+    }
+    this.pending.sort((a, b) => a.at - b.at);
+  }
+
+  /** The sample run body: a fairly steady thief who slips at about half the duds. */
+  private reactSample(kind: BoxKind, key?: number): void {
+    const p = this.params;
+    const t = this.t;
+    const k = key ?? (Math.imul(this.seed >>> 0, 0x9e3779b1) + this.looks) >>> 0;
+    this.looks++;
+    const rr = createRng((k ^ 0x5a3e11) >>> 0);
+    const B = SAMPLE_BODY;
+    this.exprMods = this.exprMods.filter((m) => m.until > t);
+    const addExpr = (ek: ExprKey, add: number, from: number, len: number): void => {
+      this.exprMods.push({ key: ek, add, from, until: from + len });
+    };
+    if (kind === 'trap') {
+      if (rr.chance(B.dudSlip)) {
+        const at = t + rr.range(B.dudHoldAtMs[0], B.dudHoldAtMs[1]);
+        this.pending.push({ at, type: 'catch', holdMs: rr.range(B.dudHoldMs[0], B.dudHoldMs[1]) });
+        this.shallowMod = { from: at, until: at + 5000, k: rr.range(0.08, 0.25) };
+        if (rr.chance(B.dudBlinkBurst)) this.blinkMod = { from: at, until: at + 3500, k: rr.range(2.5, 4) };
+        addExpr('surprise', 0.06 * p.faceLeak, at, 2500);
+        this.pulseExtra += 3;
+      } else {
+        this.shallowMod = { from: t, until: t + 5000, k: 0.03 };
+        if (rr.chance(B.quietBlinkBurst)) this.blinkMod = { from: t + 300, until: t + 3300, k: rr.range(1.8, 2.6) };
+      }
+    } else {
+      const big = kind === 'big';
+      addExpr('happy', (big ? 0.15 : 0.05) * p.faceLeak, t + 500, 4000);
+      if (rr.chance(B.lootHold)) this.pending.push({ at: t + rr.range(300, 1200), type: 'catch', holdMs: rr.range(B.lootHoldMs[0], B.lootHoldMs[1]) });
     }
     this.pending.sort((a, b) => a.at - b.at);
   }

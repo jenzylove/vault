@@ -6,6 +6,7 @@ import type { BoxKind, PeekFeatures } from './types';
 import { MIN_QUALITY } from './features';
 import { computeScore, type GameState } from './game';
 import { LEVELS, type LevelNo } from './levels';
+import { MEMORY, pickLine } from './lines';
 
 export type TellKey = 'breath' | 'shallow' | 'rate' | 'blinks' | 'smile' | 'surprise' | 'fear' | 'pulse';
 export const TELL_KEYS: readonly TellKey[] = ['breath', 'shallow', 'rate', 'blinks', 'smile', 'surprise', 'fear', 'pulse'];
@@ -220,13 +221,17 @@ export function shareTellLine(key: TellKey | null): string {
   return key ? `My tell: ${PHRASE[key].me}. Can you hide yours?` : 'He could not find my tell. Can he find yours?';
 }
 
-/** The line that opens the next run, from the last game in the history (null on a first game). */
-export function memoryLine(history: TellHistory): string | null {
+/**
+ * The line that opens the next run, from the last game in the history (null on a first game).
+ * Picked by a seeded rng: pass the new job's seed; the turn is how many games are on record.
+ */
+export function memoryLine(history: TellHistory, seed = 0): string | null {
   const last = history.games[history.games.length - 1];
   if (!last) return null;
-  if (!last.biggest) return 'Last time I could not find your tell. I am looking harder now.';
+  const pick = { seed, turn: history.games.length - 1 };
+  if (!last.biggest) return pickLine(MEMORY.none, pick, 'memory.none');
   const e = last.tells[last.biggest]?.effect ?? 1;
-  return `Last time ${PHRASE[last.biggest].past} at ${e >= 0 ? 'duds' : 'loot'}. I am watching for that now.`;
+  return pickLine(MEMORY.named(PHRASE[last.biggest].past, e >= 0 ? 'duds' : 'loot'), pick, 'memory.named');
 }
 
 export interface HideTrend { key: TellKey | null; trend: 'first' | 'better' | 'worse' | 'same' | 'unknown'; line: string; }

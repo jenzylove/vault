@@ -1,4 +1,7 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+// simulated games are slow when the probe runs alongside in another worker
+vi.setConfig({ testTimeout: 60000 });
 import {
   JOBS, jobById, bankRun, emptyStash, isUnlocked, unlockProgress, newlyUnlocked, nextLocked, parseStash,
   newGame, step, runLeft, heistPay, learnBaseline, extractFeatures, SimBody, makeSimPlayer, playSimGame, minGoodMs,

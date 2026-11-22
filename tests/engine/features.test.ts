@@ -1,10 +1,14 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+// simulated games are slow when the probe runs alongside in another worker
+vi.setConfig({ testTimeout: 60000 });
 import type { SignalFrame } from '../../src/renderer/signals/types';
 import {
   SimBody, makeSimPlayer, learnBaseline, extractFeatures, readBanker, newGame, bankerView, step,
   type SimPlayerParams, BASELINE_MS, PEEK_MS,
 } from '../../src/renderer/engine';
 import { emptyModel } from '../../src/renderer/engine/banker';
+import { UNREAD } from '../../src/renderer/engine/lines';
 
 function bodyFor(p: SimPlayerParams, seed: number, fps = 30): { body: SimBody; baseline: ReturnType<typeof learnBaseline> } {
   const body = new SimBody(p, seed, fps);
@@ -119,7 +123,7 @@ describe('extractFeatures (simulated traces)', () => {
     const box = s.boxes[0]!;
     const read = readBanker(emptyModel(), f, box, bankerView(s));
     expect(read.decision).toBe('unread');
-    expect(read.reason).toMatch(/could not read you/);
+    expect(UNREAD(read.offer!)).toContain(read.reason);
   });
 
   test('blink bursts and talking are picked up', () => {

@@ -1,10 +1,14 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
+
+// simulated games are slow when the probe runs alongside in another worker
+vi.setConfig({ testTimeout: 60000 });
 import {
   SimBody, makeSimPlayer, learnBaseline, extractFeatures, liveRead, restingAlert, replayVerdict, newGame, step, bankerView,
   playSimGame, tellSheet, updateHistory, emptyHistory, memoryLine, hideTrend, tellLine, shareTellLine,
   BASELINE_MS, PEEK_MS, PEEK_LEAD_MS, type PeekFeatures, type SimPlayerParams,
 } from '../../src/renderer/engine';
 import { emptyModel } from '../../src/renderer/engine/banker';
+import { MEMORY, VERDICT } from '../../src/renderer/engine/lines';
 
 const banned = /\b(lie|lies|lying|liar|stress|stressed|anxiety|anxious|poker|straight face)\b/i;
 const dashes = /[-‐-―−]/;
@@ -66,14 +70,14 @@ describe('replay verdict', () => {
 
   test('a walk on a catch names the real hold, a missed trap says so', () => {
     const walk = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'trap', 3);
-    expect(walk.line).toBe('There. You stopped breathing for 1.4 seconds. I knew it was a dud.');
+    expect(VERDICT.walkDud('You stopped breathing for 1.4 seconds.')).toContain(walk.line);
     expect(walk.caught).toBe(true);
     expect(walk.marks[0]).toMatchObject({ kind: 'catch', start: 900, end: 2600, label: 'Held 1.4 seconds' });
     const miss = replayVerdict(calm, { pTrap: 0.2, pBig: 0.2, decision: 'offer', offer: 200, reason: '', signal: 'none', driver: null }, 'trap', 3);
-    expect(miss.line).toBe('I saw nothing. You got me.');
+    expect(VERDICT.missed).toContain(miss.line);
     expect(miss.marks).toHaveLength(0);
     const burnt = replayVerdict(held, { pTrap: 0.9, pBig: 0.2, decision: 'walk', reason: '', signal: 'breath', driver: 'breath' }, 'big', 3);
-    expect(burnt.line).toBe('There. You stopped breathing for 1.4 seconds. So I passed.');
+    expect(VERDICT.walkLoot('You stopped breathing for 1.4 seconds.')).toContain(burnt.line);
   });
 
   test('every replay line from simulated games is plain words', () => {
@@ -102,8 +106,8 @@ describe('he remembers you', () => {
     const first = tellSheet(playSimGame('honest', 3, { practice: true }).state);
     expect(hideTrend([], first).trend).toBe('first');
     h = updateHistory(h, first);
-    if (first.biggest?.key === 'breath') expect(memoryLine(h)).toBe('Last time you held your breath at duds. I am watching for that now.');
-    else expect(memoryLine(h)).toMatch(/^Last time .* I am /);
+    if (first.biggest?.key === 'breath') expect(MEMORY.named('you held your breath', 'duds')).toContain(memoryLine(h));
+    else expect(memoryLine(h)).toMatch(/Last (time|job) /);
     const second = tellSheet(playSimGame('steady', 3, { practice: true }).state);
     const tr = hideTrend(h.games, second);
     expect(['better', 'same', 'worse', 'unknown']).toContain(tr.trend);

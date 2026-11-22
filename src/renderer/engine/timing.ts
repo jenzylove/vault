@@ -4,5 +4,5 @@
 export const BASELINE_MS = 10000;
 /** A peek: 5 s still holds at least one full breath for anyone breathing 12 or more times a minute. */
 export const PEEK_MS = 5000;
-/** Lead in before the contents show (the box lifts and opens). */
-export const PEEK_LEAD_MS = 1500;
+/** Lead in before the contents show: the door is open by 2.0 s and the contents show at 2.2 s; the read starts then. */
+export const PEEK_LEAD_MS = 2200;

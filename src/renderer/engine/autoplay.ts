@@ -5,7 +5,7 @@
 import type { BoxKind } from './types';
 import { learnBaseline } from './baseline';
 import { extractFeatures } from './features';
-import { RULES, newGame, step, type GameState, type RunRules, type Scoreboard } from './game';
+import { MAX_STRIKES, RULES, newGame, offerAt, step, type GameState, type RunRules, type Scoreboard } from './game';
 import { SimBody, makeSimPlayer, type Strategy } from './sim';
 import { createRng } from './rng';
 import { BASELINE_MS, PEEK_MS, PEEK_LEAD_MS } from './timing';
@@ -13,9 +13,12 @@ import type { LevelNo } from './levels';
 
 export { PEEK_MS, BASELINE_MS } from './timing';
 
-/** rational: sells a treasure only above its value, never sells the trap that would bust it, leaves near full heat.
- *  greedy: same, but sells every trap and never leaves. */
+/** rational: sells a treasure only above its value, sells a dud only while a strike would not bust it.
+ *  greedy: same, but sells every dud and never leaves. */
 export type Policy = 'rational' | 'greedy';
+
+/** What a simulated player does at the last safe when the take is on the line: walk out (default) or bet it. */
+export type FinalPolicy = 'leave' | 'bet';
 
 export interface SimGameResult extends Scoreboard {
   strategy: Strategy;
@@ -28,24 +31,22 @@ export interface SimGameResult extends Scoreboard {
   offersSeen: number;
 }
 
-export function wantsToSell(s: GameState, kind: BoxKind, value: number, policy: Policy): boolean {
-  const offer = s.read?.offer ?? 0;
+export function wantsToSell(s: GameState, kind: BoxKind, value: number, policy: Policy, elapsedMs = 0): boolean {
+  const offer = offerAt(s.read?.offer ?? 0, elapsedMs);
   if (kind !== 'trap') return offer > value;
   if (offer <= 0) return false;
   if (policy === 'greedy') return true;
-  // Plan the heat budget: after this sale, can I still peek every sealed box without busting?
-  const sealed = s.boxes.filter((b) => b.state === 'sealed').length;
-  const projected = s.heat + RULES.heatPerTrapBought + sealed * RULES.heatPerPeek + 0.5 * RULES.pulseHeatMax;
-  return projected < RULES.bustAt;
+  // a dud he finds is a strike: never take the one that would bust you
+  return s.strikes + RULES.strikesPerDudFound < MAX_STRIKES;
 }
 
 export function wantsToLeave(s: GameState, policy: Policy): boolean {
   if (policy === 'greedy') return false;
-  // the next peek alone adds heat; leave before it can tip the banker over
-  return s.heat + RULES.heatPerPeek + 0.4 * RULES.pulseHeatMax >= RULES.bustAt;
+  // Double Cross: one strike down, a dud he catches you at would bust you
+  return s.rules.caughtDudStrike && s.strikes >= MAX_STRIKES - 1;
 }
 
-export interface SimOpts { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean; peekMs?: number; rules?: Partial<RunRules> }
+export interface SimOpts { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean; peekMs?: number; rules?: Partial<RunRules>; final?: FinalPolicy }
 
 export function runSimGame(strategy: Strategy, seed: number, opts: SimOpts = {}): SimGameResult {
   return playSimGame(strategy, seed, opts).result;
@@ -73,8 +74,10 @@ export function playSimGame(strategy: Strategy, seed: number, opts: SimOpts = {}
 
   let peeks = 0;
   let trapWalks = 0;
-  while (s.phase === 'board') {
-    if (wantsToLeave(s, policy)) { s = step(s, { type: 'leave' }); break; }
+  const finalPolicy = opts.final ?? 'leave';
+  while (s.phase === 'board' || s.phase === 'finalChoice') {
+    if (s.phase === 'finalChoice') { s = step(s, { type: finalPolicy === 'bet' ? 'finalBet' : 'leave' }); continue; }
+    if (!s.finalBet && wantsToLeave(s, policy)) { s = step(s, { type: 'leave' }); break; }
     const sealed = s.boxes.filter((b) => b.state === 'sealed');
     const box = r.pick(sealed);
     s = step(s, { type: 'choose', boxId: box.id });
@@ -83,14 +86,16 @@ export function playSimGame(strategy: Strategy, seed: number, opts: SimOpts = {}
     s = step(s, { type: 'peekDone', features: extractFeatures(body.run(peekMs), baseline) });
     peeks++;
     if (s.phase === 'bankerRead') {
-      s = step(s, { type: wantsToSell(s, box.kind, box.value, policy) ? 'sell' : 'open' });
+      s = step(s, wantsToSell(s, box.kind, box.value, policy) ? { type: 'sell', elapsedMs: 0 } : { type: 'open' });
+    } else if (s.phase === 'finalCall') {
+      s = step(s, { type: 'next' });
     } else if (box.kind === 'trap') trapWalks++;
     if (s.phase === 'audit') s = step(s, { type: 'next' });
   }
   if (s.phase === 'audit' || s.phase === 'board') s = step(s, { type: 'leave' });
   if (s.phase === 'reveal') s = step(s, { type: 'reveal' });
   const score = s.score as Scoreboard;
-  const trapSaleTotal = s.log.filter((o) => o.kind === 'trap' && o.result === 'sold').reduce((a, o) => a + (o.offer ?? 0), 0);
+  const trapSaleTotal = s.log.filter((o) => o.kind === 'trap' && o.result === 'sold').reduce((a, o) => a + (o.paid ?? 0), 0);
   const burnedValue = s.log.filter((o) => o.kind !== 'trap' && o.result === 'burned').reduce((a, o) => a + o.value, 0);
   const offersSeen = s.log.filter((o) => o.decision !== 'walk').length;
   return { result: { ...score, strategy, policy, seed, peeks, trapWalks, trapSaleTotal, burnedValue, offersSeen }, state: s };
