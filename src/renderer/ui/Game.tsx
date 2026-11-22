@@ -112,6 +112,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const [offerMs, setOfferMs] = useState(0);
   const offerMsRef = useRef(0);
   const [tooSlow, setTooSlow] = useState(false);
+  /** He kept watching while the offer was up and caught your breath: the deal is off. */
+  const [flinched, setFlinched] = useState(false);
   /** The latest strike: which one and when, so its lamp flashes. */
   const [strikeAt, setStrikeAt] = useState<{ n: number; at: number } | null>(null);
   /** The last safe's call: 0 he thinks, 1 he calls it, 2 the truth and your take. */
@@ -510,7 +512,24 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
   // the ticking offer: his price falls every second; let it run out and you keep what is inside
   const offerKey = game.phase === 'bankerRead' ? `${gameNo.current}:${game.log.length}` : null;
-  useEffect(() => { offerMsRef.current = 0; setOfferMs(0); setTooSlow(false); }, [offerKey]);
+  useEffect(() => { offerMsRef.current = 0; setOfferMs(0); setTooSlow(false); setFlinched(false); }, [offerKey]);
+  // he keeps reading you while you decide: a breath hold during the offer and he pulls it
+  useEffect(() => {
+    if (!offerKey || paused || tooSlow || !source || !game.baseline) return;
+    const baseline = game.baseline;
+    const buf: SignalFrame[] = [];
+    const unsub = source.subscribe((f) => { buf.push(f); });
+    const t0 = performance.now();
+    const id = setInterval(() => {
+      // a short grace: a breath already held as the look ended is not a flinch at his offer
+      if (performance.now() - t0 < 800) { buf.length = 0; return; }
+      const g = gameRef.current;
+      const r = liveRead(buf, baseline, g.model, bankerView(g));
+      if (r.catchSpan) { setCatchPulse(performance.now()); setFlinched(true); setTooSlow(true); }
+    }, 150);
+    return () => { clearInterval(id); unsub(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offerKey, paused, tooSlow, source, game.baseline]);
   useEffect(() => {
     if (!offerKey || paused || tooSlow) return;
     let last = performance.now();
@@ -529,7 +548,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   useEffect(() => {
     if (!tooSlow || game.phase !== 'bankerRead') return;
     speechRef.current?.cancel();
-    const s = speak('Too slow.', P > 1 ? 2 : 1);
+    const s = speak(flinched ? 'You flinched. The deal is off.' : 'Too slow.', P > 1 ? 2 : 1);
     hit();
     const id = setTimeout(() => dispatch({ type: 'expire' }), 1200 / P);
     return () => { clearTimeout(id); s.cancel(); };
@@ -671,7 +690,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
 
   const takeOrKeep = useCallback((t: 'sell' | 'open') => {
     if (game.phase !== 'bankerRead' || tooSlow) return;
-    dispatch(t === 'sell' ? { type: 'sell', elapsedMs: offerMsRef.current } : { type: 'open' });
+    // his price holds for the whole window; the clock and his eyes are the pressure
+    dispatch(t === 'sell' ? { type: 'sell', elapsedMs: 0 } : { type: 'open' });
   }, [game.phase, tooSlow, dispatch]);
 
   const leave = useCallback(() => {
@@ -963,7 +983,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                       alert={job.hints ? liveAlert : null} final={game.finalBet} take={game.pile} />
                   )}
                   {game.phase === 'bankerRead' && game.read && activeBox && (
-                    <OfferStage offer={game.read.offer ?? 0} elapsed={offerMs} tooSlow={tooSlow} blind={game.read.decision === 'unread'} quote={spoken}
+                    <OfferStage offer={game.read.offer ?? 0} elapsed={offerMs} tooSlow={tooSlow} flinched={flinched} blind={game.read.decision === 'unread'} quote={spoken}
                       kind={activeBox.kind} value={activeBox.value} strikes={game.strikes}
                       onTake={() => takeOrKeep('sell')} onKeep={() => takeOrKeep('open')} />
                   )}
@@ -1268,40 +1288,37 @@ function PeekStage({ kind, value, recRef, caught, peekMs, alert, final, take }: 
 }
 
 /** His offer: the big cash card is the button, and the price falls while the ring drains. */
-function OfferStage({ offer, elapsed, tooSlow, blind, quote, kind, value, strikes, onTake, onKeep }: {
-  offer: number; elapsed: number; tooSlow: boolean; blind: boolean; quote: string; kind: BoxKind; value: number; strikes: number;
+function OfferStage({ offer, elapsed, tooSlow, flinched, blind, quote, kind, value, strikes, onTake, onKeep }: {
+  offer: number; elapsed: number; tooSlow: boolean; flinched: boolean; blind: boolean; quote: string; kind: BoxKind; value: number; strikes: number;
   onTake: () => void; onKeep: () => void;
 }): JSX.Element {
   const left = Math.max(0, OFFER_WINDOW_MS - elapsed);
   const late = left <= 2000;
-  const price = offerAt(offer, elapsed);
   const dud = kind === 'trap';
   const next = strikes + 1;
   return (
-    <div className="offer2">
+    <div className="offer3">
       {quote && <div className="quote"><span className="who">The Fence</span>&ldquo;{quote}&rdquo;</div>}
       {tooSlow ? (
-        <div className="tooslow">Too slow.</div>
+        <div className="tooslow">{flinched ? 'You flinched. Deal is off.' : 'Too slow. Deal is off.'}</div>
       ) : (
-        <button className={`takecard${late ? ' late' : ''}`} onClick={onTake} aria-label={`Take his ${price}`}>
-          <Ring progress={left / OFFER_WINDOW_MS} label={String(Math.ceil(left / 1000))} />
-          <span className="what">
-            <span className="verb">{blind ? 'Take his blind' : 'Take his'}</span>
-            <span className="price">{money(price)}</span>
-            <span className="falls">Drops every second until you take it</span>
-          </span>
-          <span className="key">T</span>
-        </button>
+        <>
+          <div className={`deal-timer${late ? ' late' : ''}`}><i style={{ width: `${(left / OFFER_WINDOW_MS) * 100}%` }} /></div>
+          <div className="choices">
+            <button className="choice take" onClick={onTake}>
+              <span className="lab">{blind ? 'Take his blind offer' : 'Take his cash'}</span>
+              <span className="amt num">{money(offer)}</span>
+              <span className="key">T</span>
+            </button>
+            <button className="choice keep" onClick={onKeep}>
+              <span className="lab">Keep the safe</span>
+              <span className="amt num">{dud ? 'Dud' : money(value)}</span>
+              <span className="key">K</span>
+            </button>
+          </div>
+          <div className="watch">{dud ? `He is still watching. Sell him this dud and it is strike ${next} of ${MAX_STRIKES}.` : 'He is still watching. Flinch and the deal is off.'}</div>
+        </>
       )}
-      {dud && !tooSlow && (
-        <div className="risk">
-          <span className={`lamp${next >= MAX_STRIKES ? ' on' : ''}`} />
-          {next >= MAX_STRIKES
-            ? <>He will find this dud. Strike {next} sets off the alarm: you lose your take.</>
-            : <>He will find this dud: strike {next} of {MAX_STRIKES}. You keep his cash.</>}
-        </div>
-      )}
-      <Btn ghost k="K" onClick={onKeep} disabled={tooSlow}>Keep what is inside: {dud ? 'a dud' : money(value)}</Btn>
     </div>
   );
 }
@@ -1310,23 +1327,12 @@ function OfferStage({ offer, elapsed, tooSlow, blind, quote, kind, value, strike
 function FinalChoice({ take, onWalk, onBet }: { take: number; onWalk: () => void; onBet: () => void }): JSX.Element {
   return (
     <div className="final">
-      <div className="eyebrow enter">Double or nothing</div>
-      <div className="display enter" style={{ ['--d' as string]: 1 }}>One safe left.</div>
-      <div className="lab enter" style={{ ['--d' as string]: 2, color: 'var(--cream-dim)' }}>Your take</div>
+      <div className="eyebrow enter">Last safe</div>
       <div className="take-big num">{money(take)}</div>
-      <div className="rules enter" style={{ ['--d' as string]: 3 }}>
-        He gets one call: loot or dud. If he calls it wrong, your take doubles to <b>{money(take * 2)}</b>. If he calls it right, you lose it all.
-      </div>
-      <div className="tip enter" style={{ ['--d' as string]: 3 }}>Fool him: look nervous if it is loot, stay calm if it is a dud.</div>
-      <div className="final-choice enter" style={{ ['--d' as string]: 4 }}>
-        <div className="opt">
-          <Btn big k="L" onClick={onWalk}>Walk out with {money(take)}</Btn>
-          <div className="note">Bank it now. The job ends here.</div>
-        </div>
-        <div className="opt">
-          <button className="btn bet big" onClick={onBet}><span className="lbl">Double or nothing</span><span className="key">D</span></button>
-          <div className="note">Crack one more safe. If he calls it wrong, you walk out with {money(take * 2)}.</div>
-        </div>
+      <div className="rules enter" style={{ ['--d' as string]: 2 }}>Fool him once more and it doubles to <b>{money(take * 2)}</b>. Get read and you lose it all.</div>
+      <div className="final-choice enter" style={{ ['--d' as string]: 3 }}>
+        <Btn big k="L" onClick={onWalk}>Walk out</Btn>
+        <button className="btn bet big" onClick={onBet}><span className="lbl">Double or nothing</span><span className="key">D</span></button>
       </div>
     </div>
   );
@@ -1368,7 +1374,7 @@ function outcomeCopy(game: GameState): { stamp: JSX.Element; line: string } {
       : { stamp: <span className="stamp copper">He passed</span>, line: `He passed on it. The safe locked shut with ${money(o.value)} inside.` };
   }
   if (o.expired) {
-    return { stamp: <span className="stamp copper">Too slow</span>, line: trap ? 'His offer ran out. You kept the dud: nothing added.' : `His offer ran out. You kept what was inside: ${money(o.value)} added.` };
+    return { stamp: <span className="stamp copper">No deal</span>, line: trap ? 'No deal. You kept the dud: nothing added.' : `No deal. You kept what was inside: ${money(o.value)} added.` };
   }
   if (o.result === 'sold' && trap) {
     if (game.busted) return { stamp: <span className="stamp">Busted</span>, line: `You sold him a dud for ${money(paid)}, and he found it.` };
