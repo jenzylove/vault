@@ -6,7 +6,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const FILE = 'presage-key.json';
-let cached: string | null | undefined; // undefined until the file has been read once
+let cached: Promise<string | null> | null = null; // the file is read once, then kept in step by save and forget
 
 const keyFile = (): string => join(app.getPath('userData'), FILE);
 
@@ -17,29 +17,33 @@ export function cleanKey(raw: unknown): string | null {
   return v.length >= 8 && v.length <= 512 && /^[\x21-\x7e]+$/.test(v) ? v : null;
 }
 
-export const canEncrypt = (): boolean => { try { return safeStorage.isEncryptionAvailable(); } catch { return false; } };
+export async function canEncrypt(): Promise<boolean> {
+  try { return await safeStorage.isAsyncEncryptionAvailable(); } catch { return false; }
+}
 
-/** The saved key, or null. A file this user cannot decrypt (copied from elsewhere) counts as no key. */
-export function savedKey(): string | null {
-  if (cached !== undefined) return cached;
-  cached = null;
+/** A file this user cannot decrypt (copied from elsewhere) counts as no key. */
+async function readSaved(): Promise<string | null> {
   try {
     const f = keyFile();
     if (!existsSync(f)) return null;
     const s = JSON.parse(readFileSync(f, 'utf8')) as { enc?: unknown; data?: unknown };
     if (typeof s.data !== 'string') return null;
     const raw = Buffer.from(s.data, 'base64');
-    cached = cleanKey(s.enc === true ? safeStorage.decryptString(raw) : raw.toString('utf8'));
-  } catch { cached = null; }
+    return cleanKey(s.enc === true ? (await safeStorage.decryptStringAsync(raw)).result : raw.toString('utf8'));
+  } catch { return null; }
+}
+
+export function savedKey(): Promise<string | null> {
+  cached ??= readSaved();
   return cached;
 }
 
 /** Saves the key (encrypted when the system allows). It is used for this run even if the file cannot be written. */
-export function saveKey(key: string): { saved: boolean; encrypted: boolean } {
-  cached = key;
-  const encrypted = canEncrypt();
+export async function saveKey(key: string): Promise<{ saved: boolean; encrypted: boolean }> {
+  cached = Promise.resolve(key);
   try {
-    const data = (encrypted ? safeStorage.encryptString(key) : Buffer.from(key, 'utf8')).toString('base64');
+    const encrypted = await canEncrypt();
+    const data = (encrypted ? await safeStorage.encryptStringAsync(key) : Buffer.from(key, 'utf8')).toString('base64');
     writeFileSync(keyFile(), JSON.stringify({ v: 1, enc: encrypted, data }), { mode: 0o600 });
     return { saved: true, encrypted };
   } catch {
@@ -48,6 +52,6 @@ export function saveKey(key: string): { saved: boolean; encrypted: boolean } {
 }
 
 export function forgetKey(): void {
-  cached = null;
+  cached = Promise.resolve(null);
   try { rmSync(keyFile(), { force: true }); } catch { /* already gone */ }
 }

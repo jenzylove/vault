@@ -7,7 +7,7 @@ import { canEncrypt, cleanKey, forgetKey, savedKey, saveKey } from './keyStore';
 // runs only, never the installed app), then the key the player pasted in the game (keyStore.ts).
 // It stays in this process, goes only to the SDK constructor, and is never logged.
 type KeyFrom = 'env' | 'file' | 'saved';
-function findKey(): { key: string; from: KeyFrom } | null {
+async function findKey(): Promise<{ key: string; from: KeyFrom } | null> {
   const fromEnv = process.env.PRESAGE_API_KEY?.trim();
   if (fromEnv) return { key: fromEnv, from: 'env' };
   if (!app.isPackaged) {
@@ -24,7 +24,7 @@ function findKey(): { key: string; from: KeyFrom } | null {
       } catch { /* unreadable .env: no key */ }
     }
   }
-  const saved = savedKey();
+  const saved = await savedKey();
   return saved ? { key: saved, from: 'saved' } : null;
 }
 
@@ -51,16 +51,16 @@ if (process.env.VAULT_NO_SDK !== '1') {
 }
 
 // What the page may know: whether live play can run and where the key comes from. Never the key itself.
-ipcMain.handle('vault:presage', () => {
-  const k = bindIpc ? findKey() : null;
-  return { sdk: !!bindIpc, hasKey: !!k, from: k?.from ?? null, encrypted: canEncrypt() };
+ipcMain.handle('vault:presage', async () => {
+  const k = bindIpc ? await findKey() : null;
+  return { sdk: !!bindIpc, hasKey: !!k, from: k?.from ?? null, encrypted: await canEncrypt() };
 });
 // The player pasted a key: keep it (encrypted) for the SDK. Only our own page may set or clear it.
-ipcMain.handle('vault:key:save', (e, raw: unknown) => {
+ipcMain.handle('vault:key:save', async (e, raw: unknown) => {
   if (!ownPage(e.senderFrame?.url ?? '')) throw new Error('not allowed');
   const key = cleanKey(raw);
   if (!key) return { ok: false, saved: false, encrypted: false };
-  return { ok: true, ...saveKey(key) };
+  return { ok: true, ...(await saveKey(key)) };
 });
 ipcMain.handle('vault:key:forget', (e) => {
   if (!ownPage(e.senderFrame?.url ?? '')) throw new Error('not allowed');
@@ -106,7 +106,7 @@ async function stopNative(id: number): Promise<void> {
 ipcMain.handle('vault:native:start', async (e, metrics: number[]) => {
   const wc = e.sender;
   await stopNative(wc.id);
-  const key = findKey()?.key;
+  const key = (await findKey())?.key;
   if (!bindIpc || !key) throw new Error('Live mode is off: no SDK or no Presage key.');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('@smartspectra/node-sdk') as {
