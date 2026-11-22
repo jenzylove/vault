@@ -1122,7 +1122,7 @@ function JobsScreen({ sel, setSel, stash, sim, onPlay, onWipe, canWipe }: {
 function ConsentScreen({ onAgree, onBack }: { onAgree: () => void; onBack: () => void }): JSX.Element {
   const items: [string, JSX.Element][] = [
     ['1', <><b>Your camera reads your breath, blinks, face and pulse</b> while you play. It turns on only after you agree.</>],
-    ['2', <><b>Frames stay on this computer.</b> They are never saved or uploaded. Presage only checks your key, and its telemetry is off. Only your results and tells stay here, and you can wipe them.</>],
+    ['2', <><b>Frames stay on this computer</b> and are never saved or uploaded. Presage checks your key and receives short number summaries of your pulse and breathing (never video), which its service may pass to an AI model. Your results and tells stay here, and you can wipe them.</>],
     ['3', <><b>These are tells, not health readings.</b> A tell is how your body reacts to what you see. This is a game.</>],
     ['4', <><b>Esc turns the camera off</b> at any moment and pauses the job.</>],
   ];

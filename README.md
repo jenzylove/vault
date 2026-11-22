@@ -76,8 +76,8 @@ The SDK is the game's only input. Every decision The Fence makes comes from what
 * **Frames stay on your PC.** Camera frames go from the game to the SDK inside the same app and are never saved or uploaded.
 * **What is stored.** Job results and tell summaries (numbers such as seconds of breath hold), your stash and settings, in the app's local storage on your PC. No video and no raw signal traces. **Wipe my history** on the jobs screen deletes them.
 * **Your Presage key.** Saved encrypted with Windows DPAPI in `%APPDATA%\The Vault`, used only to start the SDK, and removable with **Forget my key**.
-* **Network.** The SDK signs in to Presage to check the key and meter usage. SDK telemetry is turned off in this game. The Fence's voice is recorded audio shipped with the app, so no speech service is called. No analytics.
-* **AI use.** The Fence is a small statistical model that runs on your PC. No language model or cloud AI ever sees your signals. Built with AI coding assistance.
+* **Network.** The SDK signs in to Presage to check the key and meter usage. While a session runs, the SDK also sends Presage short number summaries of pulse, breathing rate and heart rate variability (never video or images), about once a minute, which Presage's service may pass to an AI model to write a check in; the game never requests or shows those replies. SDK telemetry is turned off in this game. The Fence's voice is recorded audio shipped with the app, so no speech service is called. No analytics.
+* **AI use.** The Fence is a small statistical model that runs on your PC; the game itself calls no AI service. Presage's SDK may pass the number summaries above to an AI model on its side, as its documentation describes. Built with AI coding assistance.
 * **A game, not a health product.** It reads tells, how your body reacts to what you see. It makes no health claims.
 
 ## Build from source
