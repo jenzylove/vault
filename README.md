@@ -9,6 +9,7 @@ Crack safes, hide what you found, and sell them to The Fence. He never sees insi
   <img alt="Built for the DEV x MLH Presage SmartSpectra Challenge" src="https://img.shields.io/badge/built%20for-DEV%20x%20MLH%20Presage%20Challenge-6b0f1a">
   <img alt="Presage SmartSpectra Node SDK 3.5" src="https://img.shields.io/badge/Presage-SmartSpectra%20SDK%203.5-a3172a">
   <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-c8743f">
+  <a href="https://vault-pied-kappa.vercel.app"><img alt="Play the sample run in your browser" src="https://img.shields.io/badge/play-in%20your%20browser-1fa06d"></a>
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-1fa06d">
 </p>
 
@@ -18,6 +19,7 @@ Crack safes, hide what you found, and sell them to The Fence. He never sees insi
 
 | Path | What you see | You need | Time |
 |---|---|---|---|
+| **Play in your browser** | The full sample job at [vault-pied-kappa.vercel.app](https://vault-pied-kappa.vercel.app), on any computer | Nothing | 2 min |
 | **A. Sample run** | A full job played by a simulated body: the look, his live suspicion, the deal, strikes, the last safe | The installer only. No camera, no key | 2 min |
 | **B. Live run** | The Fence reads *your* breathing, blinks, face and pulse and prices your safes from them | A webcam and a free Presage key from [physiology.presagetech.com](https://physiology.presagetech.com) | 3 min |
 
