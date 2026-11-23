@@ -2,7 +2,7 @@
  * Local only storage. Game results and tell summaries (never raw signals) and whether they have read the
  * consent screen this session. The Presage key is not kept here: see loadKey below.
  */
-import { emptyHistory, emptyStash, parseStash, type Stash, type TellHistory } from '../engine';
+import { emptyHistory, emptyMemory, emptyStash, parseMemory, parseStash, type BankerMemory, type Stash, type TellHistory } from '../engine';
 
 const HISTORY_KEY = 'vault.history.v1';
 const KEY_KEY = 'vault.presageKey';
@@ -23,8 +23,21 @@ export function loadHistory(): TellHistory {
   } catch { return emptyHistory(); }
 }
 export function saveHistory(h: TellHistory): void { safeSet(HISTORY_KEY, JSON.stringify(h)); }
-/** Wipes results, tells, the Stash and the first job flag: everything this game saved. */
-export function wipeHistory(): void { safeSet(HISTORY_KEY, null); safeSet(STASH_KEY, null); safeSet(FIRST_KEY, null); }
+/** Wipes results, tells, his memory of you, the Stash and the first job flag: everything this game saved. */
+export function wipeHistory(): void { safeSet(HISTORY_KEY, null); safeSet(STASH_KEY, null); safeSet(FIRST_KEY, null); safeSet(MEMORY_KEY, null); }
+
+/** His memory of you: the feature numbers and kind of each safe from your live jobs (numbers only), capped. */
+const MEMORY_KEY = 'vault.memory.v1';
+export function loadMemory(): BankerMemory {
+  const raw = safeGet(MEMORY_KEY);
+  if (!raw) return emptyMemory();
+  try { return parseMemory(JSON.parse(raw)); } catch { return emptyMemory(); }
+}
+export function saveMemory(m: BankerMemory): void {
+  // three decimals is plenty for a feature number and keeps the record small
+  const round = (x: number): number => Math.round(x * 1000) / 1000;
+  safeSet(MEMORY_KEY, JSON.stringify({ ...m, examples: m.examples.map((e) => ({ ...e, x: e.x.map(round), joy: round(e.joy) })) }));
+}
 
 const STASH_KEY = 'vault.stash.v1';
 export function loadStash(): Stash {

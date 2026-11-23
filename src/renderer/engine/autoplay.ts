@@ -10,6 +10,7 @@ import { SimBody, makeSimPlayer, type Strategy } from './sim';
 import { createRng } from './rng';
 import { BASELINE_MS, PEEK_MS, PEEK_LEAD_MS } from './timing';
 import type { LevelNo } from './levels';
+import type { BankerMemory } from './memory';
 
 export { PEEK_MS, BASELINE_MS } from './timing';
 
@@ -46,7 +47,13 @@ export function wantsToLeave(s: GameState, policy: Policy): boolean {
   return s.rules.caughtDudStrike && s.strikes >= MAX_STRIKES - 1;
 }
 
-export interface SimOpts { fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean; peekMs?: number; rules?: Partial<RunRules>; final?: FinalPolicy }
+export interface SimOpts {
+  fps?: number; policy?: Policy; level?: LevelNo; practice?: boolean; peekMs?: number; rules?: Partial<RunRules>; final?: FinalPolicy;
+  /** what he remembers from this player's earlier jobs (memory.ts) */
+  memory?: BankerMemory;
+  /** the same body plays another job: seeds the safes and the body's draws, not who the player is */
+  job?: number;
+}
 
 export function runSimGame(strategy: Strategy, seed: number, opts: SimOpts = {}): SimGameResult {
   return playSimGame(strategy, seed, opts).result;
@@ -56,11 +63,14 @@ export function runSimGame(strategy: Strategy, seed: number, opts: SimOpts = {})
 export function playSimGame(strategy: Strategy, seed: number, opts: SimOpts = {}): { result: SimGameResult; state: GameState } {
   const policy = opts.policy ?? 'rational';
   const player = makeSimPlayer(strategy, seed);
-  const body = new SimBody(player, seed, opts.fps ?? 15);
-  const r = createRng(seed * 31 + 7);
+  const gameSeed = opts.job ? seed + 7919 * opts.job : seed;
+  const body = new SimBody(player, gameSeed, opts.fps ?? 15);
+  const r = createRng(gameSeed * 31 + 7);
 
   const peekMs = opts.peekMs ?? PEEK_MS;
-  let s = step(newGame(seed, opts.level, opts.rules), { type: 'begin' });
+  let s = newGame(gameSeed, opts.level, opts.rules);
+  if (opts.memory) s = step(s, { type: 'remember', memory: opts.memory });
+  s = step(s, { type: 'begin' });
   const baseline = learnBaseline(body.run(BASELINE_MS), peekMs);
   s = step(s, { type: 'baselineDone', baseline });
 

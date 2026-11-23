@@ -33,6 +33,10 @@ Same 400 seeds at Bank 3, but every player bets the last safe instead of walking
 | Duck out of camera at traps | 100% | 29% | 605 | -1229 |
 | Always steady, ignores strikes (sells every dud) | 68% | 37% | 1261 | -439 |
 
+## He remembers you
+
+Three jobs in a row with his memory of each player carried from job to job: see [probe-memory.md](probe-memory.md) (written by `tests/engine/memory-probe.test.ts`).
+
 ## The banker ladder
 
 ### Bank 1: Pickpocket

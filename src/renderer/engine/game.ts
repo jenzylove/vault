@@ -6,6 +6,7 @@ import { MIN_QUALITY } from './features';
 import { createRng } from './rng';
 import { DEFAULT_LEVEL, levelConfig, type LevelNo } from './levels';
 import { FINAL, pickLine, type LinePick } from './lines';
+import { seedModel, type BankerMemory } from './memory';
 
 /** Fixed value table: 5 small, 2 big, 3 traps. Shown on the board. A run peeks 5 of these 10. */
 export const VALUE_TABLE = {
@@ -176,6 +177,8 @@ export interface GameState {
 }
 
 export type GameAction =
+  /** before 'begin': he starts the job remembering these safes from earlier live jobs */
+  | { type: 'remember'; memory: BankerMemory }
   | { type: 'begin' }
   | { type: 'baselineDone'; baseline: Baseline }
   | { type: 'practiceDone'; peeks: { features: PeekFeatures; kind: BoxKind }[] }
@@ -322,6 +325,9 @@ export function heistPay(offer: number, rules: RunRules): number {
 /** Pure reducer. Invalid actions for the current phase return the state unchanged. */
 export function step(s: GameState, a: GameAction): GameState {
   switch (a.type) {
+    case 'remember':
+      return s.phase === 'begin' ? { ...s, model: seedModel(s.level, a.memory) } : s;
+
     case 'begin':
       return s.phase === 'begin' ? { ...s, phase: 'baseline' } : s;
 

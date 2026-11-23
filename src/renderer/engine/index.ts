@@ -3,8 +3,13 @@ export { learnBaseline } from './baseline';
 export { extractFeatures, MIN_QUALITY, CATCH_MARGIN_MS } from './features';
 export {
   readBanker, finalRead, featureVector, evidence, signalWeights, walkThreshold, margin, bankerConfidence,
-  featureMask, PRIOR, BANKER_RULES, type BankerModel, type BankerView,
+  featureMask, PRIOR, BANKER_RULES, notebook, NOTE_LABEL, NOTE_HUNCH, NOTE_SURE, FEATURE_NAMES, type BankerModel, type BankerView,
+  type Notebook, type NoteRow, type FeatureName,
 } from './banker';
+export {
+  emptyMemory, parseMemory, rememberJob, rememberedExamples, seedModel, jobExamples, MEMORY_CAP, MEMORY_DECAY, FIRST_JOB_MEMORY_WEIGHT,
+  type BankerMemory, type MemoryEntry,
+} from './memory';
 export {
   newGame, step, createBanker, bankerView, computeScore, runLeft, defaultRules, heistPay, VALUE_TABLE, RULES, type RunRules,
   type Banker, type GameState, type GameAction, type Phase, type Scoreboard, type BoxOutcome,
@@ -16,7 +21,7 @@ export { runSimGame, playSimGame, PEEK_MS, BASELINE_MS, type Policy, type FinalP
 export { createRng, type Rng } from './rng';
 export { LEVELS, DEFAULT_LEVEL, levelConfig, type BankerLevel, type LevelNo } from './levels';
 export {
-  tellSheet, sayTell, trendSentence, tellLine, shareTellLine, memoryLine, hideTrend, type HideTrend, updateHistory, emptyHistory, tellTrend, unlockedLevel, labelledPeeks, TELL_KEYS, TELL_THRESHOLD,
+  tellSheet, sayTell, trendSentence, tellLine, shareTellLine, memoryLine, rememberLine, hideTrend, type HideTrend, updateHistory, emptyHistory, tellTrend, unlockedLevel, labelledPeeks, TELL_KEYS, TELL_THRESHOLD,
   type Tell, type TellKey, type TellSheet, type TellHistory, type TellHistoryEntry,
 } from './tells';
 export { dailySeed, shareLine } from './daily';

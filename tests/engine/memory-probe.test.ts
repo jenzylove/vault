@@ -1,0 +1,127 @@
+/**
+ * He remembers you: the same SIMULATED players play three jobs in a row, with his memory of them carried
+ * from job to job (memory.ts) and without it. Writes docs/probe-memory.md. If an assertion fails, fix the
+ * RULES, not this test.
+ */
+import { beforeAll, describe, expect, test } from 'vitest';
+import { writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { DEFAULT_LEVEL, type Policy, type SimGameResult, type Strategy } from '../../src/renderer/engine';
+import { playSimGame } from '../../src/renderer/engine/autoplay';
+import { MEMORY_CAP, MEMORY_DECAY, FIRST_JOB_MEMORY_WEIGHT, emptyMemory, rememberJob, type BankerMemory } from '../../src/renderer/engine/memory';
+import { jobById } from '../../src/renderer/engine/jobs';
+
+const NC = 150;
+const CHAIN = 3;
+const ROWS: { key: string; strategy: Strategy; policy: Policy; label: string }[] = [
+  { key: 'honest', strategy: 'honest', policy: 'rational', label: 'Honest (natural tells)' },
+  { key: 'steady', strategy: 'steady', policy: 'rational', label: 'Always steady (skilled breath control)' },
+  { key: 'fakeGasp', strategy: 'fakeGasp', policy: 'rational', label: 'Fake gasp at treasure' },
+  { key: 'freeze', strategy: 'freeze', policy: 'rational', label: 'Freeze blank every peek' },
+  { key: 'holdBreath', strategy: 'holdBreath', policy: 'rational', label: 'Hold breath every peek' },
+  { key: 'fakeSmile', strategy: 'fakeSmile', policy: 'rational', label: 'Fake smile at traps only' },
+  { key: 'hide', strategy: 'hide', policy: 'rational', label: 'Duck out of camera at traps' },
+  { key: 'steadyGreedy', strategy: 'steady', policy: 'greedy', label: 'Always steady, ignores strikes (sells every dud)' },
+];
+
+/** [strategy][job][player] */
+const withMem: Record<string, SimGameResult[][]> = {};
+const noMem: Record<string, SimGameResult[][]> = {};
+/** First Job after two Heists, with and without memory (First Job must stay gentle). */
+const firstAfter: Record<'mem' | 'none', Record<string, SimGameResult[]>> = { mem: {}, none: {} };
+
+function playChain(strategy: Strategy, policy: Policy, seed: number, carry: boolean, last?: 'first'): SimGameResult[] {
+  let mem: BankerMemory = emptyMemory();
+  const out: SimGameResult[] = [];
+  for (let j = 0; j < CHAIN; j++) {
+    const job = last === 'first' && j === CHAIN - 1 ? jobById('first') : jobById('heist');
+    const { result, state } = playSimGame(strategy, seed, { policy, fps: 15, level: job.level, rules: job.rules, memory: carry ? mem : undefined, job: j + 1 });
+    out.push(result);
+    mem = rememberJob(mem, state);
+  }
+  return out;
+}
+
+const avg = (xs: number[]): number => xs.reduce((a, x) => a + x, 0) / Math.max(1, xs.length);
+const se = (xs: number[]): number => {
+  const m = avg(xs);
+  return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / Math.max(1, xs.length - 1) / Math.max(1, xs.length));
+};
+const at = (src: Record<string, SimGameResult[][]>, j: number): Record<string, SimGameResult[]> =>
+  Object.fromEntries(ROWS.map((row) => [row.key, src[row.key]![j]!]));
+const paired = (res: Record<string, SimGameResult[]>, key: string, base = 'honest'): { mean: number; se: number } => {
+  const d = res[key]!.map((r, i) => r.pile - res[base]![i]!.pile);
+  return { mean: avg(d), se: se(d) };
+};
+const col = (res: Record<string, SimGameResult[]>, key: string, f: (r: SimGameResult) => number): number => avg(res[key]!.map(f));
+const winRate = (res: Record<string, SimGameResult[]>, key: string): number => col(res, key, (r) => (r.won ? 1 : 0));
+
+beforeAll(() => {
+  for (const row of ROWS) {
+    withMem[row.key] = Array.from({ length: CHAIN }, () => []);
+    noMem[row.key] = Array.from({ length: CHAIN }, () => []);
+    for (let i = 0; i < NC; i++) {
+      playChain(row.strategy, row.policy, i + 1, true).forEach((r, j) => withMem[row.key]![j]!.push(r));
+      playChain(row.strategy, row.policy, i + 1, false).forEach((r, j) => noMem[row.key]![j]!.push(r));
+    }
+  }
+  for (const k of ['honest', 'steady'] as const) {
+    firstAfter.mem[k] = Array.from({ length: NC }, (_, i) => playChain(k, 'rational', i + 1, true, 'first')[CHAIN - 1]!);
+    firstAfter.none[k] = Array.from({ length: NC }, (_, i) => playChain(k, 'rational', i + 1, false, 'first')[CHAIN - 1]!);
+  }
+  const fmt = (x: number, d = 0): string => x.toFixed(d);
+  const r3 = at(withMem, CHAIN - 1);
+  const n3 = at(noMem, CHAIN - 1);
+  const lines = [
+    '# Incentive probe: he remembers you',
+    '',
+    `${NC} seeded **simulated** players per strategy play three Heists (Bank ${DEFAULT_LEVEL}) in a row, the same body every job. With memory, every safe of a job (the same numbers his model learns from) is carried into the next job: the last job counts ${MEMORY_DECAY}, each job before that ${MEMORY_DECAY} times less, and he keeps the newest ${MEMORY_CAP} safes. Without memory, every job starts from his priors. Mean pile per job; the paired column compares the third job with honest play.`,
+    'Generated by `tests/engine/memory-probe.test.ts` from the simulated body in `src/renderer/engine/sim.ts`. Not recorded people.',
+    '',
+    '| Strategy | Job 1 | Job 2 | Job 3 | Job 3 vs honest (paired) | Job 3 without memory | His accuracy, job 3 (with / without) | Beat him, job 3 (with / without) |',
+    '|---|---:|---:|---:|---:|---:|---:|---:|',
+    ...ROWS.map((row) => {
+      const p = paired(r3, row.key);
+      const per = Array.from({ length: CHAIN }, (_, j) => fmt(col(at(withMem, j), row.key, (r) => r.pile)));
+      return `| ${row.label} | ${per.join(' | ')} | ${row.key === 'honest' ? '' : `${p.mean >= 0 ? '+' : ''}${fmt(p.mean)} ± ${fmt(p.se)}`} | ${fmt(col(n3, row.key, (r) => r.pile))} | ${fmt(100 * col(r3, row.key, (r) => r.bankerAccuracy))}% / ${fmt(100 * col(n3, row.key, (r) => r.bankerAccuracy))}% | ${fmt(100 * winRate(r3, row.key))}% / ${fmt(100 * winRate(n3, row.key))}% |`;
+    }),
+    '',
+    '± is one standard error.',
+    '',
+    `First Job stays gentle: there everything he remembers counts for at most ${FIRST_JOB_MEMORY_WEIGHT} safes. After two Heists, honest players beat First Job ${fmt(100 * winRate(firstAfter.mem, 'honest'))}% of the time with his memory and ${fmt(100 * winRate(firstAfter.none, 'honest'))}% without; steady players ${fmt(100 * winRate(firstAfter.mem, 'steady'))}% and ${fmt(100 * winRate(firstAfter.none, 'steady'))}%.`,
+  ];
+  writeFileSync(resolve(__dirname, '../../docs/probe-memory.md'), lines.join('\n') + '\n');
+}, 1500000);
+
+describe('he remembers you (three jobs in a row, memory carried)', () => {
+  test('faking, freezing, holding and hiding still lose to honest play on every job', () => {
+    for (let j = 0; j < CHAIN; j++) {
+      const res = at(withMem, j);
+      for (const k of ['fakeGasp', 'freeze', 'holdBreath', 'hide']) expect(paired(res, k).mean, `${k} job ${j + 1}`).toBeLessThan(0);
+      for (const k of ['fakeGasp', 'freeze', 'holdBreath']) {
+        const d = paired(res, k);
+        expect(d.mean, `${k} job ${j + 1}`).toBeLessThan(-3 * d.se);
+      }
+      // a fake smile gains nothing worth having
+      expect(paired(res, 'fakeSmile').mean, `fakeSmile job ${j + 1}`).toBeLessThan(0.01 * col(res, 'honest', (r) => r.pile));
+    }
+  });
+
+  test('skilled steady play still beats honest play once he remembers you', () => {
+    for (let j = 0; j < CHAIN; j++) {
+      const res = at(withMem, j);
+      const d = paired(res, 'steady');
+      expect(d.mean).toBeGreaterThan(3 * d.se);
+      for (const k of ['fakeGasp', 'freeze', 'holdBreath', 'hide', 'fakeSmile']) expect(winRate(res, k)).toBeLessThanOrEqual(winRate(res, 'honest') + 0.01);
+    }
+  });
+
+  test('his memory reads honest players at least as well as starting fresh', () => {
+    expect(col(at(withMem, CHAIN - 1), 'honest', (r) => r.bankerAccuracy)).toBeGreaterThanOrEqual(col(at(noMem, CHAIN - 1), 'honest', (r) => r.bankerAccuracy) - 0.01);
+  });
+
+  test('First Job stays gentle after other jobs', () => {
+    expect(winRate(firstAfter.mem, 'honest')).toBeGreaterThanOrEqual(winRate(firstAfter.none, 'honest') - 0.06);
+    expect(winRate(firstAfter.mem, 'honest')).toBeGreaterThan(0.3);
+  });
+});

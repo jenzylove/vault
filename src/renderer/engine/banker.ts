@@ -13,7 +13,7 @@ import { OFFER, UNREAD, WALK, pickLine, type LinePick } from './lines';
  */
 
 export const FEATURE_NAMES = ['breath', 'shallow', 'rate', 'blinks', 'joy', 'alarm'] as const;
-type FeatureName = (typeof FEATURE_NAMES)[number];
+export type FeatureName = (typeof FEATURE_NAMES)[number];
 const GROUP: Record<FeatureName, BankerSignal> = {
   breath: 'breath', shallow: 'breath', rate: 'breath', blinks: 'blinks', joy: 'face', alarm: 'face',
 };
@@ -43,7 +43,11 @@ export const BANKER_RULES = {
   walkOnCatch: true,   // it never buys a box you caught your breath at: a catch faked at treasure just burns it
 } as const;
 
-export interface Example { x: number[]; kind: BoxKind; unread: boolean; joy: number; }
+/**
+ * One labelled safe. w is how much it counts (1 for this job; safes he remembers from earlier jobs count
+ * less the older they are, see memory.ts); age is how many jobs back it was seen (0 or absent = this job).
+ */
+export interface Example { x: number[]; kind: BoxKind; unread: boolean; joy: number; w?: number; age?: number; }
 export interface BankerModel { examples: Example[]; level: LevelNo; }
 
 /** What the banker can see of the game: its own heat, track record and the value board. */
@@ -82,21 +86,24 @@ interface Stats { muTrap: number[]; muTreasure: number[]; sd: number[]; }
 
 export function modelStats(model: BankerModel): Stats {
   // A faster learner counts each labelled box for more against its priors.
-  const w = levelConfig(model.level).learnWeight;
+  const lw = levelConfig(model.level).learnWeight;
+  const wt = (e: Example): number => lw * (e.w ?? 1);
   const kOf = (i: number): number => (i < 3 ? PRIOR.breathPseudo : PRIOR.pseudo);
   const read = model.examples.filter((e) => !e.unread);
   const traps = read.filter((e) => e.kind === 'trap');
   const treas = read.filter((e) => e.kind !== 'trap');
+  const total = (xs: Example[]): number => xs.reduce((s, e) => s + wt(e), 0);
   const mu = (prior: readonly number[], xs: Example[]): number[] =>
-    prior.map((p, i) => (kOf(i) * p + w * xs.reduce((s, e) => s + (e.x[i] as number), 0)) / (kOf(i) + w * xs.length));
+    prior.map((p, i) => (kOf(i) * p + xs.reduce((s, e) => s + wt(e) * (e.x[i] as number), 0)) / (kOf(i) + total(xs)));
   const muTrap = mu(PRIOR.trap, traps);
   const muTreasure = mu(PRIOR.treasure, treas);
+  const wRead = total(read);
   const sd = PRIOR.sd.map((s0, i) => {
     const k = kOf(i);
     let ss = 2 * k * s0 * s0;
-    for (const e of traps) ss += w * ((e.x[i] as number) - (muTrap[i] as number)) ** 2;
-    for (const e of treas) ss += w * ((e.x[i] as number) - (muTreasure[i] as number)) ** 2;
-    return Math.max(0.35 * s0, Math.sqrt(ss / (2 * k + w * read.length)));
+    for (const e of traps) ss += wt(e) * ((e.x[i] as number) - (muTrap[i] as number)) ** 2;
+    for (const e of treas) ss += wt(e) * ((e.x[i] as number) - (muTreasure[i] as number)) ** 2;
+    return Math.max(0.35 * s0, Math.sqrt(ss / (2 * k + wRead)));
   });
   return { muTrap, muTreasure, sd };
 }
@@ -134,6 +141,72 @@ export function signalWeights(model: BankerModel): Record<'breath' | 'blinks' | 
   const s = modelStats(model);
   const sep = (i: number): number => Math.abs((s.muTrap[i] as number) - (s.muTreasure[i] as number)) / (s.sd[i] as number);
   return { breath: Math.max(sep(0), sep(1), sep(2)), blinks: sep(3), face: Math.max(sep(4), sep(5)) };
+}
+
+// ---------- his notebook: what he has learned about this player ----------
+
+/** What each feature is called in his notebook, in plain words. */
+export const NOTE_LABEL: Record<FeatureName, string> = {
+  breath: 'Breath hold', shallow: 'Shallow breathing', rate: 'Breath pace', blinks: 'Blinks', joy: 'Smile', alarm: 'Face jump',
+};
+
+export interface NoteRow {
+  key: FeatureName;
+  label: string;
+  /** learned separation, empty minus full, in spreads (signed); 0 until he has seen both kinds */
+  sep: number;
+  /** how sure he is that this gives you away */
+  word: 'nothing yet' | 'a hunch' | 'sure';
+  /** which kind of safe it shows at (null while he has nothing) */
+  side: 'empty' | 'full' | null;
+}
+
+export interface Notebook {
+  /** safes he has watched with a clear read (this job plus the ones he remembers) */
+  watched: number;
+  /** of those, safes from earlier jobs */
+  remembered: number;
+  /** one row per signal this Fence can read */
+  rows: NoteRow[];
+}
+
+/** From this separation on he has a hunch; from NOTE_SURE on he is sure. */
+export const NOTE_HUNCH = 0.4;
+export const NOTE_SURE = 1;
+
+/**
+ * What he has learned from this player's own safes, feature by feature: the gap between their empty
+ * and full safes in units of the spread he uses to read them. Unlike his read, the starting belief here
+ * is neutral (both kinds alike), so every row starts at nothing and only this player's safes move it.
+ */
+export function notebook(model: BankerModel): Notebook {
+  const s = modelStats(model);
+  const lw = levelConfig(model.level).learnWeight;
+  const mask = featureMask(model.level);
+  const read = model.examples.filter((e) => !e.unread);
+  const traps = read.filter((e) => e.kind === 'trap');
+  const treas = read.filter((e) => e.kind !== 'trap');
+  const k = PRIOR.pseudo;
+  const wT = traps.reduce((a, e) => a + lw * (e.w ?? 1), 0);
+  const wR = treas.reduce((a, e) => a + lw * (e.w ?? 1), 0);
+  const rows: NoteRow[] = [];
+  FEATURE_NAMES.forEach((key, i) => {
+    if (!mask[i]) return;
+    let sep = 0;
+    if (wT > 0 && wR > 0) {
+      const m0 = ((PRIOR.trap[i] as number) + (PRIOR.treasure[i] as number)) / 2;
+      const mT = (k * m0 + traps.reduce((a, e) => a + lw * (e.w ?? 1) * (e.x[i] as number), 0)) / (k + wT);
+      const mR = (k * m0 + treas.reduce((a, e) => a + lw * (e.w ?? 1) * (e.x[i] as number), 0)) / (k + wR);
+      sep = (mT - mR) / (s.sd[i] as number);
+    }
+    const a = Math.abs(sep);
+    rows.push({
+      key, label: NOTE_LABEL[key], sep,
+      word: a >= NOTE_SURE ? 'sure' : a >= NOTE_HUNCH ? 'a hunch' : 'nothing yet',
+      side: a >= NOTE_HUNCH ? (sep > 0 ? 'empty' : 'full') : null,
+    });
+  });
+  return { watched: read.length, remembered: read.filter((e) => (e.age ?? 0) > 0).length, rows };
 }
 
 const logit = (p: number): number => Math.log(p / (1 - p));
@@ -273,8 +346,9 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
   if (f.quality < MIN_QUALITY) {
     // Unread: blind offer from what unread boxes have turned out to be for this player.
     const ur = model.examples.filter((e) => e.unread);
-    const urTraps = ur.filter((e) => e.kind === 'trap').length;
-    const pTrap = clamp((urTraps + PRIOR.pseudo * pri.pTrap) / (ur.length + PRIOR.pseudo), 0.02, 0.98);
+    const urTraps = ur.filter((e) => e.kind === 'trap').reduce((a, e) => a + (e.w ?? 1), 0);
+    const urAll = ur.reduce((a, e) => a + (e.w ?? 1), 0);
+    const pTrap = clamp((urTraps + PRIOR.pseudo * pri.pTrap) / (urAll + PRIOR.pseudo), 0.02, 0.98);
     const evT = pri.pBigGivenTreasure * pri.bigMean + (1 - pri.pBigGivenTreasure) * pri.smallMean;
     const offer = round10((1 - pTrap) * evT * (1 - m) * BANKER_RULES.unreadDiscount);
     return { pTrap, pBig: pri.pBigGivenTreasure, decision: 'unread', offer, reason: pickLine(UNREAD, view.lines, 'unread'), signal: 'none', driver: null, lines: view.lines };
@@ -286,14 +360,17 @@ export function readBanker(model: BankerModel, f: PeekFeatures, _box: Box, view:
   const pTrap = sigmoid(z);
 
   // P(big | treasure): board prior nudged by the smile, learned from this player's revealed treasures.
-  const treas = model.examples.filter((e) => e.kind !== 'trap' && !e.unread);
+  // Only this job's treasures: a smile at gold is read against today's face, never against what he
+  // remembers (an old smile would let a copied grin move his price; probe-memory.md).
+  const treas = model.examples.filter((e) => e.kind !== 'trap' && !e.unread && !((e.age ?? 0) > 0));
   const k = PRIOR.pseudo;
   const bigs = treas.filter((e) => e.kind === 'big');
   const smalls = treas.filter((e) => e.kind === 'small');
   // Uninformative prior: the face says nothing about big vs small until this player's own
   // revealed treasures show a difference.
-  const muBig = (k * 0.03 + bigs.reduce((s, e) => s + e.joy, 0)) / (k + bigs.length);
-  const muSmall = (k * 0.03 + smalls.reduce((s, e) => s + e.joy, 0)) / (k + smalls.length);
+  const wsum = (xs: Example[]): number => xs.reduce((s, e) => s + (e.w ?? 1), 0);
+  const muBig = (k * 0.03 + bigs.reduce((s, e) => s + (e.w ?? 1) * e.joy, 0)) / (k + wsum(bigs));
+  const muSmall = (k * 0.03 + smalls.reduce((s, e) => s + (e.w ?? 1) * e.joy, 0)) / (k + wsum(smalls));
   const sdJ = 0.05;
   // a put on grin counts no more than the biggest smile this player has shown at a real treasure
   const joy = clamp(f.exprDelta.happy ?? 0, Math.min(muBig, muSmall) - sdJ, Math.max(muBig, muSmall));

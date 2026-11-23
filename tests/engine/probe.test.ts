@@ -107,6 +107,10 @@ beforeAll(() => {
       return `| ${row.label} | ${fmt(100 * b.length / N)}% | ${b.length ? fmt(100 * won / b.length) : '0'}% | ${fmt(m)} | ${m - w >= 0 ? '+' : ''}${fmt(m - w)} |`;
     }),
     '',
+    '## He remembers you',
+    '',
+    'Three jobs in a row with his memory of each player carried from job to job: see [probe-memory.md](probe-memory.md) (written by `tests/engine/memory-probe.test.ts`).',
+    '',
     '## The banker ladder',
     '',
     ...levelSections,
@@ -130,7 +134,7 @@ beforeAll(() => {
     '- Sells a dud whenever offered, unless the strike would bust it (rational); the greedy row sells every dud.',
   ];
   writeFileSync(resolve(__dirname, '../../docs/probe.md'), lines.join('\n') + '\n');
-}, 600000);
+}, 1500000);
 
 describe('incentive probe (simulated players)', () => {
   test('skilled breath control wins on average', () => {

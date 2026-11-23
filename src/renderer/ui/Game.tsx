@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   JOBS, MIN_QUALITY, BASELINE_MS, PEEK_LEAD_MS, OFFER_WINDOW_MS, MAX_STRIKES, GHOST_OFFER, offerAt,
   bankRun, bankerView, linePick, dailySeed, extractFeatures, heistPay, hideTrend, isUnlocked, jobById, learnBaseline, liveRead, memoryLine, newGame,
+  emptyMemory, rememberJob, rememberLine, seedModel, type BankerMemory,
   newlyUnlocked, nextLocked, readsList, replayVerdict, restingAlert, runLeft, sayTell, shareTellLine, step, tellLine, tellSheet, unlockProgress, updateHistory,
   type Baseline, type BoxKind, type GameAction, type GameState, type HideTrend, type Job, type JobId, type PeekFeatures, type ReplayVerdict, type Stash,
   type TellHistory, type TellSheet, type FinalCall, type BoxOutcome,
@@ -23,7 +24,7 @@ import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
 import { speak, stopSpeaking, setMuted, isMuted } from './speech';
 import {
-  loadHistory, saveHistory, wipeHistory, loadKey, saveKey, forgetKey, pace, loadHowSeen, saveHowSeen,
+  loadHistory, saveHistory, wipeHistory, loadMemory, saveMemory, loadKey, saveKey, forgetKey, pace, loadHowSeen, saveHowSeen,
   loadStash, saveStash, firstJobOffered, markFirstJobOffered,
 } from './storage';
 import { renderShareCard } from './shareCard';
@@ -137,6 +138,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const recRef = useRef<{ progress: () => number } | null>(null);
   const speechRef = useRef<{ cancel: () => void } | null>(null);
   const gameNo = useRef(0);
+  /** A sample body's jobs, remembered for this session only (never saved). */
+  const simMemory = useRef<BankerMemory>(emptyMemory());
   const endedFor = useRef(-1);
 
   useEffect(() => { void loadFonts(); }, []);
@@ -144,12 +147,18 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const dispatch = useCallback((a: GameAction) => setGame((s) => step(s, a)), []);
 
   // ---------- starting and stopping ----------
-  const enterPlay = useCallback(() => {
+  const enterPlay = useCallback((kind?: SignalSource['kind']) => {
     setPaused(false);
     setPauseWhy(null);
     setScreen('play');
+    // he starts the job remembering you: your live jobs from this computer, or this sample body's earlier jobs
+    const sim = kind === 'simulated';
+    const mem = sim ? simMemory.current : loadMemory();
+    const g0 = gameRef.current;
+    if (g0.phase === 'begin') setMemLine(rememberLine(seedModel(g0.level, mem), g0.seed, mem.jobs) ?? (sim ? null : memoryLine(loadHistory(), g0.seed)));
     setGame((s) => {
-      let g = step(s, { type: 'begin' });
+      let g = step(s, { type: 'remember', memory: mem });
+      g = step(g, { type: 'begin' });
       if (lastBaseline.current) g = step(g, { type: 'baselineDone', baseline: lastBaseline.current });
       return g;
     });
@@ -175,7 +184,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
       setScreen('key');
       return;
     }
-    if (src.kind !== 'live') enterPlay();
+    if (src.kind !== 'live') enterPlay(src.kind);
   }, [enterPlay]);
 
   const startGame = useCallback((id: JobId, with_?: { src: SignalSource; b: SignalBus }) => {
@@ -202,7 +211,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     setOpenSaid(false);
     tape.current = null;
     setWantPractice(!loadHowSeen());
-    setMemLine(memoryLine(loadHistory()));
+    setMemLine(null); // set when the job starts, from what he remembers
     const src = with_?.src ?? source;
     const b = with_?.b ?? bus;
     if (src && b && src.kind !== 'live') { void beginPlay(src, b); return; }
@@ -227,6 +236,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     setSource(src);
     setBus(b);
     lastBaseline.current = null; // a new body needs a new calm
+    simMemory.current = emptyMemory(); // and a sample body is a stranger to him
     return { src, b };
   }, [createSource, keyOnFile, source]);
 
@@ -296,7 +306,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   // ---------- lineup ----------
   const lineupReady = useCallback(() => {
     if (lineupFor.current === 'resume') { setPaused(false); setPauseWhy(null); setScreen('play'); return; }
-    enterPlay();
+    enterPlay('live');
   }, [enterPlay]);
   const lineupBack = useCallback(() => {
     stopCamera();
@@ -633,7 +643,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
       const next = updateHistory(prev, sheet, new Date().toISOString());
       saveHistory(next);
       setHistory(next);
-    }
+      saveMemory(rememberJob(loadMemory(), game));
+    } else simMemory.current = rememberJob(simMemory.current, game);
     const sc = game.score;
     const stashBefore = loadStash();
     const stashAfter = sc && !simRun ? bankRun(stashBefore, jobId, sc) : stashBefore;

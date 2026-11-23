@@ -7,6 +7,7 @@ import { MIN_QUALITY } from './features';
 import { computeScore, type GameState } from './game';
 import { LEVELS, type LevelNo } from './levels';
 import { MEMORY, pickLine } from './lines';
+import { NOTE_SURE, notebook, type BankerModel, type FeatureName } from './banker';
 
 export type TellKey = 'breath' | 'shallow' | 'rate' | 'blinks' | 'smile' | 'surprise' | 'fear' | 'pulse';
 export const TELL_KEYS: readonly TellKey[] = ['breath', 'shallow', 'rate', 'blinks', 'smile', 'surprise', 'fear', 'pulse'];
@@ -237,6 +238,24 @@ export function memoryLine(history: TellHistory, seed = 0): string | null {
   if (!last.biggest) return pickLine(MEMORY.none, pick, 'memory.none');
   const e = last.tells[last.biggest]?.effect ?? 1;
   return pickLine(MEMORY.named(PHRASE[last.biggest].past, e >= 0 ? 'empty safes' : 'full safes'), pick, 'memory.named');
+}
+
+/** His notebook rows said as tells. */
+const NOTE_TELL: Record<FeatureName, TellKey> = { breath: 'breath', shallow: 'shallow', rate: 'rate', blinks: 'blinks', joy: 'smile', alarm: 'surprise' };
+
+/**
+ * The line that opens a job, from what his model holds about you (the safes he remembers): the signal
+ * he is surest about, on the side it shows. Null when he remembers nothing. Seeded like memoryLine.
+ */
+export function rememberLine(model: BankerModel, seed = 0, turn = 0): string | null {
+  const past = model.examples.filter((e) => (e.age ?? 0) > 0);
+  if (past.length === 0) return null;
+  const pick = { seed, turn };
+  const rows = notebook({ ...model, examples: past }).rows;
+  const top = rows.reduce<(typeof rows)[number] | null>((b, r) => (!b || Math.abs(r.sep) > Math.abs(b.sep) ? r : b), null);
+  if (!top || Math.abs(top.sep) < NOTE_SURE) return pickLine(MEMORY.none, pick, 'memory.none');
+  const key = NOTE_TELL[top.key];
+  return pickLine(MEMORY.named(PHRASE[key].past, top.sep >= 0 ? 'empty safes' : 'full safes'), pick, 'memory.named');
 }
 
 export interface HideTrend { key: TellKey | null; trend: 'first' | 'better' | 'worse' | 'same' | 'unknown'; line: string; }
