@@ -7,7 +7,7 @@ import { MIN_QUALITY } from './features';
 import { computeScore, type GameState } from './game';
 import { LEVELS, type LevelNo } from './levels';
 import { MEMORY, pickLine } from './lines';
-import { NOTE_SURE, notebook, type BankerModel, type FeatureName } from './banker';
+import { NOTE_HUNCH, notebook, type BankerModel, type FeatureName } from './banker';
 
 export type TellKey = 'breath' | 'shallow' | 'rate' | 'blinks' | 'smile' | 'surprise' | 'fear' | 'pulse';
 export const TELL_KEYS: readonly TellKey[] = ['breath', 'shallow', 'rate', 'blinks', 'smile', 'surprise', 'fear', 'pulse'];
@@ -253,7 +253,8 @@ export function rememberLine(model: BankerModel, seed = 0, turn = 0): string | n
   const pick = { seed, turn };
   const rows = notebook({ ...model, examples: past }).rows;
   const top = rows.reduce<(typeof rows)[number] | null>((b, r) => (!b || Math.abs(r.sep) > Math.abs(b.sep) ? r : b), null);
-  if (!top || Math.abs(top.sep) < NOTE_SURE) return pickLine(MEMORY.none, pick, 'memory.none');
+  // the same bar as his notebook: from a hunch on he names it, so the line never contradicts the panel
+  if (!top || Math.abs(top.sep) < NOTE_HUNCH) return pickLine(MEMORY.none, pick, 'memory.none');
   const key = NOTE_TELL[top.key];
   return pickLine(MEMORY.named(PHRASE[key].past, top.sep >= 0 ? 'empty safes' : 'full safes'), pick, 'memory.named');
 }
