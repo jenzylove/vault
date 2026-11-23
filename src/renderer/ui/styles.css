@@ -457,3 +457,28 @@
 .sdkf-cap { font-size: 10px; color: rgba(58,7,16,0.55); margin: 2px 0 6px; }
 .sdkf-row { display: flex; justify-content: space-between; gap: 10px; padding: 2px 0; border-top: 1px solid rgba(58,7,16,0.08); }
 .sdkf-row b { font-family: var(--bold); font-weight: 700; text-align: right; }
+
+/* his notebook: what he knows about you. A strip over the safes, under the steps: it never covers a safe, the open safe or the offer */
+.notebook { position: absolute; left: 25.5%; width: min(41%, 700px); top: calc(var(--gut) + 46px); padding: 7px 14px 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 14px; row-gap: 1px; animation: rise 0.5s var(--ease) both; }
+.nb-head { grid-column: 1 / -1; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.nb-title { font-family: var(--display); font-size: var(--fs-m); line-height: 1.05; color: var(--velvet); }
+.nb-count { font-size: var(--fs-xs); color: rgba(58,7,16,0.72); }
+.nb-count b { font-family: var(--bold); font-weight: 700; color: var(--velvet); }
+.nb-row { display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'lab word' 'bar bar' 'side side'; column-gap: 8px; row-gap: 2px; padding: 3px 6px; margin: 0 -6px; border-radius: 10px; }
+.nb-lab { grid-area: lab; font-weight: 700; font-size: var(--fs-xs); color: var(--velvet-deep); }
+.nb-word { grid-area: word; font-family: var(--bold); font-weight: 700; font-size: var(--fs-xs); color: rgba(58,7,16,0.5); }
+.nb-row.hunch .nb-word { color: var(--copper); }
+.nb-row.sure .nb-word { color: var(--alarm); }
+.nb-bar { grid-area: bar; position: relative; height: 7px; border-radius: 99px; background: rgba(107,15,26,0.12); overflow: hidden; }
+.nb-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; transition: width 0.6s var(--ease); }
+.nb-bar i.now { background: var(--cream-dim); }
+.nb-row.hunch .nb-bar i.now { background: var(--copper); }
+.nb-row.sure .nb-bar i.now { background: var(--alarm); }
+.nb-bar i.was { background: rgba(107,15,26,0.22); }
+.nb-side { grid-area: side; font-size: calc(var(--fs-xs) * 0.92); color: rgba(58,7,16,0.62); line-height: 1.2; }
+.nb-row.pulse { animation: nbpulse 1.8s var(--ease) both; }
+@keyframes nbpulse { 0% { background: rgba(200,116,63,0.0) } 12% { background: rgba(200,116,63,0.38); transform: scale(1.03) } 100% { background: rgba(200,116,63,0); transform: none } }
+.nb-foot { font-size: calc(var(--fs-xs) * 0.92); color: rgba(58,7,16,0.6); margin-top: 2px; }
+.notebook.learned { position: static; width: 100%; max-width: 560px; grid-template-columns: 1fr; row-gap: 4px; padding: 10px 14px 12px; animation-delay: 0.3s; }
+.notebook.learned .nb-head { display: grid; gap: 2px; }
+.notebook.learned .nb-row { grid-template-columns: minmax(7em, 0.9fr) 1.4fr auto; grid-template-areas: 'lab bar word' 'side side side'; align-items: center; }

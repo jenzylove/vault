@@ -19,6 +19,7 @@ import { V_OK, V_NO_FACE, V_MANY_FACES, validationWords } from '../signals/statu
 import { Lineup } from './Lineup';
 import { KeyEntry } from './KeyEntry';
 import { SdkFeed } from './SdkFeed';
+import { Notebook, NotebookLearned } from './Notebook';
 import type { BankerState, SceneBox, SceneBoxKind, ScenePracticeBox } from '../scene/types';
 import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
@@ -960,6 +961,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
             <BodyPanel bus={paused ? null : bus} stream={paused ? null : srcStatus?.stream ?? null} sim={sim} bpm={bpm} />
             {feedOn && <SdkFeed source={paused ? null : source} validation={srcStatus?.validation ?? null} sim={sim} />}
             {(game.phase === 'board' || game.phase === 'bankerRead') && <ValuesBoard game={game} />}
+            {job.hints && !(lost && reading) && ['board', 'peek', 'bankerRead', 'audit', 'finalChoice', 'finalCall'].includes(game.phase) && <Notebook model={game.model} />}
             <div className="topright">
               <span className={`chip-status ${statusChip}`}><span className="dot" />{statusChip === 'finding' ? 'Finding you' : statusChip === 'reading' ? 'Reading you' : 'Ready'}</span>
               {sim && <span className="chip-soft sim">Sample run: simulated body</span>}
@@ -1525,6 +1527,7 @@ function EndScreen({ game, job, end, cardUrl, onAgain, onJobs, onSave }: {
         </div>
       </div>
       <div className="right">
+        <NotebookLearned before={{ ...game.model, examples: game.model.examples.filter((e) => (e.age ?? 0) > 0) }} after={game.model} />
         {cardUrl ? <img className="card-preview" src={cardUrl} alt="Your share card" /> : <div className="small">Drawing your card</div>}
         {cardUrl && <Btn ghost k="C" onClick={onSave}>Save the card</Btn>}
       </div>
