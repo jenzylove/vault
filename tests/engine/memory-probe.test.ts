@@ -21,7 +21,7 @@ const ROWS: { key: string; strategy: Strategy; policy: Policy; label: string }[]
   { key: 'holdBreath', strategy: 'holdBreath', policy: 'rational', label: 'Hold breath every peek' },
   { key: 'fakeSmile', strategy: 'fakeSmile', policy: 'rational', label: 'Fake smile at traps only' },
   { key: 'hide', strategy: 'hide', policy: 'rational', label: 'Duck out of camera at traps' },
-  { key: 'steadyGreedy', strategy: 'steady', policy: 'greedy', label: 'Always steady, ignores strikes (sells every dud)' },
+  { key: 'steadyGreedy', strategy: 'steady', policy: 'greedy', label: 'Always steady, ignores strikes (sells every empty safe)' },
 ];
 
 /** [strategy][job][player] */
