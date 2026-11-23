@@ -8,6 +8,8 @@ type KeyFrom = 'env' | 'file' | 'saved';
 // The game's own bridge: whether live mode can run and where the Presage key comes from (never the key),
 // and a way to save or forget a pasted key. The key itself stays in the main process (src/main/keyStore.ts).
 contextBridge.exposeInMainWorld('vault', {
+  // VAULT_CAMERA=sdk starts live play on the SDK's own camera (steady 30 fps, best in daylight); default: the page's camera
+  cameraPref: process.env.VAULT_CAMERA ?? '',
   presage: (): Promise<{ sdk: boolean; hasKey: boolean; from: KeyFrom | null; encrypted: boolean }> => ipcRenderer.invoke('vault:presage'),
   key: {
     save: (key: string): Promise<{ ok: boolean; saved: boolean; encrypted: boolean }> => ipcRenderer.invoke('vault:key:save', key),

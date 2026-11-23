@@ -25,7 +25,7 @@ export function nativeBridge(): NativeBridge | null {
  * (useCustomInput + sendFrame). If the page cannot open the camera, or the SDK says the fed frame rate
  * is too low, the next session falls back to the SDK's own camera.
  */
-let preferSdkCamera = false;
+let preferSdkCamera = (globalThis as { vault?: { cameraPref?: string } }).vault?.cameraPref === 'sdk';
 // SDK errors that mean the page could not feed frames steadily: kTimestampGap (11), kSustainedLowFrameRate (14)
 const FED_TROUBLE = new Set([11, 14]);
 
