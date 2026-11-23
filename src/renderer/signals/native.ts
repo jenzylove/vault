@@ -56,9 +56,32 @@ function pumpFrames(track: MediaStreamTrack, send: (b: Uint8Array, w: number, h:
         const buf = new Uint8Array(w * h * 4);
         await f.copyTo(buf, { format: 'RGBA' });
         if (on) send(buf, w, h);
+        keepRate();
       } catch { /* a dropped frame */ } finally { try { f?.close(); } catch { /* closed */ } }
     }
   })();
+  // In dim light a laptop camera on auto exposure slows to about 15 frames a second to gather light,
+  // and the SDK stops below its frame rate floor. Watch the rate; when it sags, hold the camera at the
+  // longest exposure that still fits 30 frames a second (exposureTime is in 100 microsecond units).
+  let count = 0;
+  let since = performance.now();
+  let held = false;
+  function keepRate(): void {
+    count++;
+    const now = performance.now();
+    if (now - since < 1500) return;
+    const fps = (count * 1000) / (now - since);
+    count = 0; since = now;
+    if (fps >= 24 || held) { if (fps < 24) console.warn(`[vault] camera at ${fps.toFixed(1)} frames a second`); return; }
+    held = true;
+    console.warn(`[vault] camera slowed to ${fps.toFixed(1)} frames a second: holding a 30 fps exposure`);
+    try {
+      const caps = (track.getCapabilities?.() ?? {}) as { exposureMode?: string[]; exposureTime?: { max: number } };
+      if (caps.exposureMode?.includes('manual') && caps.exposureTime) {
+        void track.applyConstraints({ advanced: [{ exposureMode: 'manual', exposureTime: Math.min(caps.exposureTime.max, 312) } as MediaTrackConstraintSet] }).catch(() => undefined);
+      }
+    } catch { /* no exposure control on this camera */ }
+  }
   return () => { on = false; void reader.cancel().catch(() => undefined); };
 }
 
