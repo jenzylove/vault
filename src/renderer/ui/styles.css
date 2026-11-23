@@ -482,3 +482,11 @@
 .notebook.learned { position: static; width: 100%; max-width: 560px; grid-template-columns: 1fr; row-gap: 4px; padding: 10px 14px 12px; animation-delay: 0.3s; }
 .notebook.learned .nb-head { display: grid; gap: 2px; }
 .notebook.learned .nb-row { grid-template-columns: minmax(7em, 0.9fr) 1.4fr auto; grid-template-areas: 'lab bar word' 'side side side'; align-items: center; }
+
+/* what he notices during the look, under his suspicion bar */
+.live-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; min-height: 1.9em; }
+.lc-lab { font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--copper); margin-right: 2px; }
+.lc { font-weight: 700; font-size: var(--fs-xs); padding: 3px 10px; border-radius: 99px; background: rgba(107,15,26,0.1); color: rgba(58,7,16,0.6); animation: popin 0.3s var(--pop) both; }
+.lc.none { animation: none; background: transparent; padding-left: 0; }
+.lc.warm { background: var(--copper); color: #fff; }
+.lc.hot { background: var(--alarm); color: #fff; box-shadow: 0 0 0 3px rgba(255,74,61,0.25); }

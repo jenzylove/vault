@@ -10,7 +10,7 @@ import {
   emptyMemory, rememberJob, rememberLine, seedModel, type BankerMemory,
   newlyUnlocked, nextLocked, readsList, replayVerdict, restingAlert, runLeft, sayTell, shareTellLine, step, tellLine, tellSheet, unlockProgress, updateHistory,
   type Baseline, type BoxKind, type GameAction, type GameState, type HideTrend, type Job, type JobId, type PeekFeatures, type ReplayVerdict, type Stash,
-  type TellHistory, type TellSheet, type FinalCall, type BoxOutcome,
+  type TellHistory, type TellSheet, type FinalCall, type BoxOutcome, type LiveNotice,
 } from '../engine';
 import type { SignalFrame, SignalSource, SourceStatus } from '../signals/types';
 import { useHeartbeat } from './heartbeat';
@@ -20,6 +20,7 @@ import { Lineup } from './Lineup';
 import { KeyEntry } from './KeyEntry';
 import { SdkFeed } from './SdkFeed';
 import { Notebook, NotebookLearned } from './Notebook';
+import { LiveChips } from './LiveChips';
 import type { BankerState, SceneBox, SceneBoxKind, ScenePracticeBox } from '../scene/types';
 import { SignalBus } from './signalBus';
 import { isPeekAware } from './simSource';
@@ -107,6 +108,8 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
   const [gapLost, setGapLost] = useState(false);
   const [wantPractice, setWantPractice] = useState<boolean>(() => !loadHowSeen());
   const [liveAlert, setLiveAlert] = useState(0);
+  /** what he is noticing in the look right now (blink, smile, breath held...) */
+  const [notices, setNotices] = useState<LiveNotice[]>([]);
   const [catchPulse, setCatchPulse] = useState<number | undefined>(undefined);
   const [payout, setPayout] = useState<{ at: number; amount: number } | undefined>(undefined);
   const [bustedAt, setBustedAt] = useState<number | undefined>(undefined);
@@ -493,12 +496,21 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
     const buf: SignalFrame[] = [];
     const unsub = source.subscribe((f) => { buf.push(f); });
     let caught = false;
+    // a signal that moves him a lot (it is your tell) makes him flinch, once a look per signal
+    const flinchedAt = new Set<string>();
+    setNotices([]);
     setLiveCaught(false);
     setLiveAlert(restingAlert(gameRef.current.model, bankerView(gameRef.current)));
     const tick = setInterval(() => {
       const g = gameRef.current;
-      const r = liveRead(buf, baseline, g.model, bankerView(g));
+      const r = liveRead(buf, baseline, g.model, bankerView(g), job.peekMs);
       setLiveAlert(r.alert);
+      setNotices(r.notices);
+      for (const n of r.notices) {
+        if (n.kind === 'hold' || n.lift < 0.6 || flinchedAt.has(n.kind)) continue;
+        flinchedAt.add(n.kind);
+        setCatchPulse(performance.now());
+      }
       if (r.catchSpan && !caught) {
         caught = true;
         const at = performance.now();
@@ -1014,7 +1026,7 @@ export function Game({ createSource, keyOnFile = false }: GameProps): JSX.Elemen
                   {game.phase === 'peek' && activeBox && !leadDone && <Cracking />}
                   {game.phase === 'peek' && activeBox && leadDone && (
                     <PeekStage kind={activeBox.kind} value={activeBox.value} recRef={recRef} caught={liveCaught && job.hints} peekMs={job.peekMs}
-                      alert={job.hints ? liveAlert : null} final={game.finalBet} take={game.pile} />
+                      alert={job.hints ? liveAlert : null} final={game.finalBet} take={game.pile} notices={job.hints ? notices : null} />
                   )}
                   {game.phase === 'bankerRead' && game.read && activeBox && (
                     <OfferStage offer={game.read.offer ?? 0} elapsed={offerMs} tooSlow={tooSlow} flinched={flinched} blind={game.read.decision === 'unread'} quote={spoken}
@@ -1251,12 +1263,14 @@ function Cracking(): JSX.Element {
   );
 }
 
-function PeekStage({ kind, value, recRef, caught, peekMs, alert, final, take }: {
+function PeekStage({ kind, value, recRef, caught, peekMs, alert, final, take, notices }: {
   kind: BoxKind; value: number; recRef: React.MutableRefObject<{ progress: () => number } | null>; caught: boolean; peekMs: number;
   /** his live suspicion 0..1, or null when the job gives no hints */
   alert: number | null;
   /** the last safe, double or nothing: he calls it instead of making an offer */
   final: boolean; take: number;
+  /** what he is noticing right now, or null when the job gives no hints */
+  notices: LiveNotice[] | null;
 }): JSX.Element {
   const p = usePoll(() => recRef.current?.progress() ?? 0, [], 100);
   const secs = Math.max(0, Math.ceil((peekMs / 1000) * (1 - p)));
@@ -1283,6 +1297,7 @@ function PeekStage({ kind, value, recRef, caught, peekMs, alert, final, take }: 
         <div className={`susp${a > 0.66 ? ' hot' : ''}`}>
           <div className="susp-lab"><span>His suspicion</span><b>{caught ? 'He saw that.' : word}</b></div>
           <div className="susp-bar"><i style={{ width: `${Math.round(8 + a * 92)}%` }} /></div>
+          {notices && <LiveChips notices={notices} />}
         </div>
       )}
       <div className="peek-next">

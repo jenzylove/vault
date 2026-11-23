@@ -25,7 +25,7 @@ export {
   type Tell, type TellKey, type TellSheet, type TellHistory, type TellHistoryEntry,
 } from './tells';
 export { dailySeed, shareLine } from './daily';
-export { liveRead, restingAlert, type LiveRead } from './live';
+export { liveRead, restingAlert, LIVE_FACE_FROM_MS, LIVE_BREATH_FROM_MS, type LiveRead, type LiveNotice } from './live';
 export { findCatch, catchAllowance, MIN_GOOD_MS, type CatchSpan } from './features';
 export { PEEK_LEAD_MS } from './timing';
 export { replayVerdict, replayMarks, detailFor, type ReplayVerdict, type ReplayMark, type MarkKind, type VerdictContext } from './replay';

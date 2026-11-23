@@ -3,7 +3,7 @@ import { describe, expect, test, vi } from 'vitest';
 // simulated games are slow when the probe runs alongside in another worker
 vi.setConfig({ testTimeout: 60000 });
 import {
-  SimBody, makeSimPlayer, learnBaseline, extractFeatures, liveRead, restingAlert, replayVerdict, newGame, step, bankerView,
+  SimBody, makeSimPlayer, learnBaseline, extractFeatures, liveRead, restingAlert, readBanker, replayVerdict, newGame, step, bankerView,
   playSimGame, tellSheet, updateHistory, emptyHistory, memoryLine, hideTrend, tellLine, shareTellLine,
   BASELINE_MS, PEEK_MS, PEEK_LEAD_MS, type PeekFeatures, type SimPlayerParams,
 } from '../../src/renderer/engine';
@@ -34,9 +34,10 @@ describe('catch times for the replay', () => {
 });
 
 describe('live read during a peek', () => {
-  test('flags a hold before the peek ends and his alert climbs; a calm peek stays near his resting level', () => {
+  test('flags a hold before the peek ends and his alert climbs; a calm peek stays near his resting level early and never runs ahead of his read', () => {
     let flagged = 0;
     let calmMax = 0;
+    let aheadMax = 0;
     for (let seed = 1; seed <= 20; seed++) {
       const body = new SimBody(quiet(seed, { trapCatch: 1, catchMs: [1800, 1800] }), seed, 30);
       const bl = learnBaseline(body.run(BASELINE_MS));
@@ -47,12 +48,20 @@ describe('live read during a peek', () => {
       const r = liveRead(frames, bl, s.model, bankerView(s));
       if (r.catchSpan) { flagged++; expect(r.alert).toBeGreaterThan(0.9); }
       body.run(3000); body.react('small');
-      const calm = liveRead(body.run(PEEK_MS), bl, s.model, bankerView(s));
-      calmMax = Math.max(calmMax, calm.alert - rest);
+      const calmFrames = body.run(PEEK_MS);
+      const c0 = calmFrames[0]!.t;
+      // the first seconds: only blinks and the face count yet, so a calm look sits near his resting level
+      const early = liveRead(calmFrames.filter((f) => f.t - c0 <= 2500), bl, s.model, bankerView(s));
+      if (!early.catchSpan) calmMax = Math.max(calmMax, early.alert - rest);
+      // by the end the bar is his read: it never runs far ahead of what he decides
+      const calm = liveRead(calmFrames, bl, s.model, bankerView(s));
+      const end = readBanker(s.model, extractFeatures(calmFrames, bl), s.boxes[0]!, bankerView(s)).pTrap;
+      if (!calm.catchSpan) aheadMax = Math.max(aheadMax, calm.alert - Math.max(end, rest));
       s = { ...s };
     }
     expect(flagged).toBeGreaterThanOrEqual(17);
     expect(calmMax).toBeLessThan(0.45);
+    expect(aheadMax).toBeLessThan(0.25);
   });
 
   test('before any signal he sits at his resting level', () => {
