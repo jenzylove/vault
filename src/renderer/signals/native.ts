@@ -31,7 +31,7 @@ const FED_TROUBLE = new Set([11, 14]);
 
 async function openCamera(): Promise<MediaStream | null> {
   try {
-    return await navigator.mediaDevices.getUserMedia({ audio: false, video: { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: 30 } } });
+    return await navigator.mediaDevices.getUserMedia({ audio: false, video: { width: { ideal: 480 }, height: { ideal: 270 }, frameRate: { ideal: 30 } } });
   } catch { return null; }
 }
 
@@ -66,6 +66,23 @@ function pumpFrames(track: MediaStreamTrack, send: (b: Uint8Array, w: number, h:
   let count = 0;
   let since = performance.now();
   let held = false;
+  // a camera already on a long exposure at the start is held at once, before the SDK counts slow frames
+  setTimeout(() => {
+    try {
+      const st = (track.getSettings?.() ?? {}) as { exposureTime?: number };
+      if (!held && (st.exposureTime ?? 0) > 313) hold(`exposure ${st.exposureTime} at the start`);
+    } catch { /* no settings */ }
+  }, 400);
+  function hold(why: string): void {
+    held = true;
+    console.warn(`[vault] holding a 30 fps exposure (${why})`);
+    try {
+      const caps = (track.getCapabilities?.() ?? {}) as { exposureMode?: string[]; exposureTime?: { max: number } };
+      if (caps.exposureMode?.includes('manual') && caps.exposureTime) {
+        void track.applyConstraints({ advanced: [{ exposureMode: 'manual', exposureTime: Math.min(caps.exposureTime.max, 312) } as MediaTrackConstraintSet] }).catch(() => undefined);
+      }
+    } catch { /* no exposure control on this camera */ }
+  }
   function keepRate(): void {
     count++;
     const now = performance.now();
@@ -73,14 +90,7 @@ function pumpFrames(track: MediaStreamTrack, send: (b: Uint8Array, w: number, h:
     const fps = (count * 1000) / (now - since);
     count = 0; since = now;
     if (fps >= 24 || held) { if (fps < 24) console.warn(`[vault] camera at ${fps.toFixed(1)} frames a second`); return; }
-    held = true;
-    console.warn(`[vault] camera slowed to ${fps.toFixed(1)} frames a second: holding a 30 fps exposure`);
-    try {
-      const caps = (track.getCapabilities?.() ?? {}) as { exposureMode?: string[]; exposureTime?: { max: number } };
-      if (caps.exposureMode?.includes('manual') && caps.exposureTime) {
-        void track.applyConstraints({ advanced: [{ exposureMode: 'manual', exposureTime: Math.min(caps.exposureTime.max, 312) } as MediaTrackConstraintSet] }).catch(() => undefined);
-      }
-    } catch { /* no exposure control on this camera */ }
+    hold(`camera slowed to ${fps.toFixed(1)} frames a second`);
   }
   return () => { on = false; void reader.cancel().catch(() => undefined); };
 }
